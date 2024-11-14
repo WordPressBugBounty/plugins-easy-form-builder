@@ -237,7 +237,7 @@ class efbFunction {
 			"cSSClasses" => $state ? $ac->text->cSSClasses : esc_html__('CSS Classes',$s),
 			"defaultValue" => $state ? $ac->text->defaultValue : esc_html__('Default value',$s),
 			"placeholder" => $state ? $ac->text->placeholder : esc_html__('Placeholder',$s),
-			"enterAdminEmailReceiveNoti" => $state ? $ac->text->enterAdminEmailReceiveNoti : esc_html__('Enter admin email for email notifications.',$s),
+			"enterAdminEmailReceiveNoti" => $state ? $ac->text->enterAdminEmailReceiveNoti : esc_html__('Enter email address to receive notifications.',$s),
 			"corners" => $state ? $ac->text->corners : esc_html__('Corners',$s),
 			"rounded" => $state ? $ac->text->rounded : esc_html__('Rounded',$s),
 			"square" => $state ? $ac->text->square : esc_html__('Square',$s),
@@ -319,8 +319,8 @@ class efbFunction {
 			"supportForm" => $state ? $ac->text->supportForm : esc_html__('Support Form',$s),
 			"createBlankMultistepsForm" => $state ? $ac->text->createBlankMultistepsForm : esc_html__('Create a blank multisteps form.',$s),
 			"createContactusForm" => $state ? $ac->text->createContactusForm : esc_html__('Create a Contact us form.',$s),
-			"createRegistrationForm" => $state ? $ac->text->createRegistrationForm : esc_html__('Create a user registration(Sign-up) form.',$s),
-			"createLoginForm" => $state ? $ac->text->createLoginForm : esc_html__('Create a user login (Sign-in) form.',$s),
+			"createRegistrationForm" => $state ? $ac->text->createRegistrationForm : esc_html__('Create a form to register new users to your WordPress site\'s user list.',$s),
+			"createLoginForm" => $state ? $ac->text->createLoginForm : esc_html__('Create a login form for users to enter your WordPress site.',$s),
 			"createnewsletterForm" => $state ? $ac->text->createnewsletterForm : esc_html__('Create a newsletter form',$s),
 			"createSupportForm" => $state ? $ac->text->createSupportForm : esc_html__('Create a support contact form.',$s),			
 			"availableSoon" => $state ? $ac->text->availableSoon : esc_html__('Available Soon',$s),
@@ -401,8 +401,8 @@ class efbFunction {
 			"sentBy" => $state ? $ac->text->sentBy : esc_html__("Sent by:",$s),
 			"youRecivedNewMessage" => $state ? $ac->text->youRecivedNewMessage : esc_html__('You have a new message.', $s),
 			"formNExist" => $state ? $ac->text->formNExist : esc_html__('Form does not exist !!',$s),
-			"error403" => $state ? $ac->text->error403 : esc_html__('We are sorry, but there seems to be a security error (403) with your request.',$s),
-			"error400" => $state ? $ac->text->error400 : esc_html__('We are sorry, but there seems to be a security error (400) with your request.',$s),
+			"error403" => $state ? $ac->text->error403 : esc_html__('Your security session has expired or is invalid. Please refresh the page. E403',$s),
+			"error400" => $state ? $ac->text->error400 : esc_html__('Your security session has expired or is invalid. Please refresh the page. E400',$s),
 			"formPrivateM" => $state ? $ac->text->formPrivateM : esc_html__('Private form, please log in.',$s),
 			"errorSiteKeyM" => $state ? $ac->text->errorSiteKeyM : esc_html__('Please check the site key and secret key on Easy Form Builder panel > Settings > Google Keys to resolve the error.',$s),
 			"errorCaptcha" => $state ? $ac->text->errorCaptcha : esc_html__('There seems to be a problem with the Captcha. Please try again.',$s),
@@ -1349,27 +1349,36 @@ class efbFunction {
             // اگر لینک دانلود داشت
             $server_name = str_replace("www.", "", $_SERVER['HTTP_HOST']);
             $vwp = get_bloginfo('version');
+			//just get version number
+			$vwp = substr($vwp,0,3);
             $u = 'https://whitestudio.team/wp-json/wl/v1/addons-link/'. $server_name.'/'.$value .'/'.$vwp.'/' ;
 			if(get_locale()=='fa_IR'){
                 $u = 'https://easyformbuilder.ir/wp-json/wl/v1/addons-link/'. $server_name.'/'.$value .'/'.$vwp.'/' ;
 				//error_log('EFB=>addon_add_efb fa_IR');
             }
-            $request = wp_remote_get($u);
-           
-            if( is_wp_error( $request ) ) {
-				
-				add_action( 'admin_notices', 'admin_notice_msg_efb' );
-                
-                return false;
-            }
+			$attempts = 2; 
+            for ($i = 0; $i < $attempts; $i++) {           
+				$request = wp_remote_get($u);
+
+				if (!is_wp_error($request)) {
+					break; 
+				}
+			
+				if ($i == $attempts - 1) {
+					
+					add_action( 'admin_notices', 'admin_notice_msg_efb' );
+					return false;
+				}
+			}	
             
             $body = wp_remote_retrieve_body( $request );
             $data = json_decode( $body );
 
-             if($data->status==false){
-              return false;
-               
+			if (isset($data->status)==true && $data->status == false) {
+                $response = ['success' => false, "m" => $data->error];
+                wp_send_json_success($response, 200);
             }
+
 
             // Check version of EFB to Addons
             if (version_compare(EMSFB_PLUGIN_VERSION,$data->v)==-1) {        

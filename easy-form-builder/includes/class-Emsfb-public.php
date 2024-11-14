@@ -436,13 +436,22 @@ class _Public {
 
 
 			  $s_m ='<!--efb-->';
-			 if( (strpos($value , '\"type\":\"maps\"') || strpos($value , '"type":"maps"'))){
-				 
-				$sm = $this->efbFunction->openstreet_map_required_efb(1);				
-				if($sm==false){
-					$s_m =" <script>alert('OpenStreetMap Error:".$lanText['tfnapca']."')</script>";
-				}
-			 }
+			  if( is_string($value) && (strpos($value , '\"type\":\"maps\"') !== false || strpos($value , '"type":"maps"') !== false)){
+				error_log('maps!!!!');
+			   $sm = $this->efbFunction->openstreet_map_required_efb(1);              
+			   if($sm==false){
+				   $s_m =" <script>alert('OpenStreetMap Error:".$lanText['tfnapca']."')</script>";
+			   }
+			}else{
+			   $new_string_value = json_encode($value);
+			   if(strpos($new_string_value , 'type":"maps"') || strpos($new_string_value , 'type\":\"maps\"')){
+				   $sm = $this->efbFunction->openstreet_map_required_efb(1);              
+				   if($sm==false){
+					   $s_m =" <script>alert('OpenStreetMap Error:".$lanText['tfnapca']."')</script>";
+				   }
+			   }
+			  
+			}
 		 }	
 		 $width =0;		// $style =$this->bootstrap_icon_efb();
 		
@@ -3311,13 +3320,7 @@ class _Public {
 		  <div class="efb card-body text-center efb"><h3 class="efb">'.esc_html__('Waiting','easy-form-builder').'</h3></div>                
 		   <!-- final fieldset --></fieldset>';
 	}
-	public function load_textdomain(): void {
-        load_plugin_textdomain(
-            EMSFB_PLUGIN_TEXTDOMAIN,
-            false,
-            EMSFB_PLUGIN_DIRECTORY . "/languages"
-        );
-    }
+
 	public function string_to_url($string) {
 			$rePage= preg_replace('/(http:@efb@)+/','http://',$string);
 			$rePage= preg_replace('/(https:@efb@)+/','https://',$rePage);
