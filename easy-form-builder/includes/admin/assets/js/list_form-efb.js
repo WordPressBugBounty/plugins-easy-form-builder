@@ -1980,6 +1980,7 @@ function fun_export_rows_for_Subscribe_emsFormBuilder(value) {
     }
   }
 
+  console.log('rowss')
   localStorage.setItem('rows_ws_p', JSON.stringify(exp));
   //  localStorage.setItem('head_ws_p', JSON.stringify(head));
 }
@@ -1989,6 +1990,7 @@ function fun_export_rows_for_Subscribe_emsFormBuilder(value) {
 function exportCSVFile_emsFormBuilder(items, fileTitle) {
   
   //source code :https://codepen.io/danny_pule/pen/WRgqNx
+  console.log(items);
   items.forEach(item => { for (let i in item) { if (item[i] == "notCount@EFB") item[i] = ""; } });
   var jsonObject = JSON.stringify(items);
   var csv = this.convertToCSV_emsFormBuilder(jsonObject);
@@ -2015,9 +2017,11 @@ function exportCSVFile_emsFormBuilder(items, fileTitle) {
 
 function convertToCSV_emsFormBuilder(objArray) {
   //source code :https://codepen.io/danny_pule/pen/WRgqNx
+  console.log(objArray);
   var array = typeof objArray != 'object' ? JSON.parse(objArray) : objArray;
   var str = '';
   for (const item of array) {
+    console.log(item);
     let line = '';
     
    // for (const key in item) {
@@ -2035,6 +2039,7 @@ function convertToCSV_emsFormBuilder(objArray) {
 
 function generat_csv_emsFormBuilder() {
   const exp = JSON.parse(localStorage.getItem("rows_ws_p"));
+  console.log(exp);
   const filename = `EasyFormBuilder-${form_type_emsFormBuilder}-export-${Math.random().toString(36).substr(2, 3)}`
   exportCSVFile_emsFormBuilder(exp, filename); // create csv file
   //convert_to_dataset_emsFormBuilder(); //create dataset for chart :D
