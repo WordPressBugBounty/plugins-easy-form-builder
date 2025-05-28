@@ -38,7 +38,7 @@ class Panel_edit  {
 			];
 			$pro =false;
 			$efbFunction = $this->get_efbFunction();
-			//$lng =new lng();		
+		
 			$ac= $efbFunction->get_setting_Emsfb();
 			$lang = $efbFunction->text_efb(2);
 			$smtp =false;
@@ -194,7 +194,7 @@ class Panel_edit  {
 				}
 
 				if(isset($ac->AdnPDP) && $ac->AdnPDP==1){
-					//wmaddon
+				
 					if(!is_dir(EMSFB_PLUGIN_DIRECTORY."/vendor/persiadatepicker")) {	
 						$r = $efbFunction->update_message_admin_side_efb();
 						echo $r; 
@@ -220,15 +220,15 @@ class Panel_edit  {
 			}else{$smtp_m =$lang["goToEFBAddEmailM"];}	
 			
 		
-			//$location =$pro==true  ? $efbFunction->get_geolocation() :'';
-			//$colors = $efbFunction->get_list_colores_template();
+		
+		
 			$colors =[];
 			$location ='';
-			//efb_code_validate_create( $fid, $type, $status, $tc)
+		
 			$sid = $efbFunction->efb_code_validate_create(0, 1, 'admin' , 0);
 			$plugins['cache'] = $efbFunction->check_for_active_plugins_cache();
 			
-			wp_enqueue_script( 'Emsfb-admin-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/admin-efb.js',false,'3.8.9');
+			wp_enqueue_script( 'Emsfb-admin-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/admin-efb.js',false,EMSFB_PLUGIN_VERSION);
 			wp_localize_script('Emsfb-admin-js','efb_var',array(
 				'nonce'=> wp_create_nonce("admin-nonce"),
 				'pro' => $pro,
@@ -253,10 +253,10 @@ class Panel_edit  {
 				
 			));
 
-			wp_enqueue_script('efb-val-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/val-efb.js',false,'3.8.8');
+			wp_enqueue_script('efb-val-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/val-efb.js',false,EMSFB_PLUGIN_VERSION);
 			 
 
-			wp_enqueue_script('efb-pro-els', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/pro_els-efb.js',false,'3.8.8');
+			wp_enqueue_script('efb-pro-els', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/pro_els-efb.js',false,EMSFB_PLUGIN_VERSION);
 			
 			
 
@@ -267,30 +267,30 @@ class Panel_edit  {
 
 
 			if("fa_IR"==get_locale()){
-				wp_register_script('persia_pay-efb.js',  EMSFB_PLUGIN_URL .'/public/assets/js/persia_pay-efb.js', array('jquery'),'3.8.8' , true);
+				wp_register_script('persia_pay-efb.js',  EMSFB_PLUGIN_URL .'/public/assets/js/persia_pay-efb.js', array('jquery'),EMSFB_PLUGIN_VERSION , true);
 				wp_enqueue_script('persia_pay-efb.js');
 			}
 	
-			wp_register_script('stripe_js',  EMSFB_PLUGIN_URL .'/public/assets/js/stripe_pay-efb.js', array('jquery'),'3.8.8' , true);
+			wp_register_script('stripe_js',  EMSFB_PLUGIN_URL .'/public/assets/js/stripe_pay-efb.js', array('jquery'),EMSFB_PLUGIN_VERSION , true);
 			wp_enqueue_script('stripe_js');
 			
 		
-			 wp_enqueue_script( 'Emsfb-core-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/core-efb.js',false,'3.8.8' );
+			 wp_enqueue_script( 'Emsfb-core-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/core-efb.js',false,EMSFB_PLUGIN_VERSION );
 			 wp_localize_script('Emsfb-core-js','ajax_object_efm_core',array(
 					'nonce'=> wp_create_nonce("admin-nonce"),
 					'check' => 0
 					));
-			wp_enqueue_script('efb-bootstrap-select-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/bootstrap-select.min-efb.js',false ,'3.8.8');
+			wp_enqueue_script('efb-bootstrap-select-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/bootstrap-select.min-efb.js',false ,EMSFB_PLUGIN_VERSION);
 			
 
-			wp_enqueue_script('efb-main-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/new-efb.js',false,'3.8.8');
+			wp_enqueue_script('efb-main-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/new-efb.js',false,EMSFB_PLUGIN_VERSION);
 			
 			
 				/* new code v4 */
 			
-				wp_register_script('jquery-ui-efb', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/jquery-ui-efb.js', array('jquery'),  true,'3.8.8');	
+				wp_register_script('jquery-ui-efb', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/jquery-ui-efb.js', array('jquery'),  true,EMSFB_PLUGIN_VERSION);	
 				wp_enqueue_script('jquery-ui-efb');
-				wp_register_script('jquery-dd-efb', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/jquery-dd-efb.js', array('jquery'),  true,'3.8.8');	
+				wp_register_script('jquery-dd-efb', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/jquery-dd-efb.js', array('jquery'),  true,EMSFB_PLUGIN_VERSION);	
 				wp_enqueue_script('jquery-dd-efb'); 
 				/*end new code v4 */
 
@@ -306,7 +306,7 @@ class Panel_edit  {
 			wp_register_script('intlTelInput-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/intlTelInput.min-efb.js', null, null, true);	
 			wp_enqueue_script('intlTelInput-js');
 
-			wp_register_style('intlTelInput-css', EMSFB_PLUGIN_URL . 'includes/admin/assets/css/intlTelInput.min-efb.css',true,'3.8.8');
+			wp_register_style('intlTelInput-css', EMSFB_PLUGIN_URL . 'includes/admin/assets/css/intlTelInput.min-efb.css',true,EMSFB_PLUGIN_VERSION);
 			wp_enqueue_style('intlTelInput-css');
 
 			if( false){
@@ -324,10 +324,10 @@ class Panel_edit  {
 			$lng = get_locale();
 			$ip =0;
 			if ( ! empty( $_SERVER['HTTP_CLIENT_IP'] ) ) {
-				//check ip from share internet
+			
 				$ip = $_SERVER['HTTP_CLIENT_IP'];
 			} elseif ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
-				//to check ip is pass from proxy
+			
 				$ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
 			} else {
 				$ip = $_SERVER['REMOTE_ADDR'];
@@ -335,7 +335,7 @@ class Panel_edit  {
 
 
 
-			wp_register_script('Emsfb-list_form-efb-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/list_form-efb.js', true,'3.8.10');
+			wp_register_script('Emsfb-list_form-efb-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/list_form-efb.js', true,EMSFB_PLUGIN_VERSION);
 			wp_enqueue_script('Emsfb-list_form-efb-js');
 			wp_localize_script( 'Emsfb-list_form-efb-js', 'ajax_object_efm',
 				array( 'ajax_url' => admin_url( 'admin-ajax.php' ),			
@@ -355,8 +355,8 @@ class Panel_edit  {
 
 				
 				$this->delete_old_rows_emsfb_stts_();
-					//smart zone test
-					//$this->test_smart_zone();
+				
+				
 		}else{
 			echo "Easy Form Builder: You don't access this section";
 		}
@@ -373,7 +373,7 @@ class Panel_edit  {
 	public function get_not_read_response(){
 		$table_name_msg = $this->db->prefix . "emsfb_msg_";
 		$table_name_rsp = $this->db->prefix . "emsfb_rsp_"; 
-		//$table_name = $this->db->prefix . "emsfb_rsp_"; 
+	
 		$value = $this->db->get_results( "SELECT t.msg_id, t.form_id
 		FROM `$table_name_msg` AS t 
 		 INNER JOIN `$table_name_rsp` AS tr 
@@ -403,8 +403,8 @@ class Panel_edit  {
 
 	public function test_smart_zone (){
 		
-			     //=>>>>>>>>>>>>>>>>>Temp Remove <<<<<<<<<<<<<<<<<< 
-            //test code for create database adsone 
+			    
+           
             $fl_ex = EMSFB_PLUGIN_DIRECTORY."/vendor/smartzone/smartzone.php";
             if(file_exists($fl_ex)){
                 
@@ -414,7 +414,7 @@ class Panel_edit  {
                 $t = new $name();
                 
             }else{}
-            //end test 
+           
 			
 	}
 
@@ -428,12 +428,12 @@ class Panel_edit  {
 		$s_sid = $this->efbFunction->efb_code_validate_select($sid ,  $_POST['fid']);
 		if ($s_sid !=1 || $sid==null){
 			
-			error_log('s_sid is not valid!! Panel');
+			
 			
 		$response = array( 'success' => false  , 'm'=>esc_html__('Something went wrong. Please refresh the page and try again.','easy-form-builder') .'<br>'. esc_html__('Error Code','easy-form-builder') . " 403"); 
 		wp_send_json_success($response,200);
 		} 
-        //check validate here
+       
         $vl=null;
         if($_POST['pl']!="msg"){
             $vl ='efb'. $_POST['id'];
@@ -444,7 +444,7 @@ class Panel_edit  {
             if($vl!=null){              
                 if(strpos($vl , '\"type\":\"dadfile\"') || strpos($vl , '\"type\":\"file\"')){                   
                     $vl ='efb'.$id;
-                    //'efb'.$this->id
+                   
                 }
            
             }
@@ -468,9 +468,9 @@ class Panel_edit  {
 		
 
 		$_FILES['async-upload']['name'] = sanitize_file_name($_FILES['async-upload']['name']);
-		//error_log($_FILES['async-upload']['name']);
+	
 		if (in_array($_FILES['async-upload']['type'], $arr_ext)) { 
-			// تنظیمات امنیتی بعدا اضافه شود که فایل از مسیر کانت که عمومی هست جابجا شود به مسیر دیگری
+		
 						
 			$name = 'efb-PLG-'. date("ymd"). '-'.substr(str_shuffle("0123456789ASDFGHJKLQWERTYUIOPZXCVBNM"), 0, 8).'.'.pathinfo($_FILES["async-upload"]["name"], PATHINFO_EXTENSION) ;
 			

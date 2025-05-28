@@ -4,7 +4,7 @@ namespace Emsfb;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
-} // No direct access allow ;)
+}
 
 class Create {
 
@@ -139,9 +139,9 @@ class Create {
 		'AdnSE' => 0,
 		'AdnPDP'=>0,
 		'AdnADP'=>0];
-		//v2 translate
+	
 
-		//write a code for get all colors used in array in template set as active template in wordpress . complate code and use regix to find all colores is used in tamplate
+	
 
 		
 		$lang = $efbFunction->text_efb(1);
@@ -157,7 +157,7 @@ class Create {
 			$efbFunction->openstreet_map_required_efb(0);
 
 			if(isset($ac->AdnSPF)==true){
-				//$ac
+			
 				
 				$addons["AdnSPF"]=$ac->AdnSPF;
 				$addons["AdnOF"]=$ac->AdnOF;
@@ -177,10 +177,10 @@ class Create {
 		}
 
 				if(isset($ac->AdnPDP) && $ac->AdnPDP==1){
-					//wmaddon
+				
 					if(!is_dir(EMSFB_PLUGIN_DIRECTORY."/vendor/persiadatepicker")) {	
 						$r = $efbFunction->update_message_admin_side_efb();
-						//echo $r; 
+					
 						$efbFunction->download_all_addons_efb();
 						return 0;
 					}
@@ -190,7 +190,7 @@ class Create {
 				if(isset($ac->AdnPDP) && $ac->AdnADP==1){
 					if(!is_dir(EMSFB_PLUGIN_DIRECTORY."/vendor/arabicdatepicker")) {	
 						$r = $efbFunction->update_message_admin_side_efb();
-						//echo $r; 
+					
 						$efbFunction->download_all_addons_efb();
 						return 0;
 					}
@@ -201,7 +201,7 @@ class Create {
 				if(isset($ac->AdnSS) && $ac->AdnSS==1){
 					if(!is_dir(EMSFB_PLUGIN_DIRECTORY."/vendor/smssended")) {	
 						$r = $efbFunction->update_message_admin_side_efb();
-						//echo $r; 
+					
 						$efbFunction->download_all_addons_efb();
 						return 0;
 					}
@@ -213,9 +213,9 @@ class Create {
 
 			
 			
-			wp_register_script('jquery-ui-efb', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/jquery-ui-efb.js', array('jquery'),'3.8.8',true);	
+			wp_register_script('jquery-ui-efb', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/jquery-ui-efb.js', array('jquery'),EMSFB_PLUGIN_VERSION,true);	
 			wp_enqueue_script('jquery-ui-efb');
-			wp_register_script('jquery-dd-efb', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/jquery-dd-efb.js', array('jquery'),'3.8.8',true);	
+			wp_register_script('jquery-dd-efb', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/jquery-dd-efb.js', array('jquery'),EMSFB_PLUGIN_VERSION,true);	
 			wp_enqueue_script('jquery-dd-efb'); 
 			
 
@@ -228,7 +228,7 @@ class Create {
 		wp_enqueue_script('intlTelInput-js');
 
 		
-		wp_register_style('intlTelInput-css', EMSFB_PLUGIN_URL . 'includes/admin/assets/css/intlTelInput.min-efb.css',true,'3.8.8');
+		wp_register_style('intlTelInput-css', EMSFB_PLUGIN_URL . 'includes/admin/assets/css/intlTelInput.min-efb.css',true,EMSFB_PLUGIN_VERSION);
         wp_enqueue_style('intlTelInput-css');
 		
 		if( false){
@@ -257,19 +257,19 @@ class Create {
 		}else{$smtp_m =$lang["goToEFBAddEmailM"];}
 
 		if("fa_IR"==get_locale()){
-			wp_register_script('persia_pay-efb.js',  EMSFB_PLUGIN_URL .'/public/assets/js/persia_pay-efb.js', array('jquery'),'3.8.8',true);
+			wp_register_script('persia_pay-efb.js',  EMSFB_PLUGIN_URL .'/public/assets/js/persia_pay-efb.js', array('jquery'),EMSFB_PLUGIN_VERSION,true);
 			wp_enqueue_script('persia_pay-efb.js');
 		}
 
-		wp_register_script('stripe_js',  EMSFB_PLUGIN_URL .'/public/assets/js/stripe_pay-efb.js', array('jquery'),'3.8.8',true);
+		wp_register_script('stripe_js',  EMSFB_PLUGIN_URL .'/public/assets/js/stripe_pay-efb.js', array('jquery'),EMSFB_PLUGIN_VERSION,true);
 		wp_enqueue_script('stripe_js');
 
 
-		//$colors = $efbFunction->get_list_colores_template();
+	
 		$colors =[];
 		
 
-		//$location =$pro==true  ? $efbFunction->get_geolocation() :'';
+	
 		$plugins =['wpsms' => 0,'wpbaker' => 0,'elemntor'=> 0 , 'cache'=>0];
 			$plugins_get = get_plugins();
 			
@@ -282,7 +282,7 @@ class Create {
 		$plugins['cache'] =$efbFunction->check_for_active_plugins_cache();
 		
 		$location ='';
-		wp_enqueue_script( 'Emsfb-admin-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/admin-efb.js',false,'3.8.9');
+		wp_enqueue_script( 'Emsfb-admin-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/admin-efb.js',false,EMSFB_PLUGIN_VERSION);
 		wp_localize_script('Emsfb-admin-js','efb_var',array(
 			'nonce'=> wp_create_nonce("admin-nonce"),
 			'check' => 1,
@@ -306,24 +306,24 @@ class Create {
 			
 		));
 
-		wp_enqueue_script('efb-val-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/val-efb.js',false,'3.8.8');
+		wp_enqueue_script('efb-val-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/val-efb.js',false,EMSFB_PLUGIN_VERSION);
 		
 		
-		wp_enqueue_script('efb-pro-els', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/pro_els-efb.js',false,'3.8.8');
+		wp_enqueue_script('efb-pro-els', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/pro_els-efb.js',false,EMSFB_PLUGIN_VERSION);
 		
 
 		
-		wp_enqueue_script('efb-forms-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/forms-efb.js',false,'3.8.8');
+		wp_enqueue_script('efb-forms-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/forms-efb.js',false,EMSFB_PLUGIN_VERSION);
 		
-		 wp_enqueue_script( 'Emsfb-core-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/core-efb.js',false,'3.8.8');
+		 wp_enqueue_script( 'Emsfb-core-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/core-efb.js',false,EMSFB_PLUGIN_VERSION);
 		 wp_localize_script('Emsfb-core-js','ajax_object_efm_core',array(
 			'nonce'=> wp_create_nonce("admin-nonce"),
 			'check' => 1		));
 
-		wp_enqueue_script('efb-main-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/new-efb.js',false,'3.8.8');
+		wp_enqueue_script('efb-main-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/new-efb.js',false,EMSFB_PLUGIN_VERSION);
 		
 
-		wp_enqueue_script('efb-bootstrap-select-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/bootstrap-select.min-efb.js',false,'3.8.8');
+		wp_enqueue_script('efb-bootstrap-select-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/bootstrap-select.min-efb.js',false,EMSFB_PLUGIN_VERSION);
 		
 
 		
@@ -344,8 +344,8 @@ class Create {
 		$creat=["errorCheckInputs","NAllowedscriptTag","formNcreated","newMessageReceived","newResponse","WeRecivedUrM","trackNo","url","error403"];
 		$lang = $efbFunction->text_efb($creat);
 		$this->userId =get_current_user_id();
-		//	
-		// get user email https://developer.wordpress.org/reference/functions/get_user_by/#user-contributed-notes
+	
+	
 		$email = '';
   
 		$nonce = $_POST['nonce'];
@@ -364,7 +364,7 @@ class Create {
 		$this->id_ ="hid";
 		$this->name =  sanitize_text_field($_POST['name']);
 		$this->email =  $email;
-		//$this->value = $_POST['value'];
+	
 
 		$valp =str_replace('\\', '', $_POST['value']);
 		
@@ -386,7 +386,7 @@ class Create {
 		
 		
 		
-		//check if smsnoti axist then call add_sms_contact_efb
+	
 		$sms_msg_new_noti="";
 		$sms_msg_responsed_noti="";
 		$sms_msg_recived_user="";
@@ -414,8 +414,8 @@ class Create {
 		$this->insert_db();
 		
 		if(isset($valp[0]['smsnoti']) && intval($valp[0]['smsnoti'])==1 ){
-			//$efbFunction->add_sms_contact_efb($this->id_,$sms_msg_new_noti,$sms_msg_recived_admin,$sms_msg_recived_user);
-			//require smsefb.php and call add_sms_contact_efb
+		
+		
 			
 			require_once( EMSFB_PLUGIN_DIRECTORY . '/vendor/smssended/smsefb.php' );
 			$smsefb = new smssendefb();
