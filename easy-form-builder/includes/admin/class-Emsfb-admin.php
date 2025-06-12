@@ -978,7 +978,17 @@ class Admin {
             $setting = str_replace('"', '\"', $st_);
         }
 
-        $this->db->insert(
+        $this->database_set_emsfb_settings($setting, $email);
+        $m = $lang["messageSent"];
+        $response = ['success' => true, "m" => $m];
+        wp_send_json_success($response, $_POST);
+
+    }
+
+    private function database_set_emsfb_settings($setting, $email) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . "emsfb_setting";
+        $wpdb->insert(
             $table_name,
             [
                 'setting' => $setting,
@@ -987,13 +997,8 @@ class Admin {
                 'email'   => $email
             ]
         );
-
         set_transient('emsfb_settings_transient', $setting, 1440);
         update_option('emsfb_settings', $setting);
-        $m = $lang["messageSent"];
-        $response = ['success' => true, "m" => $m];
-        wp_send_json_success($response, $_POST);
-
     }
 
     public function get_ajax_track_admin() {
@@ -1555,11 +1560,37 @@ class Admin {
                 $efbRequirement = new CheckRequirementEmsfb();
                 $efbRequirement->run_and_save_efb();
             }
-
+            $settings =false;
 
             $check = get_option('emsfb_email_status', false);
-            if (!$check || !is_array($check) || $check['status'] === 'ok') return;
-                $email_notifi = sprintf(
+
+
+            if(!$check || is_array($check)){
+
+                    if($check['status'] === 'ok_set_smtp') {
+                        return; // No issues found or already configured
+                    }else if ($check['status'] === 'ok' ) {
+                        $efbFunction = $this->get_efbFunction(1);
+                        $settings= $efbFunction->get_setting_Emsfb();
+                        if (isset($settings->smtp) && !in_array($settings->smtp, ['1', 'true', true,1], true)) {
+                            $settings->smtp = true;
+                            $email = isset($settings->emailSupporter) ? $settings->emailSupporter : '';
+                            $st_ = json_encode($settings,JSON_UNESCAPED_UNICODE);
+                            $setting = str_replace('"', '\"', $st_);
+                            $this->database_set_emsfb_settings($setting, $email);
+                            $check['status'] = 'ok_set_smtp';
+                            $check['message']['title'] = 'configured';
+                            update_option('emsfb_email_status', $check);
+                        }
+
+                        return; // No issues found or already configured
+                    }else if ( $check['message']['id'] == 'mail_function_failed'){
+                        return;
+                    }
+
+            }
+
+            $email_notifi = sprintf(
                 esc_html__('%s notification', 'easy-form-builder'),
                 esc_html__('Email', 'easy-form-builder')
             );
@@ -1647,7 +1678,10 @@ class Admin {
             $description = isset($messages[$msg_id]['description']) ? $messages[$msg_id]['description'] : '';
             ob_start();
             ?>
-            <div id="notice-email-efb" class="notice notice-error efb-notice-email-error notice-alt efb" style="display:flex;align-items:flex-start;gap:12px;padding:10px 20px;">
+            <div id="notice-email-efb" class="notice notice-error efb-notice-email-error notice-alt efb" style="display:flex;align-items:flex-start;gap:12px;padding:10px 20px;position:relative;">
+               <button type="button" id="efb-close-notice-btn"
+            style="position:absolute;top:8px;right:8px;background:transparent;border:none;font-size:20px;cursor:pointer;"
+            aria-label="Close">&times;</button>
                 <img src="<?php echo esc_url($logo_url); ?>" alt="<?php echo esc_attr__('Easy Form Builder', 'easy-form-builder'); ?>" style="width:46px;height:auto;margin-top:4px;" />
                 <div>
                     <p><strong><?php echo esc_html__('Easy Form Builder Email Warning:', 'easy-form-builder'); ?></strong> <?php echo esc_html($title); ?></p>
@@ -1655,6 +1689,22 @@ class Admin {
                     <p><?= $help ?></p>
                 </div>
             </div>
+            <script>
+                if (window.sessionStorage.getItem('efb_hide_notice') === '1') {
+                    var efbNotice = document.getElementById('notice-email-efb');
+                    if (efbNotice) efbNotice.style.display = 'none';
+                }
+                var efbCloseBtn = document.getElementById('efb-close-notice-btn');
+
+                if (efbCloseBtn) {
+                    efbCloseBtn.addEventListener('click', function () {
+                        console.log('Notice closed');
+                        var efbNotice = document.getElementById('notice-email-efb');
+                        if (efbNotice) efbNotice.style.display = 'none';
+                        window.sessionStorage.setItem('efb_hide_notice', '1');
+                    });
+                }
+            </script>
             <?php
             $output = ob_get_clean();
 
