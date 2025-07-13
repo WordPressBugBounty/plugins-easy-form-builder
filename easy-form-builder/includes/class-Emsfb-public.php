@@ -2423,34 +2423,18 @@ class _Public {
 
 				$users_email =array();
 
-				/*
-
-				$emailsId=[];
-			foreach($data as $key=>$val){
-				error_log('-----> data: ' . json_encode($val));
-				if($val['type']=="email" && isset($val['noti']) && in_array($val['noti'] ,[1,'1',true,'true'],true) ){
-					$emailsId[]=$val['id_'];
-				}
-			}
-
-				*/
+				$email_to = isset($valn[0]["email_to"]) ? $valn[0]["email_to"] : '';
 				$emailsId = [];
 				foreach($valn as $key=>$val){
 					if($val['type']=="email" && isset($val['noti']) && in_array($val['noti'] ,[1,'1',true,'true'],true) ){
 						$emailsId[]=$val['id_'];
+					}else if ($val['type']=="email" &&  $val['id_']==$email_to ){
+						$emailsId[]=$val['id_'];
 					}
+
 				}
 
-			/* 	if(isset($id)){
-					foreach ($msg_obj as $key => $value) {
 
-						if(isset($value['id_']) && $value['id_']==$valn[0]["email_to"]){
-
-							array_push($users_email,$value["value"]);
-						}
-					}
-
-				} */
 
 				if(!empty($emailsId)){
 					foreach ($msg_obj as $value) {

@@ -1101,7 +1101,7 @@ class efbFunction {
 
 		$user_res = json_decode($user_res,true);
 		$lst = end($user_res);
-		$link_w = $lst['type']=="w_link" ? $lst['value'] : 'null';
+		$link_w = $lst['type']=="w_link" ? $lst['value'].'?track='.$trackingCode : 'null';
 
 
 		$table_name = $this->db->prefix . "emsfb_form";
@@ -1110,10 +1110,12 @@ class efbFunction {
 		$data =str_replace('\\', '', $data[0]->form_structer);
 		$data = json_decode($data,true);
 		if(($data[0]["sendEmail"]=="true"|| $data[0]["sendEmail"]==true ) &&   strlen($data[0]["email_to"])>2 ){
-
+			$email_to = $data[0]["email_to"];
 			$emailsId=[];
 			foreach($data as $key=>$val){
 				if($val['type']=="email" && isset($val['noti']) && in_array($val['noti'] ,[1,'1',true,'true'],true) ){
+					$emailsId[]=$val['id_'];
+				}else if ($val['type']=="email" && $val['id_']==$email_to ){
 					$emailsId[]=$val['id_'];
 				}
 			}
