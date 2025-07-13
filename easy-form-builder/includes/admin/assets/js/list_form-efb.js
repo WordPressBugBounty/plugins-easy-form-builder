@@ -362,7 +362,7 @@ function fun_send_replayMessage_emsFormBuilder(id) {
 
 }
 
-// 3.8.6 start
+
 function fun_ws_show_list_messages(value) {
 
   let rows = '';
@@ -463,7 +463,7 @@ function fun_ws_show_list_messages(value) {
   if (form_type_emsFormBuilder != 'login') fun_export_rows_for_Subscribe_emsFormBuilder(value);
 
 }
-// 3.8.6 end
+
 
 
 
@@ -944,6 +944,7 @@ function fun_show_setting__emsFormBuilder() {
     bootstrap = f('bootstrap');
     osLocationPicker = f('osLocationPicker') == 'null' ? false : Boolean(f('osLocationPicker'));
     emailTemp = f('emailTemp');
+    emailTemp = emailTemp!='null' ? emailTemp.replace(/(@efb@)+/g, '/') : ''
     sms_config_efb= sms_method = f('sms_config')=='null' ? 'null' :f('sms_config');
 
     scaptcha = f('scaptcha')=='null' ? false :f('scaptcha') ;
@@ -1082,8 +1083,8 @@ function fun_show_setting__emsFormBuilder() {
                                             <input type="text"  class="efb form-control efb h-d-efb  border-d efb-rounded my-1" id="shortCode_emsFormBuilder" value="[Easy_Form_Builder_confirmation_code_finder]" readonly>
                                             <span id="shortCode_emsFormBuilder-message" class="efb text-danger"></span>
                                           </div>
-                                            <button type="button" class="efb btn col-md-4 efb btn-r h-d-efb btn-outline-pink my-1" onclick="copyCodeEfb('shortCode_emsFormBuilder')">
-                                                <i class="efb  bi-clipboard-check mx-1"></i> ${efb_var.text.copy}
+                                            <button type="button" class="efb btn col-md-4 efb btn-r h-d-efb btn-outline-pink my-1" onclick="copyCodeEfb('shortCode_emsFormBuilder' ,'copyshortCodeEfb')">
+                                                <i class="efb  bi-clipboard-check mx-1"></i><span id="copyshortCodeEfb">${efb_var.text.copy}</span>
                                             </button>
                                         </div>
                               </div>
@@ -1288,7 +1289,7 @@ function fun_show_setting__emsFormBuilder() {
                             <!--EmailTemplate-->
                               <div class="efb  col-md-8 bg-back">
                                 <h3 class="efb  card-title mt-3 mobile-title">${efb_var.text.editor}</h3>
-                                <textarea class="efb  form-control" id="emailTemp_emsFirmBuilder" rows="50" data-tab="${efb_var.text.emailTemplate}">${emailTemp !== "null" ? emailTemp : ''}</textarea>
+                                <textarea class="efb  form-control" id="emailTemp_emsFirmBuilder" rows="50" data-tab="${efb_var.text.emailTemplate}">${emailTemp}</textarea>
                                 <span id="emailTemp_emsFirmBuilder-message" class="efb text-danger"></span>
                               </div>
                             <div class="efb col-md-4 mt1 efb guide p-2">
@@ -1298,9 +1299,9 @@ function fun_show_setting__emsFormBuilder() {
                               </br></br>
                               <span class="efb  fs-7"> ${efb_var.text.noticeEmailContent}</span>
                               </br></br>
-                              <span class="efb  fs-7">shortcode_title <span class="efb  text-danger">*</span> :</span> ${efb_var.text.shortcodeTitleInfo}
-                              </br></br>
                               <span class="efb  fs-7">shortcode_message <span class="efb  text-danger">*</span> :</span> ${efb_var.text.shortcodeMessageInfo}
+                              </br></br>
+                              <span class="efb  fs-7">shortcode_title <span class="efb  text-danger d-none">*</span> :</span> ${efb_var.text.shortcodeTitleInfo}
                               </br></br>
                               <span class="efb  fs-7">shortcode_website_name :</span> ${efb_var.text.shortcodeWebsiteNameInfo}
                               </br></br>
@@ -1495,7 +1496,7 @@ function fun_set_setting_emsFormBuilder(state_auto = 0) {
         } else if (el.value.length > 10000) {
           st = 0;
           c = `<div class="efb text-center text-darkb efb"><div class="efb bi-exclamation-triangle fs-3 text-danger efb"></div><p class="efb fs-5 efb">${efb_var.text.ChrlimitEmail}</p></div>`;
-        } else if (el.value.length > 1 && el.value.indexOf('shortcode_message') == -1 && el.value.indexOf('shortcode_title') == -1) {
+        } else if (el.value.length > 1 && el.value.indexOf('shortcode_message') == -1) {
           c = `<div class="efb text-center text-darkb efb"><div class="efb bi-exclamation-triangle fs-3 text-danger efb"></div><p class="efb fs-5 efb">${efb_var.text.addSCEmailM}</p></div>`;
           st = 0;
         }
@@ -1655,8 +1656,7 @@ function fun_set_setting_emsFormBuilder(state_auto = 0) {
         } , state_auto);
   }
 
-  /* document.getElementById('save-stng-efb').innerHTML = nnrhtml
-  document.getElementById('save-stng-efb').classList.remove('disabled'); */
+
 }
 
 function fun_State_btn_set_setting_emsFormBuilder($state) {
@@ -1980,7 +1980,7 @@ function fun_export_rows_for_Subscribe_emsFormBuilder(value) {
     }
   }
 
-  console.log('rowss')
+
   localStorage.setItem('rows_ws_p', JSON.stringify(exp));
 
 }
@@ -1990,7 +1990,7 @@ function fun_export_rows_for_Subscribe_emsFormBuilder(value) {
 function exportCSVFile_emsFormBuilder(items, fileTitle) {
 
 
-  console.log(items);
+
   items.forEach(item => { for (let i in item) { if (item[i] == "notCount@EFB") item[i] = ""; } });
   var jsonObject = JSON.stringify(items);
   var csv = this.convertToCSV_emsFormBuilder(jsonObject);
@@ -2059,7 +2059,7 @@ function convertToCSV_emsFormBuilder(objArray) {
 
 function generat_csv_emsFormBuilder() {
   const exp = JSON.parse(localStorage.getItem("rows_ws_p"));
-  console.log(exp);
+
   const filename = `EasyFormBuilder-${form_type_emsFormBuilder}-export-${Math.random().toString(36).substr(2, 3)}`
   exportCSVFile_emsFormBuilder(exp, filename);
 
@@ -2192,7 +2192,7 @@ function emsFormBuilder_chart(titles, colname, colvalue) {
 
       }
 
-    }// end for 1
+    }
 
 
   }, 1000);
@@ -2274,7 +2274,7 @@ function email_template_efb(s) {
 
     } else if (c.length > 2 && c.length < 2000) {
       ti = efb_var.text.preview;
-      if (!c.includes('shortcode_message') && !c.includes('shortcode_title')) {
+      if (!c.includes('shortcode_message')) {
         c = `<div class="efb text-center text-darkb efb"><div class="efb bi-exclamation-triangle fs-3 text-danger efb"></div><p class="efb fs-5 efb">${efb_var.text.addSCEmailM}</p></div>`;
         ti = efb_var.text.error;
       }

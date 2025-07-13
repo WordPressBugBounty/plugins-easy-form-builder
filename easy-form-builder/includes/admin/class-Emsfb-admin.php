@@ -662,8 +662,7 @@ class Admin {
         $id =  ( int ) sanitize_text_field($_POST['id']) ;
 
         $table_name = $this->db->prefix . "emsfb_form";
-        $value      = $this->db->get_var("SELECT form_structer FROM `$table_name` WHERE form_id = '$id'");
-
+        $value = $this->db->get_var("SELECT form_structer FROM `$table_name` WHERE form_id = '$id'");
 
 
 
@@ -925,7 +924,7 @@ class Admin {
         }
 
         foreach ($m as $key => $value) {
-            if ($key == "emailSupporter") {
+            if (in_array($key ,['emailSupporter','femail'])) {
                 $m[$key] = sanitize_text_field($value);
                 $email =  $m[$key];
 
@@ -941,11 +940,8 @@ class Admin {
 
                 }
 
-            }
-             else if($key == "emailTemp"){
-
-
-                if( strlen($value)>5  && (strpos($setting ,'shortcode_message')==false || strpos($setting ,'shortcode_title')==false)){
+            }else if($key == "emailTemp"){
+                if( strlen($value)>5  && (strpos($setting ,'shortcode_message')==false )){
                     $m = $lang["addSCEmailM"];
                     $response = ['success' => false, "m" =>$m];
                     wp_send_json_success($response, $_POST);
@@ -967,17 +963,40 @@ class Admin {
                     die();
                 }
 
+            }else if($key == 'smtp'){
+
+                function result_ok() {
+                    return [
+                        'status' => 'ok_set_smtp',
+                        'message' => [
+                            'title' => 'configured',
+                            'description' => 'user configured email settings',
+                            'id' => 'email_settings_configured'
+                        ]
+                    ];
+                }
+                if(isset($value) && in_array($value,[1,true,'true','1']) ){
+
+                  $check =  get_option('emsfb_email_status',false);
+                    if($check==false || $check==null){
+                         update_option('emsfb_email_status', result_ok());
+                    }else if($check['status']!='ok_set_smtp' || $check['status']!='ok'){
+
+                            update_option('emsfb_email_status', result_ok());
+                    }
+
+                }
+
+
             }
 
-
         }
-
         if(isset($m['efb_version'])==false){
             $m['efb_version']=EMSFB_PLUGIN_VERSION;
             $st_ = json_encode($m,JSON_UNESCAPED_UNICODE);
             $setting = str_replace('"', '\"', $st_);
         }
-
+        $email = isset($m['emailSupporter']) ? $m['emailSupporter'] : '';
         $this->database_set_emsfb_settings($setting, $email);
         $m = $lang["messageSent"];
         $response = ['success' => true, "m" => $m];
@@ -1018,7 +1037,7 @@ class Admin {
 
         $table_name = $this->db->prefix . "emsfb_msg_";
         $id         = sanitize_text_field($_POST['value']);
-        $value      = $this->db->get_results("SELECT * FROM `$table_name` WHERE track = '$id'");
+        $value      = $this->db->get_results($this->db->prepare("SELECT * FROM `$table_name` WHERE track = %s", $id));
 
 
         if (count($value)>0) {
@@ -1135,7 +1154,7 @@ class Admin {
         $check = $efbFunction->send_email_state_new([$to , null,$from] ,$sub ,$cont,$pro,'testMailServer',home_url(),$ac);
 
                 if($check==true){
-                    $ac->smtp = "true";
+                    $ac->smtp = true;
                     $ac->emailSupporter = $to;
                     $table_name = $this->db->prefix . "emsfb_setting";
                     $newAc= json_encode( $ac ,JSON_UNESCAPED_UNICODE );
@@ -1149,7 +1168,15 @@ class Admin {
                             'email'   => $to,
                         ]
                     );
-
+                    $ok =  [
+                        'status' => 'ok_set_smtp',
+                        'message' => [
+                            'title' => 'configured',
+                            'description' => 'user configured email settings',
+                            'id' => 'email_settings_configured'
+                        ]
+                        ];
+                    update_option('emsfb_email_status',$ok);
                     set_transient('emsfb_settings_transient', $newAc, 1440);
                     update_option('emsfb_settings', $newAc);
                 }
@@ -1234,7 +1261,7 @@ class Admin {
     public function file_upload_public(){
 
 
-        $_POST['id']=sanitize_text_field($_POST['id']);
+        $_POST['id']=intval($_POST['id']);
         $_POST['pl']=sanitize_text_field($_POST['pl']);
         $_POST['nonce_msg']=sanitize_text_field($_POST['nonce_msg']);
         $vl=null;
@@ -1553,62 +1580,66 @@ class Admin {
 		if($state==1) return $this->efbFunction;
 	}
 
-        function admin_notices_efb () {
-
-            if (get_option('emsfb_email_status') === false) {
-                require_once (EMSFB_PLUGIN_DIRECTORY . 'includes/class-Emsfb-requirement.php');
-                $efbRequirement = new CheckRequirementEmsfb();
-                $efbRequirement->run_and_save_efb();
+    function admin_notices_efb () {
+             $check = get_option('emsfb_email_status', false);
+            function result_ok ($ok) {
+                   $r['status'] = $ok;
+                   $r['message']['title'] = 'configured';
+                   $r['message']['description'] = 'user configured email settings';
+                   $r['message']['id'] = 'email_settings_configured';
+                   return $r;
             }
-            $settings =false;
+            $efbFunction = $this->get_efbFunction(1);
+            $settings= $efbFunction->get_setting_Emsfb();
 
-            $check = get_option('emsfb_email_status', false);
-
-
-            if(!$check || is_array($check)){
-
+            if(is_array($check)){
                     if($check['status'] === 'ok_set_smtp') {
-                        return; // No issues found or already configured
+                        return;
                     }else if ($check['status'] === 'ok' ) {
-                        $efbFunction = $this->get_efbFunction(1);
-                        $settings= $efbFunction->get_setting_Emsfb();
                         if (isset($settings->smtp) && !in_array($settings->smtp, ['1', 'true', true,1], true)) {
                             $settings->smtp = true;
                             $email = isset($settings->emailSupporter) ? $settings->emailSupporter : '';
                             $st_ = json_encode($settings,JSON_UNESCAPED_UNICODE);
                             $setting = str_replace('"', '\"', $st_);
                             $this->database_set_emsfb_settings($setting, $email);
-                            $check['status'] = 'ok_set_smtp';
-                            $check['message']['title'] = 'configured';
-                            update_option('emsfb_email_status', $check);
                         }
 
-                        return; // No issues found or already configured
-                    }else if ( $check['message']['id'] == 'mail_function_failed'){
+                        return;
+                    }else if (($check['status'] !== 'ok' || $check['status'] !== 'ok_set_smtp') && (isset($settings->smtp) && in_array($settings->smtp, ['1', 'true', true,1], true))) {
+                            update_option('emsfb_email_status',  result_ok('ok_set_smtp'));
+                            return;
+                    }
+            }else{
+                if (isset($settings->smtp) && in_array($settings->smtp, ['1', 'true', true,1], true)) {
+                       update_option('emsfb_email_status', result_ok('ok_set_smtp'));
+                       return;
+                }else{
+                    require_once (EMSFB_PLUGIN_DIRECTORY . 'includes/class-Emsfb-requirement.php');
+                    $efbRequirement = new CheckRequirementEmsfb();
+                    $efbRequirement->run_and_save_efb();
+                    $check = get_option('emsfb_email_status', false);
+                    if(is_array($check)  && isset($check['status']) && ($check['status'] == 'ok_set_smtp' || $check['status'] == 'ok')) {
+                        if (isset($settings->smtp) && !in_array($settings->smtp, ['1', 'true', true,1], true)) {
+                            $settings->smtp = true;
+                            $email = isset($settings->emailSupporter) ? $settings->emailSupporter : '';
+                            $st_ = json_encode($settings,JSON_UNESCAPED_UNICODE);
+                            $setting = str_replace('"', '\"', $st_);
+                            $this->database_set_emsfb_settings($setting, $email);
+                        }
                         return;
                     }
+                }
 
             }
-
             $email_notifi = sprintf(
                 esc_html__('%s notification', 'easy-form-builder'),
                 esc_html__('Email', 'easy-form-builder')
             );
 
-
-            function result_ok () {
-                   $check['status'] = 'ok';
-                   $check['message']['title'] = 'configured';
-                   $check['message']['description'] = 'user configured email settings';
-                   $check['message']['id'] = 'email_settings_configured';
-                   return $check;
-            }
-
             $warning =' '. sprintf(
                 esc_html__('Disabling this feature may affect the proper functionality of Easy Form Builder. If you plan to use the %s feature, please ensure it is enabled.', 'easy-form-builder'),
                 $email_notifi
             );
-
 
              $messages = [
                 'mail_function_ok' => [
@@ -1637,40 +1668,9 @@ class Admin {
                 ],
             ];
 
-            $settings = get_option('emsfb_settings', false);
 
 
 
-            if ($settings!=false){
-
-                $s = str_replace('\\', '', $settings);
-                $settings = json_decode($s);
-
-
-                if (isset($settings->smtp) && in_array($settings->smtp, ['1', 'true', true,1], true)) {
-
-                  /*  $check['status'] = 'ok';
-                   $check['message']['title'] = 'configured';
-                   $check['message']['description'] = 'user configured email settings'; */
-
-                   update_option('emsfb_email_status', result_ok());
-                   return;
-                }
-            }else{
-                $efbFunction = $this->get_efbFunction(1);
-                $settings= $efbFunction->get_setting_Emsfb();
-                if($settings!=false){
-                    if (isset($settings->smtp) && in_array($settings->smtp, ['1', 'true', true,1], true)) {
-
-                      /*  $check['status'] = 'ok';
-                       $check['message']['title'] = 'configured';
-                       $check['message']['description'] = 'user configured email settings'; */
-
-                       update_option('emsfb_email_status', result_ok());
-                       return;
-                    }
-                }
-            }
             $logo_url = EMSFB_PLUGIN_URL.'includes/admin/assets/image/logo.png';
             $msg_id = isset($check['message']['id']) ? $check['message']['id'] : '';
             $help = '<a href="https://whitestudio.team/documents/how-to-fix-email-not-working-issue#'.$msg_id.'" target="_blank" >' . esc_html__('Click here for more details','easy-form-builder') . '</a>';
@@ -1690,18 +1690,25 @@ class Admin {
                 </div>
             </div>
             <script>
-                if (window.sessionStorage.getItem('efb_hide_notice') === '1') {
-                    var efbNotice = document.getElementById('notice-email-efb');
+                var efbNotice = document.getElementById('notice-email-efb');
+                if (window.sessionStorage.getItem('efb_hide_notice') === '3') {
                     if (efbNotice) efbNotice.style.display = 'none';
                 }
                 var efbCloseBtn = document.getElementById('efb-close-notice-btn');
 
                 if (efbCloseBtn) {
+                    //look for efb classes on the elements of page
+                    const page = document.querySelector('.sideMenuFEfb');
+                    if (page) {
+                        efbNotice.style.display = 'none';
+                    }
                     efbCloseBtn.addEventListener('click', function () {
                         console.log('Notice closed');
                         var efbNotice = document.getElementById('notice-email-efb');
                         if (efbNotice) efbNotice.style.display = 'none';
-                        window.sessionStorage.setItem('efb_hide_notice', '1');
+                        let count = window.sessionStorage.getItem('efb_hide_notice') ?? 0
+                        count = parseInt(count) + 1;
+                        window.sessionStorage.setItem('efb_hide_notice', count);
                     });
                 }
             </script>

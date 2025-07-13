@@ -275,13 +275,13 @@ class Panel_edit  {
 			wp_enqueue_script('efb-main-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/new-efb.js',false,EMSFB_PLUGIN_VERSION);
 
 
-				/* new code v4 */
+
 
 				wp_register_script('jquery-ui-efb', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/jquery-ui-efb.js', array('jquery'),  true,EMSFB_PLUGIN_VERSION);
 				wp_enqueue_script('jquery-ui-efb');
 				wp_register_script('jquery-dd-efb', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/jquery-dd-efb.js', array('jquery'),  true,EMSFB_PLUGIN_VERSION);
 				wp_enqueue_script('jquery-dd-efb');
-				/*end new code v4 */
+
 
 
 			wp_register_script('countries-js', 'https://cdn.jsdelivr.net/gh/hassantafreshi/Json-List-of-countries-states-and-cities-in-the-world@main/js/wp/countries.js', null, null, true);
@@ -406,7 +406,7 @@ class Panel_edit  {
 	public function file_upload_api(){
 		$efbFunction = $this->get_efbFunction();
 		if(empty($this->efbFunction))$this->efbFunction =$efbFunction;
-		$_POST['id']=sanitize_text_field($_POST['id']);
+		$_POST['id']=intval($_POST['id']);
         $_POST['pl']=sanitize_text_field($_POST['pl']);
         $_POST['fid']=sanitize_text_field($_POST['fid']);
 		$sid = sanitize_text_field($_POST['sid']);
@@ -471,7 +471,7 @@ class Panel_edit  {
 			die('invalid file '.$_FILES['async-upload']['type']);
 		}
 
-	}// end function
+	}
 
 
 	public function delete_old_rows_emsfb_stts_() {

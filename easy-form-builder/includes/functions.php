@@ -403,7 +403,7 @@ class efbFunction {
 			"formNExist" => $state ? $ac->text->formNExist : esc_html__('Form does not exist !!',$s),
 			"error403" => $state ? $ac->text->error403 : esc_html__('Your security session has expired or is invalid. Please refresh the page. E403',$s),
 			"error400" => $state ? $ac->text->error400 : esc_html__('Your security session has expired or is invalid. Please refresh the page. E400',$s),
-			"formPrivateM" => $state ? $ac->text->formPrivateM : esc_html__('Private form, please log in.',$s),
+			"formPrivateM" => $state  && isset($ac->text->formPrivateM) ? $ac->text->formPrivateM : esc_html__('This is a private form. Please log in to access it.',$s),
 			"errorSiteKeyM" => $state ? $ac->text->errorSiteKeyM : esc_html__('Please check the site key and secret key on Easy Form Builder panel > Settings > Google Keys to resolve the error.',$s),
 			"errorCaptcha" => $state ? $ac->text->errorCaptcha : esc_html__('There seems to be a problem with the Captcha. Please try again.',$s),
 			"createAcountDoneM" => $state ? $ac->text->createAcountDoneM : esc_html__('Your account has been successfully created! You will receive an email containing your information',$s),
@@ -446,7 +446,7 @@ class efbFunction {
 			"freefeatureNotiEmail" => $state  &&  isset($ac->text->freefeatureNotiEmail) ? $ac->text->freefeatureNotiEmail : esc_html__('One of the free features of Easy Form Builder is the ability to send a notification email to either the admin or user.',$s),
 			"notFound" => $state  &&  isset($ac->text->notFound) ? $ac->text->notFound : esc_html__('Not Found',$s),
 			"editor" => $state  &&  isset($ac->text->editor) ? $ac->text->editor : esc_html__('Editor',$s),
-			"addSCEmailM" => $state  &&  isset($ac->text->addSCEmailM) ? $ac->text->addSCEmailM : esc_html__('Please add these shortcodes shortcode_message and shortcode_title to the email template.',$s),
+			"addSCEmailM" => $state  &&  isset($ac->text->addSCEmailM) ? $ac->text->addSCEmailM : esc_html__('Please add the shortcode_message shortcode to the email template.',$s),
 			"ChrlimitEmail" => $state  &&  isset($ac->text->ChrlimitEmail) ? $ac->text->ChrlimitEmail : esc_html__('Your Email Template cannot exceed 10,000 characters.',$s),
 			"pleaseEnterVaildEtemp" => $state  &&  isset($ac->text->pleaseEnterVaildEtemp) ? $ac->text->pleaseEnterVaildEtemp : esc_html__('Please use HTML tags to create your email template.',$s),
 			"infoEmailTemplates" => $state  &&  isset($ac->text->infoEmailTemplates) ? $ac->text->infoEmailTemplates : esc_html__('To create an email template using HTML2, use the following shortcodes. Please note that the shortcodes marked with an asterisk (*) should be included in the email template.',$s),
@@ -510,8 +510,8 @@ class efbFunction {
 			"submit" => $state  &&  isset($ac->text->submit) ? $ac->text->submit : esc_html__('Submit',$s),
 			"purchaseOrder" => $state  &&  isset($ac->text->purchaseOrder) ? $ac->text->purchaseOrder : esc_html__('Purchase Order',$s),
 			"paymentNcaptcha" => $state  &&  isset($ac->text->paymentNcaptcha) ? $ac->text->paymentNcaptcha : esc_html__('It is not possible to include reCAPTCHA on payment forms.',$s),
-			"PleaseMTPNotWork" => $state &&  isset($ac->text->PleaseMTPNotWork) ? $ac->text->PleaseMTPNotWork : esc_html__('Easy Form Builder could not confirm if your service is able to send emails. Please check your email inbox (or spam folder) to see if you have received an email with the subject line: Email server [Easy Form Builder]. If you have received the email, please select the option < I confirm that this host supports SMTP > and save the changes.',$s),
-			"hostSupportSmtp" => $state  &&  isset($ac->text->hostSupportSmtp) ? $ac->text->hostSupportSmtp : esc_html__('I confirm that this host supports SMTP',$s),
+			"PleaseMTPNotWork" => $state &&  isset($ac->text->PleaseMTPNotWork) ? $ac->text->PleaseMTPNotWork : esc_html__('Easy Form Builder could not confirm if your service is able to send emails. Please check your email inbox (or spam folder) to see if you have received an email with the subject line: Email server [Easy Form Builder]. If you have received the email, please select the option < This site can send emails > and save the changes.',$s),
+			"hostSupportSmtp" => $state  &&  isset($ac->text->hostSupportSmtp) ? $ac->text->hostSupportSmtp : esc_html__('This site can send emails',$s),
 			"PleaseMTPNotWork2" => $state &&  isset($ac->text->PleaseMTPNotWork2) ? $ac->text->PleaseMTPNotWork2 : esc_html__('Easy Form Builder could not confirm that your server can send emails. Please check your inbox or spam folder for an email with the subject: "Email server [Easy Form Builder]". If you received it, please enable the "%s" toggle and save your changes.',$s),
 			"hostSupportSmtp2" => $state  &&  isset($ac->text->hostSupportSmtp2) ? $ac->text->hostSupportSmtp2 : esc_html__('I confirm that this WordPress site is able to send emails properly',$s),
 			"interval" => $state  &&  isset($ac->text->interval) ? $ac->text->interval : esc_html__('Interval',$s),
@@ -707,8 +707,8 @@ class efbFunction {
 			"sms_dnoti" => $state  &&  isset($ac->text->sms_dnoti) ? $ac->text->sms_dnoti : esc_html__('To send informational text messages, such as notifications or new messages, please enter the mobile numbers of the administrators here.',$s),
 			"sms_ndnoti" => $state  &&  isset($ac->text->sms_ndnoti) ? $ac->text->sms_ndnoti : esc_html__(' Note that by entering mobile numbers, all notification messages for all forms and other informational texts will be sent to the provided numbers.',$s),
 			"emlc" => $state  &&  isset($ac->text->emlc) ? $ac->text->emlc : esc_html__('Choose Email notification content',$s),
-			"emlacl" => $state  &&  isset($ac->text->emlacl) ? $ac->text->emlacl : esc_html__('The email includes the confirmation code and link',$s),
-			"emlml" => $state  &&  isset($ac->text->emlml) ? $ac->text->emlml : esc_html__('The email includes the filled form and link',$s),
+			"emlacl" => $state  &&  isset($ac->text->emlacl) ? $ac->text->emlacl : esc_html__('Send email with confirmation code and link',$s),
+			"emlml" => $state  &&  isset($ac->text->emlml) ? $ac->text->emlml : esc_html__('Send email with submitted form content and link',$s),
 			"msgemlmp" => $state  &&  isset($ac->text->msgemlmp) ? $ac->text->msgemlmp : esc_html__('To view the map and selected points, simply click here to navigate to the received message page',$s),
 			"msgchckvt" => $state  &&  isset($ac->text->msgchckvt) ? $ac->text->msgchckvt : esc_html__('Review the entered values in the XXX tab.this message appeared because an error is detected.',$s),
 
@@ -771,6 +771,9 @@ class efbFunction {
 			"alns" => $state  &&  isset($ac->text->alns) ? $ac->text->alns : esc_html__('The %s1 pages are currently unavailable. It looks like another plugin is causing a conflict with %s1 . To fix this issue, %s2 contact %s1 support %s3 for assistance  or try disabling your plugins one at a time to identify the one causing the conflict.',$s),
 			"notis" => $state  &&  isset($ac->text->noti) ? $ac->text->noti : esc_html__('%s notification',$s),
 			"settings" => $state  &&  isset($ac->text->settings) ? $ac->text->settings : esc_html__('Settings',$s),
+			"emlcc" => $state  &&  isset($ac->text->emlcc) ? $ac->text->emlcc : esc_html__('Send email with submitted form content only',$s),
+			"copied" => $state  &&  isset($ac->text->copied) ? $ac->text->copied : esc_html__('copied!',$s),
+			"srvnrsp" => $state  &&  isset($ac->text->srvnrsp) ? $ac->text->srvnrsp : esc_html__('The website is not responding; please refresh and try again-saving or submitting is not available until it is restored.',$s),
 			"thank" => $state  &&  isset($ac->text->thank) ? $ac->text->thank : esc_html__('Thank',$s)
 
 		];
@@ -798,6 +801,7 @@ class efbFunction {
 
 	public function send_email_state_new($to ,$sub ,$cont,$pro,$state,$link,$st="null"){
 				add_filter( 'wp_mail_content_type',[$this, 'wpdocs_set_html_mail_content_type' ]);
+				$email_content_type = isset($state[2]) ? $state[2]  : 'traking_link' ;
 			   	$mailResult = "n";
 				if(gettype($to) == 'array')ksort($to);
 				$from =get_bloginfo('name')." <no-reply@".$_SERVER['SERVER_NAME'].">";
@@ -818,7 +822,7 @@ class efbFunction {
 
 				);
 				if(gettype($sub)=='string'){
-					$message = $this->email_template_efb($pro,$state,$cont,$link,$st);
+					$message = $this->email_template_efb($pro,$state,$cont,$link,$email_content_type,$st);
 					if( $state!="reportProblem"){
 						$to_;$mailResult;
 						if (gettype($to) == 'string') {
@@ -863,7 +867,8 @@ class efbFunction {
 				}else{
 					for($i=0 ; $i<2 ; $i++){
 						if(empty($to[$i])==false && $to[$i]!="null" && $to[$i]!=null && $to[$i]!=[null] && $to[$i]!=[]){
-							$message = $this->email_template_efb($pro,$state[$i],$cont[$i],$link[$i],$st);
+
+							$message = $this->email_template_efb($pro,$state[$i],$cont[$i],$link[$i],$email_content_type,$st);
 							if( $state!="reportProblem"){
 								$to_;$mailResult;
 								$to_ = $to[$i];
@@ -896,8 +901,7 @@ class efbFunction {
 			   return $mailResult;
 	}
 
-	public function email_template_efb($pro, $state, $m,$link ,$st="null"){
-
+	public function email_template_efb($pro, $state, $m,$link ,$email_content_type,$st="null"){
 		$l ='https://whitestudio.team';
 		$wp_lan = get_locale();
 			 if($wp_lan=="fa_IR"){ $l='https://easyformbuilder.ir'  ;}
@@ -933,7 +937,14 @@ class efbFunction {
 
 
 		$dts =  $lang['msgdml'];
-
+		$track_id = '';
+		if(gettype($m)=='string'){
+			$track_id =$m;
+		}else{
+			$track_id=$m[0];
+		}
+		$dts = str_replace('%s', $track_id, $dts);
+		$tracking_section = $email_content_type=='just_message' ? "" : "<div id='sectionTracking'><p style='text-align:center'>".$dts." </p><div style='text-align:center'><a href='".$link."' target='_blank'  style='padding:5px;color:white;background:black;' >".$lang['vmgs']."</a></div></div>";
 		if($state=="testMailServer"){
 			$dt = $lang['msgnml'];
 			$de = $lang['mlntip'];
@@ -970,20 +981,17 @@ class efbFunction {
 
 		}elseif($state=="newMessage"){
 
+
 			if(gettype($m)=='string'){
 				$dts = str_replace('%s', $m, $dts);
 				$link = strpos($link,"?")==true ? $link.'&track='.$m : $link.'?track='.$m;
 				$message ="<h2 style='text-align:center'>".$lang["newMessageReceived"]."</h2>
-				<p style='text-align:center'>". $lang["trackingCode"].": ".$m." </p>
-				<p style='text-align:center'>".$dts." </p>
-				<div style='text-align:center'><a href='".$link."' target='_blank' style='padding:5px;color:white;background:black;'>".$lang['vmgs']."</a></div>";
+				<p style='text-align:center'>". $lang["trackingCode"].": ".$m." </p>".$tracking_section ;
 			}else{
 				$dts = str_replace('%s', $m[0], $dts);
 				$link = strpos($link,"?")==true ? $link.'&track='.$m[0] : $link.'?track='.$m[0];
 				$message ="
-				<div style='text-align:".$align.";color:#252526;font-size:14px;background: #f9f9f9;padding: 10px;margin: 20px 5px;'>".$m[1]." </div>
-				<p style='text-align:center'>".$dts." </p>
-				<div style='text-align:center'><a href='".$link."' target='_blank' style='padding:5px;color:white;background:black;'>".$lang['vmgs']."</a></div>";
+				<div style='text-align:".$align.";color:#252526;font-size:14px;background: #f9f9f9;padding: 10px;margin: 20px 5px;'>".$m[1]." </div>".$tracking_section;
 			}
 		}else{
 			if(gettype($m)=='string'){
@@ -995,10 +1003,7 @@ class efbFunction {
 				$dts = str_replace('%s', $m[0], $dts);
 				$message="
 				<div style='text-align:center'><h2>".$lang["WeRecivedUrM"]."</h2> </div>
-				<div style='text-align:".$align.";color:#252526;font-size:14px;background: #f9f9f9;padding: 10px;margin: 20px 5px;'>".$m[1]." </div>
-				<p style='text-align:center'>".$dts." </p>
-				<div style='text-align:center'><a href='".$link."' target='_blank'  style='padding:5px;color:white;background:black;' >".$lang['vmgs']."</a></div>
-				";
+				<div style='text-align:".$align.";color:#252526;font-size:14px;background: #f9f9f9;padding: 10px;margin: 20px 5px;'>".$m[1]." </div>". $tracking_section;
 			}
 		}
 
@@ -1048,7 +1053,7 @@ class efbFunction {
 
 	public function get_setting_Emsfb()
 	{
-		// 1. Try to get from transient cache (30 seconds)
+
 		$transient = get_transient('emsfb_settings_transient');
 		if ($transient !== false && !empty($transient)) {
 			if (is_string($transient)) {
@@ -1060,7 +1065,7 @@ class efbFunction {
 			}
 		}
 
-		// 2. If not found in transient, get from DB
+
 		$table_name = $this->db->prefix . "emsfb_setting";
 		$value = $this->db->get_var("SELECT setting FROM $table_name ORDER BY id DESC LIMIT 1");
 		if (!isset($value) || empty($value)) {
@@ -1071,7 +1076,6 @@ class efbFunction {
 		$rtrn = $rtrn != null ? $rtrn : 'null';
 
 		update_option('emsfb_settings', $value);
-		// 3. Save to transient for next time (30 seconds)
 		if ($rtrn != 'null') {
 			set_transient('emsfb_settings_transient', $value, 1440);
 		}
@@ -1106,16 +1110,21 @@ class efbFunction {
 		$data =str_replace('\\', '', $data[0]->form_structer);
 		$data = json_decode($data,true);
 		if(($data[0]["sendEmail"]=="true"|| $data[0]["sendEmail"]==true ) &&   strlen($data[0]["email_to"])>2 ){
+
+			$emailsId=[];
+			foreach($data as $key=>$val){
+				if($val['type']=="email" && isset($val['noti']) && in_array($val['noti'] ,[1,'1',true,'true'],true) ){
+					$emailsId[]=$val['id_'];
+				}
+			}
 			$ac=$this->get_setting_Emsfb();
 			$smtp =(isset($ac->smtp) && (bool)$ac->smtp ) ? true : false;
 			if($smtp) {
 				foreach($user_res as $key=>$val){
-					if(isset($user_res[$key]["id_"]) && $user_res[$key]["id_"]==$data[0]["email_to"]){
+					if(isset($user_res[$key]["id_"]) && in_array($user_res[$key]["id_"],$emailsId,true) && isset($val["value"]) && is_email($val["value"]) ){
 						$email=$val["value"];
 						$subject ="📮 ".$lang["youRecivedNewMessage"];
 						$this->send_email_state_new($email ,$subject ,$trackingCode,$pro,"newMessage",$link_w,'null');
-
-
 					}
 				}
 			}
@@ -1271,7 +1280,7 @@ class efbFunction {
 			}
 		}
 		return $valp;
-	}// end function
+	}
 
 
 
@@ -1321,56 +1330,6 @@ class efbFunction {
 		$current_domain = parse_url(home_url(), PHP_URL_HOST);
 		$allowed_domains = array('google.com', 'gstatic.com', 'googleapis.com', 'googleusercontent.com', 'youtube.com', 'ytimg.com', 'microsoft.com', 'office.com', 'live.com', 'msn.com', 'outlook.com', 'amazonaws.com', 'cloudfront.net', 'cdnjs.cloudflare.com', 'maxcdn.bootstrapcdn.com', 'jsdelivr.net', 'unpkg.com', 'facebook.com', 'fbcdn.net', 'twitter.com', 'twimg.com', 'github.com', 'github.io', 'vimeo.com', 'vimeocdn.com', 'wikipedia.org', 'wikimedia.org', 'wikidata.org', 'stripe.com', 'paypal.com', 'braintreepayments.com', 'fonts.googleapis.com', 'fonts.gstatic.com', 'use.fontawesome.com', 'dailymotion.com', 'dmcdn.net', 'maps.googleapis.com', 'openstreetmap.org', 'mapbox.com', 'gravatar.com', 'unsplash.com', 'placekitten.com', 'placehold.co', 'akamaihd.net', 'cloudflare.com', 'fastly.net', 'linkedin.com', 'apple.com', 'adobe.com', 'cdn.shopify.com', 'example.com', 'example.org', 'trusted.com', 'cdn.trusted.com');
 
-
-
-		function validate_url($url) {
-			global $allowed_domains;
-			$parsed_url = parse_url($url);
-
-
-			if (isset($parsed_url['host']) && in_array($parsed_url['host'], $allowed_domains)) {
-				return esc_url($url);
-			}
-
-
-			if (strpos($url, 'javascript:') === false && strpos($url, 'data:') === false) {
-				return esc_url($url);
-			}
-
-			return '';
-		}
-
-
-		function sanitize_style_attribute($style) {
-			global $allowed_properties;
-			$style_rules = explode(';', $style);
-			$sanitized_rules = array();
-
-			foreach ($style_rules as $rule) {
-				if (strpos($rule, ':') !== false) {
-					list($property, $value) = explode(':', $rule, 2);
-					$property = trim($property);
-					$value = trim($value);
-
-
-					if (in_array($property, $allowed_properties)) {
-
-						if (strpos($value, 'url(') !== false) {
-							preg_match('/url\(["\']?([^"\')]+)["\']?\)/i', $value, $matches);
-							if (isset($matches[1]) && validate_url($matches[1])) {
-								$sanitized_rules[] = $property . ': ' . $value;
-							}
-						} else {
-
-							$sanitized_rules[] = $property . ': ' . $value;
-						}
-					}
-				}
-			}
-
-
-			return implode('; ', $sanitized_rules);
-		}
 
 
 		$allowed_tags = array(
@@ -1442,6 +1401,15 @@ class efbFunction {
 				'width' => true,
 				'height' => true,
 			)),
+			'iframe' => array_merge($global_attributes, array(
+				'src' => true,
+				'width' => true,
+				'height' => true,
+				'frameborder' => true,
+				'scrolling' => true,
+				'allowscriptaccess' => true,
+				'allowfullscreen' => true,
+			)),
 		);
 
 
@@ -1451,7 +1419,7 @@ class efbFunction {
 		$sanitized_html = preg_replace_callback(
 			'/style=["\']([^"\']+)["\']/i',
 			function ($matches) {
-				return 'style="' . sanitize_style_attribute($matches[1]) . '"';
+				return 'style="' . $this->sanitize_style_attribute_efb($matches[1]) . '"';
 			},
 			$sanitized_html
 		);
@@ -1631,7 +1599,7 @@ class efbFunction {
 			$t = new $name();
 		}
 
-	}// end function
+	}
 
 
 	public function download_all_addons_efb(){
@@ -2028,4 +1996,56 @@ class efbFunction {
 		$this->send_email_state_new('reportProblem' ,'reportProblem' ,$str,0,"reportProblem",'null','null');
 		return true;
 	}
+
+	public function validate_url_efb($url) {
+			global $allowed_domains;
+			$parsed_url = parse_url($url);
+
+			if (isset($parsed_url['host']) && in_array($parsed_url['host'], $allowed_domains)) {
+				return esc_url($url);
+			}
+
+
+			if (strpos($url, 'javascript:') === false && strpos($url, 'data:') === false) {
+				return esc_url($url);
+			}
+
+			return '';
+		}
+
+
+public function sanitize_style_attribute_efb($style) {
+			global $allowed_properties;
+			$style_rules = explode(';', $style);
+			$sanitized_rules = array();
+
+			foreach ($style_rules as $rule) {
+				if (strpos($rule, ':') !== false) {
+					list($property, $value) = explode(':', $rule, 2);
+					$property = trim($property);
+					$value = trim($value);
+
+
+					if (in_array($property, $allowed_properties)) {
+
+						if (strpos($value, 'url(') !== false) {
+							preg_match('/url\(["\']?([^"\')]+)["\']?\)/i', $value, $matches);
+							if (isset($matches[1]) && $this->validate_url_efb($matches[1])) {
+								$sanitized_rules[] = $property . ': ' . $value;
+							}
+						} else {
+
+							$sanitized_rules[] = $property . ': ' . $value;
+						}
+					}
+				}
+			}
+
+
+			return implode('; ', $sanitized_rules);
+		}
+
 }
+
+
+
