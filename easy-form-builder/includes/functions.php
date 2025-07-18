@@ -773,7 +773,7 @@ class efbFunction {
 			"settings" => $state  &&  isset($ac->text->settings) ? $ac->text->settings : esc_html__('Settings',$s),
 			"emlcc" => $state  &&  isset($ac->text->emlcc) ? $ac->text->emlcc : esc_html__('Send email with submitted form content only',$s),
 			"copied" => $state  &&  isset($ac->text->copied) ? $ac->text->copied : esc_html__('copied!',$s),
-			"srvnrsp" => $state  &&  isset($ac->text->srvnrsp) ? $ac->text->srvnrsp : esc_html__('The website is not responding; please refresh and try again-saving or submitting is not available until it is restored.',$s),
+			"srvnrsp" => $state  &&  isset($ac->text->srvnrsp) ? $ac->text->srvnrsp : esc_html__('The website is not responding; please refresh and try again—saving or submitting is not available until it is restored.',$s),
 			"thank" => $state  &&  isset($ac->text->thank) ? $ac->text->thank : esc_html__('Thank',$s)
 
 		];
@@ -1284,7 +1284,60 @@ class efbFunction {
 		return $valp;
 	}
 
+		public function allowed_properties_thml_efb(){
+		return array(
 
+			'color', 'background', 'background-color', 'background-image', 'background-position',
+			'background-repeat', 'background-size', 'background-attachment', 'background-clip', 'background-origin',
+			'border-image', 'border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'border-image-repeat',
+
+
+			'font', 'font-family', 'font-size', 'font-style', 'font-variant', 'font-weight',
+			'letter-spacing', 'line-height', 'text-align', 'text-decoration', 'text-indent',
+			'text-overflow', 'text-shadow', 'text-transform', 'white-space', 'word-break', 'word-spacing',
+			'direction', 'unicode-bidi', 'writing-mode', 'hyphens',
+
+
+			'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
+			'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+			'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+			'box-sizing', 'overflow', 'overflow-x', 'overflow-y', 'aspect-ratio',
+
+
+			'border', 'border-width', 'border-style', 'border-color', 'border-top', 'border-right', 'border-bottom', 'border-left',
+			'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+			'border-radius', 'outline', 'outline-width', 'outline-style', 'outline-color',
+			'border-collapse', 'border-spacing', 'border-image', 'border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'border-image-repeat',
+
+
+			'box-shadow', 'box-sizing', 'box-decoration-break',
+
+
+			'position', 'top', 'right', 'bottom', 'left', 'z-index',
+			'float', 'clear', 'vertical-align', 'clip',
+
+
+			'display', 'flex', 'flex-grow', 'flex-shrink', 'flex-basis',
+			'align-items', 'align-content', 'align-self', 'justify-content', 'order',
+			'grid', 'grid-template-rows', 'grid-template-columns', 'grid-template-areas',
+			'grid-area', 'row-gap', 'column-gap', 'gap', 'place-items', 'place-content', 'place-self',
+
+
+			'animation', 'animation-name', 'animation-duration', 'animation-timing-function', 'animation-delay',
+			'animation-iteration-count', 'animation-direction', 'animation-fill-mode', 'animation-play-state',
+			'transition', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay',
+
+
+			'border-collapse', 'border-spacing', 'caption-side', 'empty-cells', 'table-layout','collapse',
+
+
+			'cursor', 'opacity', 'clip-path', 'filter', 'backface-visibility', 'visibility',
+			'transform', 'transform-origin', 'transform-style', 'perspective', 'perspective-origin',
+			'pointer-events', 'resize', 'scroll-behavior', 'user-select', 'will-change',
+			'isolation', 'contain', 'mix-blend-mode', 'object-fit', 'object-position', 'overflow-wrap',
+			'shape-outside', 'shape-margin', 'shape-image-threshold'
+		);
+	}
 
 	public function sanitize_full_html_efb($html) {
 
@@ -1298,35 +1351,7 @@ class efbFunction {
 		);
 
 
-		$allowed_properties = array(
-
-			'color', 'background', 'background-color', 'background-image', 'background-position',
-			'background-repeat', 'background-size', 'background-attachment', 'background-clip', 'background-origin',
-
-			'font', 'font-family', 'font-size', 'font-style', 'font-variant', 'font-weight',
-			'letter-spacing', 'line-height', 'text-align', 'text-decoration', 'text-indent',
-			'text-overflow', 'text-shadow', 'text-transform',
-
-			'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
-			'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
-			'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-
-			'border', 'border-width', 'border-style', 'border-color', 'border-radius', 'outline',
-
-			'box-shadow', 'box-sizing',
-
-			'position', 'top', 'right', 'bottom', 'left', 'z-index', 'float', 'clear',
-
-			'display', 'flex', 'flex-grow', 'flex-shrink', 'flex-basis', 'align-items', 'align-content',
-			'align-self', 'justify-content', 'grid', 'grid-template-rows', 'grid-template-columns',
-			'grid-area', 'row-gap', 'column-gap',
-
-			'animation', 'animation-name', 'animation-duration', 'animation-timing-function', 'animation-delay',
-			'transition', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay',
-
-			'cursor', 'opacity', 'clip-path', 'filter', 'backface-visibility', 'transform',
-			'transform-origin', 'transform-style',
-		);
+		$allowed_properties = $this->allowed_properties_thml_efb();
 
 
 		$current_domain = parse_url(home_url(), PHP_URL_HOST);
@@ -2017,7 +2042,7 @@ class efbFunction {
 
 
 public function sanitize_style_attribute_efb($style) {
-			global $allowed_properties;
+			$allowed_properties = $this->allowed_properties_thml_efb();
 			$style_rules = explode(';', $style);
 			$sanitized_rules = array();
 
@@ -2028,7 +2053,7 @@ public function sanitize_style_attribute_efb($style) {
 					$value = trim($value);
 
 
-					if (in_array($property, $allowed_properties)) {
+					if ( !is_null($property) && in_array($property, $allowed_properties)) {
 
 						if (strpos($value, 'url(') !== false) {
 							preg_match('/url\(["\']?([^"\')]+)["\']?\)/i', $value, $matches);
