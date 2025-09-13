@@ -800,6 +800,7 @@ class efbFunction {
 	}
 
 	public function send_email_state_new($to ,$sub ,$cont,$pro,$state,$link,$st="null"){
+
 				add_filter( 'wp_mail_content_type',[$this, 'wpdocs_set_html_mail_content_type' ]);
 				$email_content_type = isset($state[2]) ? $state[2]  : 'traking_link' ;
 			   	$mailResult = "n";
@@ -823,6 +824,7 @@ class efbFunction {
 				);
 				if(gettype($sub)=='string'){
 					$message = $this->email_template_efb($pro,$state,$cont,$link,$email_content_type,$st);
+
 					if( $state!="reportProblem"){
 						$to_;$mailResult;
 						if (gettype($to) == 'string') {
@@ -869,6 +871,7 @@ class efbFunction {
 						if(empty($to[$i])==false && $to[$i]!="null" && $to[$i]!=null && $to[$i]!=[null] && $to[$i]!=[]){
 
 							$message = $this->email_template_efb($pro,$state[$i],$cont[$i],$link[$i],$email_content_type,$st);
+
 							if( $state!="reportProblem"){
 								$to_;$mailResult;
 								$to_ = $to[$i];
@@ -1008,7 +1011,18 @@ class efbFunction {
 		}
 
 		$val ="
-		<html xmlns='http://www.w3.org/1999/xhtml'> <body style='margin:auto 10px;direction:".$d.";color:#000000;'><center>
+		<html xmlns='http://www.w3.org/1999/xhtml'>
+		<head>
+		<style type='text/css'>
+			@media only screen and (max-width:600px){
+			.containerEmailEfb{width:100% !important; max-width:100% !important;}
+			.containerEmailEfb .columnEmailEfb{display:block !important; width:100% !important; max-width:100% !important;}
+			.containerEmailEfb .columnEmailEfb p{text-align:right !important;}
+			.containerEmailEfb img{max-width:100% !important; height:auto !important; display:block !important;}
+			}
+			</style>
+		</head>
+		<body style='margin:auto 10px;direction:".$d.";color:#000000;'><center>
 			<table class='efb body-wrap' style='text-align:center;width:100%;font-family:arial,sans-serif;border:12px solid rgba(126, 122, 122, 0.08);border-spacing:4px 20px;direction:".$d.";'> <tr>
 				<img src='".EMSFB_PLUGIN_URL ."public/assets/images/email_template1.png' alt='$title' style='width:36%;'>
 				</tr> <tr> <td><center> <table bgcolor='#FFFFFF' width='100%' border='0'>  <tbody> <tr>
@@ -1110,8 +1124,8 @@ class efbFunction {
 		$data =str_replace('\\', '', $data[0]->form_structer);
 		$data = json_decode($data,true);
 		if(($data[0]["sendEmail"]=="true"|| $data[0]["sendEmail"]==true ) &&   strlen($data[0]["email_to"])>2 ){
-			$email_to = $data[0]["email_to"];
 			$emailsId=[];
+			$email_to = $data[0]["email_to"];
 			foreach($data as $key=>$val){
 				if($val['type']=="email" && isset($val['noti']) && in_array($val['noti'] ,[1,'1',true,'true'],true) ){
 					$emailsId[]=$val['id_'];
@@ -1284,60 +1298,6 @@ class efbFunction {
 		return $valp;
 	}
 
-		public function allowed_properties_thml_efb(){
-		return array(
-
-			'color', 'background', 'background-color', 'background-image', 'background-position',
-			'background-repeat', 'background-size', 'background-attachment', 'background-clip', 'background-origin',
-			'border-image', 'border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'border-image-repeat',
-
-
-			'font', 'font-family', 'font-size', 'font-style', 'font-variant', 'font-weight',
-			'letter-spacing', 'line-height', 'text-align', 'text-decoration', 'text-indent',
-			'text-overflow', 'text-shadow', 'text-transform', 'white-space', 'word-break', 'word-spacing',
-			'direction', 'unicode-bidi', 'writing-mode', 'hyphens',
-
-
-			'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
-			'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
-			'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
-			'box-sizing', 'overflow', 'overflow-x', 'overflow-y', 'aspect-ratio',
-
-
-			'border', 'border-width', 'border-style', 'border-color', 'border-top', 'border-right', 'border-bottom', 'border-left',
-			'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
-			'border-radius', 'outline', 'outline-width', 'outline-style', 'outline-color',
-			'border-collapse', 'border-spacing', 'border-image', 'border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'border-image-repeat',
-
-
-			'box-shadow', 'box-sizing', 'box-decoration-break',
-
-
-			'position', 'top', 'right', 'bottom', 'left', 'z-index',
-			'float', 'clear', 'vertical-align', 'clip',
-
-
-			'display', 'flex', 'flex-grow', 'flex-shrink', 'flex-basis',
-			'align-items', 'align-content', 'align-self', 'justify-content', 'order',
-			'grid', 'grid-template-rows', 'grid-template-columns', 'grid-template-areas',
-			'grid-area', 'row-gap', 'column-gap', 'gap', 'place-items', 'place-content', 'place-self',
-
-
-			'animation', 'animation-name', 'animation-duration', 'animation-timing-function', 'animation-delay',
-			'animation-iteration-count', 'animation-direction', 'animation-fill-mode', 'animation-play-state',
-			'transition', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay',
-
-
-			'border-collapse', 'border-spacing', 'caption-side', 'empty-cells', 'table-layout','collapse',
-
-
-			'cursor', 'opacity', 'clip-path', 'filter', 'backface-visibility', 'visibility',
-			'transform', 'transform-origin', 'transform-style', 'perspective', 'perspective-origin',
-			'pointer-events', 'resize', 'scroll-behavior', 'user-select', 'will-change',
-			'isolation', 'contain', 'mix-blend-mode', 'object-fit', 'object-position', 'overflow-wrap',
-			'shape-outside', 'shape-margin', 'shape-image-threshold'
-		);
-	}
 
 	public function sanitize_full_html_efb($html) {
 
@@ -2039,7 +1999,60 @@ class efbFunction {
 
 			return '';
 		}
+	public function allowed_properties_thml_efb(){
+		return array(
+			// Colors and background properties
+			'color', 'background', 'background-color', 'background-image', 'background-position',
+			'background-repeat', 'background-size', 'background-attachment', 'background-clip', 'background-origin',
+			'border-image', 'border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'border-image-repeat',
 
+			// Font and text properties
+			'font', 'font-family', 'font-size', 'font-style', 'font-variant', 'font-weight',
+			'letter-spacing', 'line-height', 'text-align', 'text-decoration', 'text-indent',
+			'text-overflow', 'text-shadow', 'text-transform', 'white-space', 'word-break', 'word-spacing',
+			'direction', 'unicode-bidi', 'writing-mode', 'hyphens',
+
+			// Dimensions and layout properties
+			'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
+			'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+			'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+			'box-sizing', 'overflow', 'overflow-x', 'overflow-y', 'aspect-ratio',
+
+			// Border properties
+			'border', 'border-width', 'border-style', 'border-color', 'border-top', 'border-right', 'border-bottom', 'border-left',
+			'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+			'border-radius', 'outline', 'outline-width', 'outline-style', 'outline-color',
+			'border-collapse', 'border-spacing', 'border-image', 'border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'border-image-repeat',
+
+			// Box and shadow properties
+			'box-shadow', 'box-sizing', 'box-decoration-break',
+
+			// Positioning and z-index
+			'position', 'top', 'right', 'bottom', 'left', 'z-index',
+			'float', 'clear', 'vertical-align', 'clip',
+
+			// Flexbox and grid properties
+			'display', 'flex', 'flex-grow', 'flex-shrink', 'flex-basis',
+			'align-items', 'align-content', 'align-self', 'justify-content', 'order',
+			'grid', 'grid-template-rows', 'grid-template-columns', 'grid-template-areas',
+			'grid-area', 'row-gap', 'column-gap', 'gap', 'place-items', 'place-content', 'place-self',
+
+			// Animation and transition properties
+			'animation', 'animation-name', 'animation-duration', 'animation-timing-function', 'animation-delay',
+			'animation-iteration-count', 'animation-direction', 'animation-fill-mode', 'animation-play-state',
+			'transition', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay',
+
+			// Table properties
+			'border-collapse', 'border-spacing', 'caption-side', 'empty-cells', 'table-layout','collapse',
+
+			// Miscellaneous
+			'cursor', 'opacity', 'clip-path', 'filter', 'backface-visibility', 'visibility',
+			'transform', 'transform-origin', 'transform-style', 'perspective', 'perspective-origin',
+			'pointer-events', 'resize', 'scroll-behavior', 'user-select', 'will-change',
+			'isolation', 'contain', 'mix-blend-mode', 'object-fit', 'object-position', 'overflow-wrap',
+			'shape-outside', 'shape-margin', 'shape-image-threshold'
+		);
+	}
 
 public function sanitize_style_attribute_efb($style) {
 			$allowed_properties = $this->allowed_properties_thml_efb();
@@ -2072,7 +2085,38 @@ public function sanitize_style_attribute_efb($style) {
 			return implode('; ', $sanitized_rules);
 		}
 
+			function ensure_trailing_colon_efb(string $s, string $colon = ':'): string
+			{
+				// هر علامت پایان جمله/پایان عبارت در زبان‌های مختلف (به‌اضافه «:»)
+				$punctClass = '[:：\.\!\?\…‥。！？｡．؟\x{06D4}؛;;‽‼⁇⁈⁉⸮።፧။។៕։\x{0964}\x{0965}\x{0589}\x{1362}\x{104B}\x{17D4}\x{17D5}\x{05C3}]';
+
+				// اگر هر کدام از این‌ها هرجای متن باشد، چیزی اضافه نکن
+				if (preg_match('/' . $punctClass . '/u', $s)) {
+					return $s;
+				}
+
+				// کلوزرهای انتهایی (مثل ” ) ] …) و فاصله‌های آخر را جدا کنیم تا کولون قبل از آن‌ها بنشیند
+				$closersRe = '(?:\p{Pe}|\p{Pf}|["\'»”’）\)\]】］｝〉》」』〕〗])*';
+				if (preg_match('/(?P<closers>' . $closersRe . ')(?P<spaces>[\s\x{00A0}\x{202F}]*)$/u', $s, $m)) {
+					$endClosers = $m['closers'];
+					$endSpaces  = $m['spaces'];
+					// حذف بخش انتهایی برای درج کولون قبل از آن
+					$s = preg_replace('/' . $closersRe . '[\s\x{00A0}\x{202F}]*$/u', '', $s);
+				} else {
+					$endClosers = '';
+					$endSpaces  = '';
+				}
+
+				// یک فاصله قبل از کولون (سبک فارسی/فرانسوی «نام خانوادگی :»)
+				if (!preg_match('/\s$/u', $s)) {
+					$s .= ' ';
+				}
+
+				return $s . $colon . $endClosers . $endSpaces;
+			}
+
 }
+
 
 
 

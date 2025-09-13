@@ -666,7 +666,7 @@ fun_imgRadio_efb=(id ,link,row)=>{
   let value = row.hasOwnProperty('value')  ? row.value : efb_var.text.newOption ?? '';
   let sub_value = row.hasOwnProperty('sub_value') ? row.sub_value : efb_var.text.sampleDescription ?? '';
 
-  link = link.includes('http')==false || link.length <5 ?  efb_var.images.head : row.src;
+  link = link.includes('http')==false || link.length <5 ?  u(efb_var.images.head) : u(row.src);
 
   return `
     <label class="efb  " id="${id}_lab" for="${id}">

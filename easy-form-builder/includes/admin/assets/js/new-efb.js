@@ -1378,7 +1378,7 @@ function handle_navbtn_efb(steps, device) {
             document.getElementById("prev_efb").classList.remove("d-none");
           }else{
             //efb_var.text.finish
-             document.getElementById("title_efb").textContent = efb_var.text.finish;
+            document.getElementById("title_efb").textContent = efb_var.text.finish;
             document.getElementById("desc_efb").textContent = efb_var.text.finish;
 
           }
