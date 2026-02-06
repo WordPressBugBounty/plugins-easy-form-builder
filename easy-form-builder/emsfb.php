@@ -3,10 +3,12 @@
  * Plugin Name:         Easy Form Builder
  * Plugin URI:          https://whitestudio.team
  * Description:         Easily create multi-step forms with a unique Confirmation Code feature and notification emails, all without any coding knowledge required, using the easy-to-use drag and drop form wizard of Easy Form Builder. This is the free version and provides an intuitive interface and functionality to create professional forms in minutes. With the unique Confirmation Code feature, you can easily associate each submission with a specific request or user.
- * Version:             3.8.20
+ * Version:             3.9.6
  * Author:              WhiteStudio
  * Author URI:          https://whitestudio.team
  * Text Domain:         easy-form-builder
+ * License:             GPL v2 or later
+ * License URI:         https://www.gnu.org/licenses/gpl-2.0.html
  * Domain Path:         /languages
  */
 
@@ -26,7 +28,7 @@ if (!defined("EMSFB_PLUGIN_DIRECTORY")) {
 }
 
 if (!defined("EMSFB_PLUGIN_VERSION")) {
-    define("EMSFB_PLUGIN_VERSION", "3.8.20");
+    define("EMSFB_PLUGIN_VERSION", "3.9.6");
 }
 
 /** Constant pointing to the root directory URL of the plugin */
@@ -47,5 +49,4 @@ require 'includes/class-Emsfb.php';
 $emsfb = new Emsfb();
 
 
-/* require_once 'includes/class-Emsfb-requirement.php';
-register_activation_hook(__FILE__, ['CheckRequirementEmsfb', 'run_and_save_efb']); */
+

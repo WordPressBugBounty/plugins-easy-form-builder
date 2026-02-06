@@ -1,13 +1,12 @@
 <?php
 
 namespace Emsfb;
-
 use WP_REST_Response;
 /**
  * Class _Public
  * @package Emsfb
  */
-require_once('functions.php');
+require_once(__DIR__ . '/functions.php');
 
 class _Public {
 	public $value;
@@ -24,6 +23,8 @@ class _Public {
 	public $location;
 	public $url;
 	public $efb_uid  ;
+	private $form_cache = array();
+	private static $icons_rendered = false;
 	public function __construct() {
 
 		global $wpdb;
@@ -33,21 +34,18 @@ class _Public {
 
 
 
-		add_action('rest_api_init',  @function(){
+		add_action('rest_api_init',  function(){
 			$this->efb_uid  = get_current_user_id();
 
-
-			register_rest_route('Emsfb/v1','test/(?P<name>[a-zA-Z0-9_]+)/(?P<id>[a-zA-Z0-9_]+)', [
-				'method'=> 'POST',
-				'callback'=>  [$this,'test_fun'],
-				'permission_callback' => '__return_true'
-			]);
-
-
+		register_rest_route('Emsfb/v1','test/(?P<name>[a-zA-Z0-9_]+)/(?P<id>[a-zA-Z0-9_]+)', [
+			'method'=> 'POST',
+			'callback'=>  [$this,'test_fun'],
+			'permission_callback' => [$this, 'check_nonce_permission_efb']
+		]);
 			register_rest_route('Emsfb/v1','forms/message/add', [
 				'methods' => 'POST',
 				'callback'=>  [$this,'get_form_public_efb'],
-				'permission_callback' => '__return_true'
+				'permission_callback' => [$this, 'check_nonce_permission_efb']
 			]);
 			/* register_rest_route('Emsfb/v1','forms/email/send', [
 				'methods' => 'POST',
@@ -58,60 +56,298 @@ class _Public {
 			register_rest_route('Emsfb/v1','forms/payment/persia/add', [
 				'methods' => 'POST',
 				'callback'=>  [$this,'pay_persia_sub_Emsfb_api'],
-				'permission_callback' => '__return_true'
+				'permission_callback' => [$this, 'check_nonce_permission_efb']
 			]);
 
 			register_rest_route('Emsfb/v1','forms/payment/stripe/card/add', [
 				'methods' => 'POST',
 				'callback'=>  [$this,'pay_stripe_sub_Emsfb_api'],
-				'permission_callback' => '__return_true'
+				'permission_callback' => [$this, 'check_nonce_permission_efb']
 			]);
 
 			register_rest_route('Emsfb/v1','forms/response/get', [
 				'methods' => 'POST',
 				'callback'=>  [$this,'get_track_public_api'],
-				'permission_callback' => '__return_true'
+				'permission_callback' => [$this, 'check_nonce_permission_efb']
 			]);
 
 			register_rest_route('Emsfb/v1','forms/response/add', [
 				'methods' => 'POST',
 				'callback'=>  [$this,'set_rMessage_id_Emsfb_api'],
-				'permission_callback' => '__return_true'
+				'permission_callback' => [$this, 'check_nonce_permission_efb']
 			]);
 
 			register_rest_route('Emsfb/v1','forms/file/upload', [
 				'methods' => 'POST',
 				'callback'=>  [$this,'file_upload_api'],
-				'permission_callback' => '__return_true'
+				'permission_callback' => [$this, 'check_nonce_permission_efb']
 			]);
-		});
+	});
 
-		add_shortcode( 'Easy_Form_Builder_confirmation_code_finder',  array( $this, 'EMS_Form_Builder_track' ) );
+	add_shortcode( 'Easy_Form_Builder_confirmation_code_finder',  array( $this, 'EMS_Form_Builder_track' ) );
 
-//
+	$this->get_efbFunction(0);
+	add_shortcode( 'EMS_Form_Builder',  array( $this, 'EFB_Form_Builder' ) );
+	add_shortcode( 'ems_form_builder',  array( $this, 'EFB_Form_Builder' ) );
+	add_action('init',  array($this, 'hide_toolmenu'));
 
-		$this->get_efbFunction(0);
-		add_shortcode( 'EMS_Form_Builder',  array( $this, 'EFB_Form_Builder' ) );
-		add_shortcode( 'ems_form_builder',  array( $this, 'EFB_Form_Builder' ) );
+	add_action('wp_ajax_form_preview_efb', [$this, 'form_preview_efb']);
+	add_action('delete_preview_page_efb', [$this,'delete_preview_page_efb'], 10, 1);
 
-		add_action('init',  array($this, 'hide_toolmenu'));
 
-		add_action('wp_ajax_form_preview_efb', [$this, 'form_preview_efb']);
-		add_action('delete_preview_page_efb', [$this,'delete_preview_page_efb'], 10, 1);
+	if (!is_admin()) {
+		add_action('wp_enqueue_scripts', [$this, 'init_elementor_compatibility_efb'], 1);
+	}
 
+}
+
+
+public function check_nonce_permission_efb($request) {
+
+	$allowed_origins = apply_filters('efb_allowed_cors_origins', array(
+		home_url(),
+		site_url()
+	));
+
+	$origin = isset($_SERVER['HTTP_ORIGIN']) ? esc_url_raw( wp_unslash( $_SERVER['HTTP_ORIGIN'] ) ) : '';
+
+	if ($origin && in_array($origin, $allowed_origins)) {
+		header('Access-Control-Allow-Origin: ' . $origin);
+	} else {
+
+		$parsed_origin = wp_parse_url($origin);
+		$parsed_home = wp_parse_url(home_url());
+
+		if (isset($parsed_origin['host']) && isset($parsed_home['host']) &&
+		    $parsed_origin['host'] === $parsed_home['host']) {
+			header('Access-Control-Allow-Origin: ' . $origin);
+		}
+	}
+
+	header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+	header('Access-Control-Allow-Credentials: true');
+	header('Access-Control-Allow-Headers: Content-Type, X-WP-Nonce, Authorization');
+	header('Access-Control-Max-Age: 86400');
+
+
+	if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+		status_header(200);
+		exit();
 	}
 
 
-	public function enqueue_jquery(){
+	if (!isset($_SERVER['HTTP_X_WP_NONCE'])) {
+		return new \WP_Error('rest_forbidden', __('X-WP-Nonce header is missing', 'easy-form-builder'), array('status' => 403));
+	}
+
+
+	$verify = wp_verify_nonce( sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_WP_NONCE'] ) ), 'wp_rest');
+
+	if (!$verify) {
+		return new \WP_Error('rest_forbidden', __('Invalid or expired nonce', 'easy-form-builder'), array('status' => 403));
+	}
+
+	return true;
+}	/**
+	 * Initialize Elementor compatibility only if Elementor is detected
+	 */
+	public function init_elementor_compatibility_efb() {
+
+		if (is_admin()) {
+			return;
+		}
+
+
+		$elementor_active = $this->is_elementor_active_efb();
+
+		if ($elementor_active) {
+
+			add_action('wp_head', [$this, 'simple_elementor_fix_efb'], 1);
+			add_action('wp_footer', [$this, 'simple_elementor_fix_footer_efb'], 1);
+
+		}
+	}
+
+	/**
+	 * Safe wrapper for wp_script_is that respects WordPress hooks
+	 */
+	private function safe_wp_script_is_efb($handle, $list = 'enqueued') {
+
+		if (!did_action('wp_enqueue_scripts') && !did_action('admin_enqueue_scripts') && !did_action('login_enqueue_scripts')) {
+			return false;
+		}
+
+		if (function_exists('wp_script_is')) {
+			return wp_script_is($handle, $list);
+		}
+
+		return false;
+	}
+
+	/**
+	 * Check if Elementor is active using multiple detection methods
+	 */
+	public function is_elementor_active_efb() {
+
+		if (is_admin()) {
+			return false;
+		}
+
+
+		if (class_exists('\Elementor\Plugin') || defined('ELEMENTOR_VERSION')) {
+			return true;
+		}
+
+
+		if (function_exists('is_plugin_active') && is_plugin_active('elementor/elementor.php')) {
+			return true;
+		}
+
+
+		global $post;
+		if (is_object($post) && isset($post->post_content)) {
+			if (strpos($post->post_content, 'elementor') !== false ||
+			    strpos($post->post_content, 'data-elementor-type') !== false) {
+				return true;
+			}
+		}
+
+
+		if ($this->safe_wp_script_is_efb('elementor-frontend', 'enqueued') ||
+		    $this->safe_wp_script_is_efb('elementor-frontend', 'registered')) {
+			return true;
+		}
+
+		return false;
+	}
+
+	public function enqueue_jquery_efb(){
+
+		static $jquery_checked = false;
+		if ($jquery_checked) {
+			return;
+		}
+		$jquery_checked = true;
+
+
+		if (is_admin()) {
+			return;
+		}
+
+
+		$elementor_active = false;
+
+
+		if (class_exists('\Elementor\Plugin') || defined('ELEMENTOR_VERSION')) {
+			$elementor_active = true;
+		}
+
+
+		if (function_exists('is_plugin_active') && is_plugin_active('elementor/elementor.php')) {
+			$elementor_active = true;
+		}
+
+
+		if ($this->safe_wp_script_is_efb('elementor-frontend', 'enqueued') ||
+		    $this->safe_wp_script_is_efb('elementor-frontend', 'registered') ||
+		    $this->safe_wp_script_is_efb('elementor-frontend', 'to_do')) {
+		$elementor_active = true;
+	}
+
+
+	if (isset($_SERVER['REQUEST_URI']) && strpos( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ), 'elementor') !== false) {
+		$elementor_active = true;
+	}
+		global $post;
+		if (is_object($post) && method_exists($post, 'get_content')) {
+			if (strpos($post->post_content, 'elementor') !== false) {
+				$elementor_active = true;
+			}
+		}
+
+
+		global $post;
+		$has_elementor_content = false;
+		if (is_object($post) && isset($post->post_content)) {
+			$has_elementor_content = strpos($post->post_content, 'elementor') !== false;
+		}
+
+
+		if ($elementor_active || $has_elementor_content) {
+
+			return;
+		}
+
 
 		if (!isset(wp_scripts()->registered['jquery']) || version_compare(wp_scripts()->registered['jquery']->ver , '3.6.0' , '<')) {
 			$wp_version = get_bloginfo('version');
 			if (version_compare($wp_version, '6.0', '>')) {
-				wp_enqueue_script('jquery', includes_url('/js/jquery/jquery.js') , false ,'3.7.1');
+				wp_enqueue_script('jquery', includes_url('/js/jquery/jquery.js') , false, '3.7.1', true);
 			}else {
-				wp_enqueue_script('jquery', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/jquery.min-efb.js', false, '3.6.2');
+				wp_enqueue_script('jquery', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/jquery.min-efb.js', false, '3.6.2', true);
 			}
+		}
+	}
 
+	/**
+	 * Get form data with caching
+	 * @param int $form_id Form ID
+	 * @param array $fields Fields to retrieve (default: ['form_structer', 'form_type'])
+	 * @return object|null Form data or null if not found
+	 */
+	private function get_form_data_efb($form_id, $fields = array('form_structer', 'form_type')) {
+		$form_id = intval($form_id);
+		$cache_key = $form_id . '_' . md5(implode('_', $fields));
+
+
+		if (isset($this->form_cache[$cache_key])) {
+			return $this->form_cache[$cache_key];
+		}
+
+
+		$cache_data = wp_cache_get('efb_form_' . $cache_key, 'emsfb');
+		if ($cache_data !== false) {
+			$this->form_cache[$cache_key] = $cache_data;
+			return $cache_data;
+		}
+
+
+		$table_name = $this->db->prefix . "emsfb_form";
+		$fields_str = implode(', ', array_map('esc_sql', $fields));
+
+		$result = $this->db->get_results(
+			$this->db->prepare(
+				"SELECT {$fields_str} FROM `{$table_name}` WHERE form_id = %d ORDER BY form_id DESC LIMIT 1",
+				$form_id
+			)
+		);
+
+		if (!$result || empty($result)) {
+			return null;
+		}
+
+
+		$this->form_cache[$cache_key] = $result[0];
+		wp_cache_set('efb_form_' . $cache_key, $result[0], 'emsfb', 3600);
+
+		return $result[0];
+	}
+
+	/**
+	 * Clear form cache
+	 * @param int $form_id Form ID to clear cache for
+	 */
+	public function clear_form_cache_efb($form_id) {
+		$form_id = intval($form_id);
+
+		$field_combinations = array(
+			array('form_structer', 'form_type'),
+			array('form_structer')
+		);
+
+		foreach ($field_combinations as $fields) {
+			$cache_key = $form_id . '_' . md5(implode('_', $fields));
+			wp_cache_delete('efb_form_' . $cache_key, 'emsfb');
 		}
 	}
 
@@ -127,22 +363,171 @@ class _Public {
 
 	}
 
+	public function simple_elementor_fix_efb() {
+
+		if (defined('REST_REQUEST') && REST_REQUEST) {
+			return;
+		}
+
+
+		if (!is_admin() && !current_user_can('edit_posts') && $this->is_elementor_active_efb()) {
+			?>
+			<script>
+
+			window.elementorFrontendConfig = window.elementorFrontendConfig || {};
+			window.elementorFrontendConfig.tools = window.elementorFrontendConfig.tools || {};
+			window.elementorFrontendConfig.settings = window.elementorFrontendConfig.settings || {};
+
+			</script>
+			<?php
+		}
+	}
+
+	public function simple_elementor_fix_footer_efb() {
+
+		if (defined('REST_REQUEST') && REST_REQUEST) {
+			return;
+		}
+
+
+		if (!is_admin() && !current_user_can('edit_posts') && $this->is_elementor_active_efb()) {
+			?>
+			<script>
+
+			(function() {
+
+				var safeConfig = {
+					tools: {
+						hash: {},
+						ajax: {},
+						request: {},
+						utils: {}
+					},
+					settings: {
+						page: {},
+						general: {},
+						editorPreferences: {}
+					}
+				};
+
+
+				window.elementorFrontendConfig = window.elementorFrontendConfig || safeConfig;
+				window.elementorFrontendConfig.tools = window.elementorFrontendConfig.tools || safeConfig.tools;
+				window.elementorFrontendConfig.settings = window.elementorFrontendConfig.settings || safeConfig.settings;
+
+
+				var attempts = 0;
+				var checkElementor = setInterval(function() {
+					attempts++;
+
+					if (window.elementorFrontend && typeof window.elementorFrontend === 'object') {
+
+
+
+						Object.defineProperty(window.elementorFrontend, 'config', {
+							get: function() {
+								return window.elementorFrontendConfig || safeConfig;
+							},
+							set: function(value) {
+								if (value && typeof value === 'object') {
+									window.elementorFrontendConfig = value;
+									window.elementorFrontendConfig.tools = window.elementorFrontendConfig.tools || safeConfig.tools;
+									window.elementorFrontendConfig.settings = window.elementorFrontendConfig.settings || safeConfig.settings;
+								}
+							},
+							configurable: true,
+							enumerable: true
+						});
+
+
+						if (window.elementorFrontend.initOnReadyComponents) {
+							var originalInitOnReadyComponents = window.elementorFrontend.initOnReadyComponents;
+							window.elementorFrontend.initOnReadyComponents = function() {
+								try {
+
+
+
+
+
+
+									this.config = window.elementorFrontendConfig || safeConfig;
+
+
+									this.config.tools = safeConfig.tools;
+									this.config.settings = safeConfig.settings;
+
+
+
+
+
+
+									try {
+
+										var result = originalInitOnReadyComponents.call(this);
+
+										return result;
+									} catch (innerError) {
+										console.warn('🛡️ EFB: Inner method error, using safe fallback:', innerError);
+
+										return {};
+									}
+								} catch (e) {
+									console.warn('🛡️ EFB: Caught initOnReadyComponents error:', e);
+
+									return {};
+								}
+							};
+						}
+
+
+						if (window.elementorFrontend.init) {
+							var originalInit = window.elementorFrontend.init;
+							window.elementorFrontend.init = function() {
+								try {
+									this.config = this.config || safeConfig;
+									this.config.tools = this.config.tools || safeConfig.tools;
+									this.config.settings = this.config.settings || safeConfig.settings;
+
+
+									return originalInit.apply(this, arguments);
+								} catch (e) {
+									console.warn('🛡️ EFB: Caught init error:', e);
+									return {};
+								}
+							};
+						}
+
+
+						clearInterval(checkElementor);
+					}
+
+					if (attempts > 500) {
+						clearInterval(checkElementor);
+
+					}
+				}, 10);
+
+			})();
+			</script>
+			<?php
+		}
+	}
 
 	public function EFB_Form_Builder($id){
 
 		if(!is_numeric(end($id))){ return "<div id='body_efb' class='efb card-public row pb-3 efb' > <div class='efb text-center my-5'><h2 style='text-align: center;'></h2><h3 class='efb warning text-center text-darkb fs-4'>".esc_html__('We are sorry, but there seems to be a security error (400) with your request.','easy-form-builder')."</h3>
 			<h4 style='color:#ff4b93;text-align: center;'>".esc_html__('Easy Form Builder', 'easy-form-builder')."</h4><p></div></div>";
 		}
-		$this->enqueue_jquery();
+		$this->enqueue_jquery_efb();
 		$state_form = 'not';
 		$admin_form = false;
 		$admin_sc = null;
 		if(isset($_GET['track'])){
-			$state_form =  sanitize_text_field($_GET['track']) ;
+			$state_form =  sanitize_text_field(wp_unslash($_GET['track']) );
 
 
-			if(isset($_GET['user'])  && $_GET['user']=="admin" ) $admin_form = true;
-			if(isset($_GET['sc'])) $admin_sc = sanitize_text_field($_GET['sc']);
+			if(isset($_GET['user'])  && sanitize_text_field( wp_unslash( $_GET['user'] ) ) == "admin" ) $admin_form = true;
+			if(isset($_GET['sc'])) $admin_sc = sanitize_text_field(wp_unslash($_GET['sc']));
 		}
 
 
@@ -150,40 +535,42 @@ class _Public {
 			return "<div id='body_efb' class='efb card-public row pb-3 efb px-2'  style='color: #9F6000; background-color: #FEEFB3;  padding: 5px 10px;'> <div class='efb text-center my-5'><h2 style='text-align: center;'></h2><h3 class='efb warning text-center text-darkb fs-4'>".esc_html__('It seems that you are the admin of this form. Please login and try again.', 'easy-form-builder')."</h3><p class='efb fs-5  text-center my-1 text-pinkEfb' style='text-align: center;'><p></div></div>";
 		}
 
-		$table_name = $this->db->prefix . "emsfb_form";
 		$this->id = end($id);
 		$this->id = intval($this->id);
-		$value_form = $this->db->get_results( "SELECT form_structer ,form_type   FROM `$table_name` WHERE form_id = '$this->id'" );
+		$value_form_data = $this->get_form_data_efb($this->id, array('form_structer', 'form_type'));
+		$value_form = $value_form_data ? array($value_form_data) : null;
+
 		if($value_form!=null){
 			$typeOfForm =$value_form[0]->form_type;
 			if($state_form!='not' && strlen($state_form)>7
 			&& ($typeOfForm!="register" || $typeOfForm!="login")){
 				$this->id =-1;
 				return $this->EMS_Form_Builder_track();
+
 			}
 		}else{
+			$this->output_bootstrap_icons_style_efb($this->id, 'private');
 			return "<div id='body_efb' class='efb card-public row pb-3 efb px-2'> <div class='efb text-center my-5'><div class='efb text-danger bi-exclamation-triangle-fill efb text-center display-1 my-2'></div>
 			<h3 style='color:#202a8d;text-align: center;'>".esc_html__('Form does not exist !!','easy-form-builder')."</h3>
 			<h4 style='color:#ff4b93;text-align: center;'>".esc_html__('Easy Form Builder', 'easy-form-builder')."</h4></div></div>";
 		}
-		$this->text_ = ["somethingWentWrongPleaseRefresh","atcfle","cpnnc","tfnapca", "icc","cpnts","cpntl","mcplen","mmxplen","mxcplen","clcdetls","vmgs","required","mmplen","offlineSend","amount","allformat","videoDownloadLink","downloadViedo","removeTheFile","pWRedirect","eJQ500","error400","errorCode","remove","minSelect","search","MMessageNSendEr","formNExist","settingsNfound","formPrivateM","pleaseWaiting","youRecivedNewMessage","WeRecivedUrM","thankFillForm","trackNo","thankRegistering","welcome","thankSubscribing","thankDonePoll","error403","errorSiteKeyM","errorCaptcha","pleaseEnterVaildValue","createAcountDoneM","incorrectUP","sentBy","newPassM","done","surveyComplatedM","error405","errorSettingNFound","errorMRobot","enterVValue","guest","cCodeNFound","errorFilePer","errorSomthingWrong","nAllowedUseHtml","messageSent","offlineMSend","uploadedFile","interval","dayly","weekly","monthly","yearly","nextBillingD","onetime","proVersion","payment","emptyCartM","transctionId","successPayment","cardNumber","cardExpiry","cardCVC","payNow","payAmount","selectOption","copy","or","document","error","somethingWentWrongTryAgain","define","loading","trackingCode","enterThePhone","please","pleaseMakeSureAllFields","enterTheEmail","formNotFound","errorV01","enterValidURL","password8Chars","registered","yourInformationRegistered","preview","selectOpetionDisabled","youNotPermissionUploadFile","pleaseUploadA","fileSizeIsTooLarge","documents","image","media","zip","trackingForm","trackingCodeIsNotValid","checkedBoxIANotRobot","messages","pleaseEnterTheTracking","alert","pleaseFillInRequiredFields","enterThePhones","pleaseWatchTutorial","formIsNotShown","errorVerifyingRecaptcha","orClickHere","enterThePassword","PleaseFillForm","selected","selectedAllOption","field","sentSuccessfully","thanksFillingOutform","sync","enterTheValueThisField","thankYou","login","logout","YouSubscribed","send","subscribe","contactUs","support","register","passwordRecovery","info","areYouSureYouWantDeleteItem","noComment","waitingLoadingRecaptcha","itAppearedStepsEmpty","youUseProElements","fieldAvailableInProversion","thisEmailNotificationReceive","activeTrackingCode","default","defaultValue","name","latitude","longitude","previous","next","invalidEmail","aPIkeyGoogleMapsError","howToAddGoogleMap","deletemarkers","updateUrbrowser","stars","nothingSelected","availableProVersion","finish","select","up","red","Red","sending","enterYourMessage","add","code","star","form","black","pleaseReporProblem","reportProblem","ddate","serverEmailAble","sMTPNotWork","aPIkeyGoogleMapsFeild","download","copyTrackingcode","copiedClipboard","browseFile","dragAndDropA","fileIsNotRight","on","off","lastName","firstName","contactusForm","registerForm","entrTrkngNo","response","reply","by","youCantUseHTMLTagOrBlank","easyFormBuilder","rnfn","fil",'stf','total','fetf','search','jqinl','eln','copied'];
+		$this->output_bootstrap_icons_style_efb($this->id, 'normal');
+		$this->text_ = ["somethingWentWrongPleaseRefresh","atcfle","cpnnc","tfnapca", "icc","cpnts","cpntl","mcplen","mmxplen","mxcplen","clcdetls","vmgs","required","mmplen","offlineSend","amount","allformat","videoDownloadLink","downloadViedo","removeTheFile","pWRedirect","eJQ500","error400","errorCode","remove","minSelect","search","MMessageNSendEr","formNExist","settingsNfound","formPrivateM","pleaseWaiting","youRecivedNewMessage","WeRecivedUrM","thankFillForm","trackNo","thankRegistering","welcome","thankSubscribing","thankDonePoll","error403","errorSiteKeyM","errorCaptcha","pleaseEnterVaildValue","createAcountDoneM","incorrectUP","sentBy","newPassM","done","surveyComplatedM","error405","errorSettingNFound","errorMRobot","enterVValue","guest","cCodeNFound","errorFilePer","errorSomthingWrong","nAllowedUseHtml","messageSent","offlineMSend","uploadedFile","interval","dayly","weekly","monthly","yearly","nextBillingD","onetime","proVersion","payment","emptyCartM","transctionId","successPayment","cardNumber","cardExpiry","cardCVC","payNow","payAmount","selectOption","copy","or","document","error","somethingWentWrongTryAgain","define","loading","trackingCode","enterThePhone","please","pleaseMakeSureAllFields","enterTheEmail","formNotFound","errorV01","enterValidURL","password8Chars","registered","yourInformationRegistered","preview","selectOpetionDisabled","youNotPermissionUploadFile","pleaseUploadA","fileSizeIsTooLarge","documents","image","media","zip","trackingForm","trackingCodeIsNotValid","checkedBoxIANotRobot","messages","pleaseEnterTheTracking","alert","pleaseFillInRequiredFields","enterThePhones","pleaseWatchTutorial","formIsNotShown","errorVerifyingRecaptcha","orClickHere","enterThePassword","PleaseFillForm","selected","selectedAllOption","field","sentSuccessfully","thanksFillingOutform","sync","enterTheValueThisField","thankYou","login","logout","YouSubscribed","send","subscribe","contactUs","support","register","passwordRecovery","info","areYouSureYouWantDeleteItem","noComment","waitingLoadingRecaptcha","itAppearedStepsEmpty","youUseProElements","fieldAvailableInProversion","thisEmailNotificationReceive","activeTrackingCode","default","defaultValue","name","latitude","longitude","previous","next","invalidEmail","aPIkeyGoogleMapsError","howToAddGoogleMap","deletemarkers","updateUrbrowser","stars","nothingSelected","availableProVersion","finish","select","up","red","Red","sending","enterYourMessage","add","code","star","form","black","pleaseReporProblem","reportProblem","ddate","serverEmailAble","sMTPNotWork","aPIkeyGoogleMapsFeild","download","copyTrackingcode","copiedClipboard","browseFile","dragAndDropA","fileIsNotRight","on","off","lastName","firstName","contactusForm","registerForm","entrTrkngNo","response","reply","by","youCantUseHTMLTagOrBlank","easyFormBuilder","rnfn","fil",'stf','total','fetf','search','jqinl','eln','copied',"nonceExpired"];
 
 
 		$page_builder="";
-		$action_post = isset($_GET['action']) ? $_GET['action'] :'';
+		$action_post = isset($_GET['action']) ? sanitize_key( wp_unslash( $_GET['action'] ) ) :'';
 
 		if((is_admin() || isset($_GET['vc_editable']) ||isset($_GET['vcv-ajax']) || $action_post=='elementor' || isset($_GET['elementor-preview'])  )){
-
-
 				if(isset($_GET['vc_editable'])){ $page_builder='vc_editable';}
 				else if(isset($_GET['vc_editable'])) {$page_builder = 'wpbakery';}
-				else if ( ( isset($_GET['action']) && $_GET['action']=='elementor') || isset($_GET['elementor-preview']) ){
+				else if ( ( isset($_GET['action']) && sanitize_key( wp_unslash( $_GET['action'] ) ) == 'elementor') || isset($_GET['elementor-preview']) ){
 					$page_builder='elementor';
 
 
 
 				}
-				//Click here to edit your Easy Form Builder shortcode.
+
 			$content="
 			<div id='body_efb' class='efb row pb-3 efb px-2'>
 				<div style='width:100%;text-align: center;'>
@@ -204,67 +591,44 @@ class _Public {
 			return $content;
 		}
 
-		$this->public_scripts_and_css_head();
+		$this->public_scripts_and_css_head_efb();
 
 
 
 		$state="";
 		$pro=  $this->pro_efb;
 		$lanText= $this->efbFunction->text_efb($this->text_);
-		$sid = $this->efbFunction->efb_code_validate_create( $this->id , 0, 'visit' , 0);
+
+		$sid = '';
 		$ar_core = array( 'sid'=>$sid);
 
 
 		$typeOfForm =$value_form[0]->form_type;
 		$value = $value_form[0]->form_structer;
 
-		$icons=[[
-			'bi-clipboard-check',
-			"bi-shield-lock-fill",
-			'bi-exclamation-triangle-fill',
-			"bi-exclamation-diamond-fill",
-			"bi-check2-square",
-			"bi-hourglass-split",
-			"bi-chat-square-text",
-			"bi-download",
-			"bi-star-fill",
-			"bi-hourglass-split",
-			"bi-hand-thumbs-up",
-			"bi-envelope",
-			"bi-arrow-right",
-			"bi-arrow-left",
-			"bi-upload",
-			"bi-x-lg",
-			"bi-file-earmark-richtext",
-			"bi-check-square",
-			"bi-square",
-			"bi-chevron-down",
-			"bi-check-lg",
-			"bi-crosshair"
 
-
-		]];
 
 		$pattern = '/bi-[a-zA-Z0-9-]+/';
 		 preg_match_all($pattern, $value, $icons_ );
 
 
-		 $iconsd = array_merge($icons_[0] , $icons[0]);
+		 if ( ! isset($icons) || ! is_array($icons) || ! isset($icons[0]) || ! is_array($icons[0]) ) {
+			 $icons = array(array());
+		 }
+
+		 $iconsd = array_merge($icons_[0], $icons[0]);
 		 $icons_ = array_unique($iconsd);
 		 $value = preg_replace('/\\\"email\\\":\\\"(.*?)\\\"/', '\"email\":\"\"', $value);
 
-		 $iconst_html_preload ='<div style="display:none;">';
-		 foreach($iconsd as $icon){
-			$iconst_html_preload .= "<i class='bi $icon'></i>";
-		 }
-		 $iconst_html_preload .='</div>';
+
+		 $iconst_html_preload = '';
 
 		$lang = get_locale();
 		$lang =strpos($lang,'_')!=false ? explode( '_', $lang )[0]:$lang;
 		$state="form";
 		$multi_exist = strpos($value , '"type\":\"multiselect\"');
 		if($multi_exist==true || strpos($value , '"type":"multiselect"') || strpos($value , '"type\":\"payMultiselect\"') || strpos($value , '"type":"payMultiselect"')){
-			wp_enqueue_script('efb-bootstrap-select-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/bootstrap-select.min-efb.js',false,EMSFB_PLUGIN_VERSION);
+			wp_enqueue_script('efb-bootstrap-select-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/bootstrap-select.min-efb.js', false, EMSFB_PLUGIN_VERSION, true);
 
 			wp_register_style('Emsfb-bootstrap-select-css', EMSFB_PLUGIN_URL . 'includes/admin/assets/css/bootstrap-select-efb.css', true,EMSFB_PLUGIN_VERSION );
 			wp_enqueue_style('Emsfb-bootstrap-select-css');
@@ -289,8 +653,8 @@ class _Public {
 
 		$paymentType="null";
 		$paymentKey="null";
-		$refid = isset($_GET['Authority'])  ? sanitize_text_field($_GET['Authority']) : 'not';
-		$Status_pay = isset($_GET['Status'])  ? sanitize_text_field($_GET['Status']) : 'NOK';
+		$refid = isset($_GET['Authority'])  ? sanitize_text_field(wp_unslash($_GET['Authority'])) : 'not';
+		$Status_pay = isset($_GET['Status'])  ? sanitize_text_field(wp_unslash($_GET['Status'])) : 'NOK';
 		$img =[];
 
 		if($this->pro_efb==1){
@@ -304,18 +668,17 @@ class _Public {
 
 
 				if($el_pro_load==true){
-					wp_enqueue_script('efb-pro-els', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/pro_els-efb.js',false,EMSFB_PLUGIN_VERSION);
+					wp_enqueue_script('efb-pro-els', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/pro_els-efb.js', false, EMSFB_PLUGIN_VERSION, true);
 
 				}
 
 				if($typeOfForm=="payment"){
 					$this->setting= $this->setting!=NULL  && empty($this->setting)!=true ? $this->setting:  $this->get_setting_Emsfb('setting');
 					$r = $this->setting;
-					if(gettype($r)=="string"){
-						$setting =str_replace('\\', '', $r);
-						$setting =json_decode($setting);
-						$server_name = str_replace("www.", "", $_SERVER['HTTP_HOST']);
-
+				if(gettype($r)=="string"){
+					$setting =str_replace('\\', '', $r);
+					$setting =json_decode($setting);
+					$server_name =isset($_SERVER['HTTP_HOST']) ? str_replace("www.", "", sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) ) : '';
 						if(isset($setting->activeCode) &&  md5($server_name) ==$setting->activeCode){$pro=true;}
 						if(strpos($value , '\"type\":\"stripe\"') || strpos($value , '"type":"stripe"')){$paymentType="stripe";}
 						else if(strpos($value , '\"type\":\"persiaPay\"') || strpos($value , '"type":"persiaPay"')){
@@ -323,7 +686,7 @@ class _Public {
 						}else if(strpos($value , '\"type\":\"zarinPal\"') || strpos($value , '"type":"zarinPal"')){$paymentType="zarinPal";}
 							if($paymentType!="null" && $pro==true){
 								if($paymentType=="stripe"){
-									wp_register_script('stripe-js', 'https://js.stripe.com/v3/', null, null, true);
+									wp_register_script('stripe-js', 'https://js.stripe.com/v3/', array(), '3.0', true);
 									wp_enqueue_script('stripe-js');
 									wp_register_script('stripepay_js', plugins_url('../public/assets/js/stripe_pay-efb.js',__FILE__), array('jquery'), EMSFB_PLUGIN_VERSION, true);
 									wp_enqueue_script('stripepay_js');
@@ -343,7 +706,7 @@ class _Public {
 					));
 				}
 				if(strpos($value , '\"type\":\"switch\"') || strpos($value , '"type":"switch')){
-					wp_enqueue_script('efb-bootstrap-bundle-min-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/bootstrap.bundle.min-efb.js', array( 'jquery' ), true,EMSFB_PLUGIN_VERSION);
+					wp_enqueue_script('efb-bootstrap-bundle-min-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/bootstrap.bundle.min-efb.js', array( 'jquery' ), true, EMSFB_PLUGIN_VERSION, true);
 
 				}
 				if(strpos($value , '\"type\":\"pdate\"') || strpos($value , '"type":"pdate"')){
@@ -368,23 +731,16 @@ class _Public {
 						"logo" => ''.EMSFB_PLUGIN_URL . 'includes/admin/assets/image/logo-easy-form-builder.svg',
 						"head"=> ''.EMSFB_PLUGIN_URL . 'includes/admin/assets/image/header.png',
 						];
-					wp_register_script('intlTelInput-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/intlTelInput.min-efb.js', null, null, true);
+					wp_register_script('intlTelInput-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/intlTelInput.min-efb.js', array(), EMSFB_PLUGIN_VERSION, true);
 					wp_enqueue_script('intlTelInput-js');
 					wp_register_style('intlTelInput-css', EMSFB_PLUGIN_URL . 'includes/admin/assets/css/intlTelInput.min-efb.css',true,EMSFB_PLUGIN_VERSION);
 					wp_enqueue_style('intlTelInput-css');
 				}
 				if(strpos($value , '\"logic\":\"1\"') || strpos($value , '"logic":"1"')){
-					wp_register_script('logic-efb',EMSFB_PLUGIN_URL.'/vendor/logic/assets/js/logic.js', null, null, true);
+					wp_register_script('logic-efb',EMSFB_PLUGIN_URL.'/vendor/logic/assets/js/logic.js', array(), EMSFB_PLUGIN_VERSION, true);
 					wp_enqueue_script('logic-efb');
 				}
 
-		}else if ($this->pro_efb!=1 && ($lang=='fa' || $lang=='ar')){
-					$efb_m .= '<p class="efb fs-7 text-darkb mb-4 d-none" style="text-align: center;" >
-					<a href="https://easyformbuilder.ir"  class="efb d-none" target="_blank">افزونه فرم ساز وردپرس فارسی</a>
-					<a href="https://wordpress.org/plugins/easy-form-builder/"  class="efb d-none" target="_blank">Easy Form Builder Plugin for WordPress</a>
-					<a href="https://'.$lang.'.wordpress.org/plugins/easy-form-builder/"  class="efb d-none" target="_blank">'.$lanText['easyFormBuilder'].' WordPress</a>
-					</p>
-					';
 		}
 				$poster =  EMSFB_PLUGIN_URL . 'public/assets/images/efb-poster.svg';
 				$send=array();
@@ -433,18 +789,19 @@ class _Public {
 				'location'=> "",
 				'v_efb'=>EMSFB_PLUGIN_VERSION,
 
-				'images' => $img,
-				'rest_url'=>get_rest_url(null),
-				'page_id'=>get_the_ID(),
-				'page_builder'=>$page_builder
-			) );
-			wp_localize_script( 'Emsfb-core_js', 'ajax_object_efm',$ar_core);
-			 $k="";
 
+			'images' => $img,
+			'rest_url'=> str_replace('127.0.0.1', isset($_SERVER['HTTP_HOST']) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '', get_rest_url(null)),
+			'page_id'=>get_the_ID(),
+			'page_builder'=>$page_builder,
+			'nonce' => wp_create_nonce('wp_rest')
+		) );
+		wp_localize_script( 'Emsfb-core_js', 'ajax_object_efm',$ar_core);
+		 $k="";
 
 			 $stng = $this->pub_stting;
 		 	if(gettype($stng)!=="integer" && $lanText["settingsNfound"]){
-
+ 			 $k = "<script>let sitekye_emsFormBuilder='".$k."'</script>";
 			 if( ($formObj[0]['captcha']==1) && (isset($this->pub_stting['siteKey'])==true) && strlen($this->pub_stting['siteKey'])>1)
 			 {
 
@@ -454,9 +811,14 @@ class _Public {
 				 if($r_captcha==false){
 					 $k ="<script>let sitekye_emsFormBuilder=2; const c_r_efb ='reCAPTCHA Error:".$lanText['tfnapca']."'</script>";
 				 }
+
+
 			 }
 
-
+		 		add_action('wp_head', function() use ($k) {
+					echo $k ;
+				});
+				$k="";
 			  $s_m ='<!--efb-->';
 			  if( is_string($value) && (strpos($value , '\"type\":\"maps\"') !== false || strpos($value , '"type":"maps"') !== false)){
 
@@ -479,7 +841,6 @@ class _Public {
 
 		 if($formObj[0]["stateForm"]==true ){
 			$content ="
-			".$this->bootstrap_icon_efb($icons_)."
 			<div id='body_efb' class='efb  row pb-3 efb px-2'> <div class='efb text-center my-5'>
 			<div class='efb bi-shield-lock-fill efb text-center display-1 my-2'></div><h3 class='efb  text-center fs-5'>". $lanText["formPrivateM"]."</h3>
 			 ".$efb_m."
@@ -489,9 +850,6 @@ class _Public {
 		 }else{
 
 			 $content="
-
-			 ".$this->bootstrap_icon_efb($icons_)."
-			 ".$iconst_html_preload."
 			 <div id='body_efb' class='efb  row pb-3 efb px-2'>
 			 <div class='efb text-center my-5'>
 			 ".$this->loading_icon_public_efb('',$lanText["pleaseWaiting"] , $lanText["fil"])."
@@ -506,12 +864,14 @@ class _Public {
 		return $content;
 	}
 	public function EMS_Form_Builder_track(){
-
-		$this->enqueue_jquery();
-
+				 add_action('wp_head', function() {
+					echo '<script>let sitekye_emsFormBuilder=""; </script>';
+				});
+		$this->enqueue_jquery_efb();
 
 		$this->id=0;
-		$this->public_scripts_and_css_head();
+		$this->public_scripts_and_css_head_efb();
+		$this->output_bootstrap_icons_style_efb(0, 'tracker');
 
 
 
@@ -521,7 +881,7 @@ class _Public {
 
 		$this->get_efbFunction(0);
 
-				$text=["spprt","atcfle","cpnnc","tfnapca", "icc","cpnts","cpntl","mcplen","mmxplen","mxcplen","mmplen","offlineSend","message","clsdrspn","createdBy","easyFormBuilder","payAmount","payment","id","methodPayment","ddate","updated","methodPayment","interval","file","videoDownloadLink","downloadViedo","pWRedirect","eJQ500","error400","errorCode","remove","minSelect","search","MMessageNSendEr","formNExist","settingsNfound","formPrivateM","pleaseWaiting","youRecivedNewMessage","WeRecivedUrM","thankFillForm","trackNo","thankRegistering","welcome","thankSubscribing","thankDonePoll","error403","errorSiteKeyM","errorCaptcha","pleaseEnterVaildValue","createAcountDoneM","incorrectUP","sentBy","newPassM","done","surveyComplatedM","error405","errorSettingNFound","errorMRobot","enterVValue","guest","cCodeNFound","errorFilePer","errorSomthingWrong","nAllowedUseHtml","messageSent","offlineMSend","uploadedFile","interval","dayly","weekly","monthly","yearly","nextBillingD","onetime","proVersion","payment","emptyCartM","transctionId","successPayment","cardNumber","cardExpiry","cardCVC","payNow","payAmount","selectOption","copy","or","document","error","somethingWentWrongTryAgain","define","loading","trackingCode","enterThePhone","please","pleaseMakeSureAllFields","enterTheEmail","formNotFound","errorV01","enterValidURL","password8Chars","registered","yourInformationRegistered","preview","selectOpetionDisabled","youNotPermissionUploadFile","pleaseUploadA","fileSizeIsTooLarge","documents","image","media","zip","trackingForm","trackingCodeIsNotValid","checkedBoxIANotRobot","messages","pleaseEnterTheTracking","alert","pleaseFillInRequiredFields","enterThePhones","pleaseWatchTutorial","somethingWentWrongPleaseRefresh","formIsNotShown","errorVerifyingRecaptcha","orClickHere","enterThePassword","PleaseFillForm","selected","selectedAllOption","field","sentSuccessfully","thanksFillingOutform","sync","enterTheValueThisField","thankYou","login","logout","YouSubscribed","send","subscribe","contactUs","support","register","passwordRecovery","info","areYouSureYouWantDeleteItem","noComment","waitingLoadingRecaptcha","itAppearedStepsEmpty","youUseProElements","fieldAvailableInProversion","thisEmailNotificationReceive","activeTrackingCode","default","defaultValue","name","latitude","longitude","previous","next","invalidEmail","aPIkeyGoogleMapsError","howToAddGoogleMap","deletemarkers","updateUrbrowser","stars","nothingSelected","availableProVersion","finish","select","up","red","Red","sending","enterYourMessage","add","code","star","form","black","pleaseReporProblem","reportProblem","ddate","serverEmailAble","sMTPNotWork","aPIkeyGoogleMapsFeild","download","copyTrackingcode","copiedClipboard","browseFile","dragAndDropA","fileIsNotRight","on","off","lastName","firstName","contactusForm","registerForm","entrTrkngNo","response","reply","by","youCantUseHTMLTagOrBlank","rnfn","fil",'stf','total','ttlprc','fetf','jqinl','eln'];
+				$text=["spprt","atcfle","cpnnc","tfnapca", "icc","cpnts","cpntl","mcplen","mmxplen","mxcplen","mmplen","offlineSend","message","clsdrspn","createdBy","easyFormBuilder","payAmount","payment","id","methodPayment","ddate","updated","methodPayment","interval","file","videoDownloadLink","downloadViedo","pWRedirect","eJQ500","nonceExpired","error400","errorCode","remove","minSelect","search","MMessageNSendEr","formNExist","settingsNfound","formPrivateM","pleaseWaiting","youRecivedNewMessage","WeRecivedUrM","thankFillForm","trackNo","thankRegistering","welcome","thankSubscribing","thankDonePoll","error403","errorSiteKeyM","errorCaptcha","pleaseEnterVaildValue","createAcountDoneM","incorrectUP","sentBy","newPassM","done","surveyComplatedM","error405","errorSettingNFound","errorMRobot","enterVValue","guest","cCodeNFound","errorFilePer","errorSomthingWrong","nAllowedUseHtml","messageSent","offlineMSend","uploadedFile","interval","dayly","weekly","monthly","yearly","nextBillingD","onetime","proVersion","payment","emptyCartM","transctionId","successPayment","cardNumber","cardExpiry","cardCVC","payNow","payAmount","selectOption","copy","or","document","error","somethingWentWrongTryAgain","define","loading","trackingCode","enterThePhone","please","pleaseMakeSureAllFields","enterTheEmail","formNotFound","errorV01","enterValidURL","password8Chars","registered","yourInformationRegistered","preview","selectOpetionDisabled","youNotPermissionUploadFile","pleaseUploadA","fileSizeIsTooLarge","documents","image","media","zip","trackingForm","trackingCodeIsNotValid","checkedBoxIANotRobot","messages","pleaseEnterTheTracking","alert","pleaseFillInRequiredFields","enterThePhones","pleaseWatchTutorial","somethingWentWrongPleaseRefresh","formIsNotShown","errorVerifyingRecaptcha","orClickHere","enterThePassword","PleaseFillForm","selected","selectedAllOption","field","sentSuccessfully","thanksFillingOutform","sync","enterTheValueThisField","thankYou","login","logout","YouSubscribed","send","subscribe","contactUs","support","register","passwordRecovery","info","areYouSureYouWantDeleteItem","noComment","waitingLoadingRecaptcha","itAppearedStepsEmpty","youUseProElements","fieldAvailableInProversion","thisEmailNotificationReceive","activeTrackingCode","default","defaultValue","name","latitude","longitude","previous","next","invalidEmail","aPIkeyGoogleMapsError","howToAddGoogleMap","deletemarkers","updateUrbrowser","stars","nothingSelected","availableProVersion","finish","select","up","red","Red","sending","enterYourMessage","add","code","star","form","black","pleaseReporProblem","reportProblem","ddate","serverEmailAble","sMTPNotWork","aPIkeyGoogleMapsFeild","download","copyTrackingcode","copiedClipboard","browseFile","dragAndDropA","fileIsNotRight","on","off","lastName","firstName","contactusForm","registerForm","entrTrkngNo","response","reply","by","youCantUseHTMLTagOrBlank","rnfn","fil",'stf','total','ttlprc','fetf','jqinl','eln'];
 				$text= $this->efbFunction->text_efb($text) ;
 		$state="tracker";
 		$pl= $this->get_setting_Emsfb('pub');
@@ -538,7 +898,7 @@ class _Public {
 
 
 			   if(isset($valstng->siteKey) && isset($valstng->scaptcha) && $valstng->scaptcha==true){
-				   wp_register_script('recaptcha', 'https://www.google.com/recaptcha/api.js?hl='.$lang.'&render=explicit#asyncload', null , null, true);
+				   wp_register_script('recaptcha', 'https://www.google.com/recaptcha/api.js?hl='.$lang.'&render=explicit#asyncload', array() , '3.0', true);
 				   wp_enqueue_script('recaptcha');
 				}
 
@@ -559,14 +919,16 @@ class _Public {
 
 		if($this->pro_efb==1){
 
-			wp_enqueue_script('efb-pro-els', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/pro_els-efb.js',false,EMSFB_PLUGIN_VERSION);
+			wp_enqueue_script('efb-pro-els', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/pro_els-efb.js', false, EMSFB_PLUGIN_VERSION, true);
 
 		}
 
 		$location = '';
 
-		$sid = $this->efbFunction->efb_code_validate_create( 0 , 0, 'visit' , 0);
-		$sc = isset($_GET['sc']) ? sanitize_text_field($_GET['sc']) : 'null';
+
+		$sid = '';
+        $_POST['pl']= isset($_POST['pl']) ? sanitize_text_field(wp_unslash($_POST['pl'])) : '';
+		$sc = isset($_GET['sc']) ? sanitize_text_field(wp_unslash($_GET['sc'])) : 'null';
 		$usr =wp_get_current_user();
 		$username = '';
 		if(gettype($usr)!='integer') $username = $usr->display_name  ;
@@ -578,7 +940,7 @@ class _Public {
 			   'language' => $lang,
 			   'form_setting' => $stng,
 			   'user_name'=> $username,
-			   'nonce'=> wp_create_nonce("public-nonce"),
+			   'nonce'=> wp_create_nonce('wp_rest'),
 			   'poster'=> EMSFB_PLUGIN_URL . 'public/assets/images/efb-poster.svg',
 			   'rtl' => is_rtl(),
 			   'text' =>$text,
@@ -616,14 +978,22 @@ class _Public {
 
 
 		 $val = $this->pro_efb==true ? '<!--efb.app-->' : '<a href="https://whitestudio.team"  class="efb text-decoration-none" target="_blank"><p class="efb fs-7 text-darkb mb-4" style="text-align: center;">'.$text['easyFormBuilder'].'<p></a>';
-	 	$content="<script>let sitekye_emsFormBuilder='' </script>
-		 ".$this->bootstrap_icon_efb($icons_)."
+
+
+	 	$content="
 		".$s_m."
 		<div id='body_tracker_emsFormBuilder' class='efb '><div id='alert_efb' class='efb mx-5 text-center'></div>
 		".$this->loading_icon_public_efb('',$text["pleaseWaiting"], $text['fil'])."</div>";
 		return $content;
 	}
-	function public_scripts_and_css_head(){
+	function public_scripts_and_css_head_efb(){
+
+		static $scripts_loaded = false;
+		if ($scripts_loaded) {
+			return;
+		}
+		$scripts_loaded = true;
+
 		wp_register_style('Emsfb-style-css', EMSFB_PLUGIN_URL . 'includes/admin/assets/css/style-efb.css', true,EMSFB_PLUGIN_VERSION);
 		wp_enqueue_style('Emsfb-style-css');
 
@@ -631,10 +1001,96 @@ class _Public {
 		 wp_enqueue_script('Emsfb-core_js');
 
 		wp_enqueue_script('efb-main-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/new-efb.js',array('jquery'), EMSFB_PLUGIN_VERSION, true);
-		$ar_core = array() ;
-		wp_localize_script( 'efb-main-js', 'efb_var',$ar_core);
 
-		if(is_rtl()){
+		/*
+		$efb_var_defaults = array(
+			'tools' => array(),
+			'text' => array(
+				'form' => __('Form', 'easy-form-builder'),
+				'selectOption' => __('Select Option', 'easy-form-builder'),
+				'error' => __('Error', 'easy-form-builder')
+			),
+			'ajax_url' => admin_url('admin-ajax.php'),
+			'nonce' => wp_create_nonce('wp_rest'),
+			'language' => get_locale(),
+			'pro' => false,
+			'rtl' => is_rtl() ? 1 : 0,
+			'addons' => array()
+		);
+
+		wp_localize_script( 'efb-main-js', 'efb_var', $efb_var_defaults);
+
+
+
+		static $ajax_object_efm_initialized = false;
+
+		if (!$ajax_object_efm_initialized) {
+			$ajax_object_efm_defaults = array(
+				'ajax_value' => '',
+				'id' => 0,
+				'type' => 'form',
+				'state' => 'form',
+				'text' => array(
+					'error' => __('Error', 'easy-form-builder'),
+					'alert' => __('Alert', 'easy-form-builder'),
+					'jqinl' => __('jQuery is required', 'easy-form-builder')
+				),
+
+			);
+
+			wp_localize_script( 'Emsfb-core_js', 'ajax_object_efm', $ajax_object_efm_defaults);
+			$ajax_object_efm_initialized = true;
+		} */
+
+
+
+
+
+		if (false && $is_elementor_active_efb) {
+
+			add_action('wp_head', function() {
+				echo '<script>
+				window.elementorFrontendConfig = window.elementorFrontendConfig || {};
+				window.elementorFrontendConfig.tools = window.elementorFrontendConfig.tools || {};
+				window.elementorFrontendConfig.settings = window.elementorFrontendConfig.settings || {};
+				</script>';
+			}, 1);
+
+			$elementor_compat_script = '
+
+			(function() {
+				function ensureElementorConfig() {
+					window.elementorFrontendConfig = window.elementorFrontendConfig || {};
+					window.elementorFrontendConfig.tools = window.elementorFrontendConfig.tools || {};
+					window.elementorFrontendConfig.settings = window.elementorFrontendConfig.settings || {};
+				}
+
+
+				ensureElementorConfig();
+
+
+				if (typeof jQuery !== "undefined") {
+					jQuery(document).ready(function() {
+						ensureElementorConfig();
+					});
+
+
+					jQuery(window).on("load", function() {
+						ensureElementorConfig();
+					});
+				}
+
+
+				var checkCount = 0;
+				var checkInterval = setInterval(function() {
+					ensureElementorConfig();
+					checkCount++;
+					if (checkCount > 10) clearInterval(checkInterval);
+				}, 500);
+			})();
+			';
+			wp_add_inline_script('Emsfb-core_js', $elementor_compat_script, 'before');
+		}		if(is_rtl()){
 			wp_register_style('Emsfb-css-rtl', EMSFB_PLUGIN_URL . 'includes/admin/assets/css/admin-rtl-efb.css', true ,EMSFB_PLUGIN_VERSION);
 			wp_enqueue_style('Emsfb-css-rtl');
 		}
@@ -647,6 +1103,8 @@ class _Public {
 	  }
 
 	  public function get_form_public_efb($data_POST_){
+		//phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce is verified via permission_callback in REST API route registration
+
 		$data_POST = $data_POST_->get_json_params();
 
 		$text_ =["somethingWentWrongPleaseRefresh","pleaseMakeSureAllFields","bkXpM","bkFlM","mnvvXXX","ptrnMmm","ptrnMmx",'payment','error403','errorSiteKeyM',"errorCaptcha","pleaseEnterVaildValue","createAcountDoneM","incorrectUP","sentBy","newPassM","done","surveyComplatedM","error405","errorSettingNFound","clcdetls","vmgs","youRecivedNewMessage","WeRecivedUrM","thankRegistering","welcome","thankSubscribing","thankDonePoll","thankFillForm","trackNo",'fernvtf',"msgdml"];
@@ -655,24 +1113,24 @@ class _Public {
 		$efbFunction =  $this->get_efbFunction(1);
 
 		if(empty($this->efbFunction)) $this->efbFunction =$efbFunction;
-		$sid = sanitize_text_field($data_POST['sid']);
-		$this->id = sanitize_text_field($data_POST['id']);
-		$page_id = sanitize_text_field($data_POST['page_id']);
+		$sid = '';
+		$this->id = sanitize_text_field(wp_unslash($data_POST['id']));
+		$page_id = sanitize_text_field(wp_unslash($data_POST['page_id']));
 		$data_POST['url']= $url = sanitize_url($data_POST['url']);
 
-		$s_sid = $this->efbFunction->efb_code_validate_select($sid , $this->id);
+
 		$this->lanText= $this->efbFunction->text_efb($text_);
 		$setting;
 
 		$this->cache_cleaner_Efb($page_id);
 
 
-		if ($s_sid !=1){
-
+		/* if ($s_sid !=1){
+			error_log('Invalid SID: ' . $sid);
 			$m =  $this->lanText["somethingWentWrongPleaseRefresh"]. '<br>'. esc_html__('Error Code','easy-form-builder') .': 403';
 			$response = array( 'success' => false  , 'm'=>$m);
-			wp_send_json_success($response,$data_POST);
-		}
+			wp_send_json_success($response,200);
+		} */
 		$user_id = 1;
 		$to_list_admin=[];
 		$r=  $this->setting!=NULL  && empty($this->setting)!=true ? $this->setting: $this->get_setting_Emsfb('setting');
@@ -688,18 +1146,13 @@ class _Public {
 		if( isset($setting["emailSupporter"])) array_push($to_list_admin ,$setting["emailSupporter"] );
 
 		$pro = false;
-		$type =sanitize_text_field($data_POST['type']);
+		$type =sanitize_text_field(wp_unslash($data_POST['type']));
 		$email=get_option('admin_email');
 
 		$rePage ="null";
-		$table_name = $this->db->prefix . "emsfb_form";
 		$this->id = intval($this->id);
-		$value_form = $this->db->get_results(
-			$this->db->prepare(
-				"SELECT form_structer, form_type FROM `$table_name` WHERE form_id = %d",
-				$this->id
-			)
-		);
+		$value_form_data = $this->get_form_data_efb($this->id, array('form_structer', 'form_type'));
+		$value_form = $value_form_data ? array($value_form_data) : null;
 		$fs = isset($value_form) ? str_replace('\\', '', $value_form[0]->form_structer) :'';
 		$not_captcha=$formObj= $trackingCode_state = $send_email_to_user_state =  $check = "";
 		$email_user= array();
@@ -783,7 +1236,7 @@ class _Public {
 				if($type!=$formObj[0]["type"]){
 
 					$response = array( 'success' => false  , 'm'=>$this->lanText["fernvtf"]);
-					wp_send_json_success($response,$data_POST);
+					wp_send_json_success($response,200);
 				}
 				if($formObj[0]["thank_you"]=="rdrct"){
 					$rePage= $this->string_to_url($formObj[0]["rePage"]);
@@ -794,7 +1247,8 @@ class _Public {
 				$rt;
 
 				if(isset($data_POST['url']) && strlen($data_POST['url'])>5 ){
-					$ar = ['http://wwww.'.$_SERVER['HTTP_HOST'] , 'https://wwww.'.$_SERVER['HTTP_HOST'] ,'http://'.$_SERVER['HTTP_HOST'], 'https://'.$_SERVER['HTTP_HOST']];
+					$http_host = isset($_SERVER['HTTP_HOST']) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) :'';
+					$ar =  ['http://wwww.'.$http_host , 'https://wwww.'.$http_host ,'http://'.$http_host, 'https://'.$http_host];
 					foreach ($ar as  $r) {
 						$c=strpos($data_POST['url'],$r);
 						if(gettype($c)!='boolean' && $c==0){
@@ -808,7 +1262,7 @@ class _Public {
 				}
 				if($stated==0){
 					$response = array( 'success' => false  , 'm'=>$this->lanText["error403"]);
-					wp_send_json_success($response,$data_POST);
+					wp_send_json_success($response,200);
 				}
 				$mr='';
 				$stated = 1;
@@ -875,13 +1329,13 @@ class _Public {
 								case "date":
 									$stated=0;
 									if(isset($item['value'])){
-										$item['value'] = sanitize_text_field($item['value']);
+										$item['value'] = sanitize_text_field(wp_unslash($item['value']));
 										$v = explode("-", $item['value']);
 										if(count($v)==3 && checkdate($v[1],$v[2],$v[0]) ){
 
 											$stated=1;
 											$rt= $item;
-											$current_date = date('Y-m-d');
+											$current_date = wp_date('Y-m-d');
 											if(isset($f['milen']) && $f['milen']!=''){
 												$f['milen'] = intval($f['milen'])==1 ? $current_date :$f['milen'];
 												if($f['milen']!='' && (strtotime($f['milen'])>strtotime($item['value']) || strtotime($f['milen'])>strtotime($item['value'])) ){
@@ -923,7 +1377,7 @@ class _Public {
 
 									if(isset($item['value'])){
 										$stated=0;
-										$item['value'] = sanitize_text_field($item['value']);
+										$item['value'] = sanitize_text_field(wp_unslash($item['value']));
 										$item['value'] = preg_replace('/\s+/', '', $item['value']);
 
 										if(isset($f['smsnoti']) && intval($f['smsnoti'])==1 ){
@@ -960,7 +1414,7 @@ class _Public {
 								case 'imgRadio':
 									$stated=0;
 									if(isset($item['value'])){
-										$item['value'] = sanitize_text_field($item['value']);
+										$item['value'] = sanitize_text_field(wp_unslash($item['value']));
 										array_filter($formObj, function($fr,$ki ) use(&$item,&$rt,&$stated,&$formObj,$form_condition ,&$mr) {
 											if(isset($fr['id_']) && isset($item['id_ob']) && $fr['id_']==$item['id_ob']){
 												$item['value']=$fr['value'];
@@ -1019,7 +1473,7 @@ class _Public {
 								case 'switch':
 									$stated=0;
 									if(isset($item['value'])){
-										$item['value'] = sanitize_text_field($item['value']);
+										$item['value'] = sanitize_text_field(wp_unslash($item['value']));
 										array_filter($formObj, function($fr) use($item,&$rt,&$stated) {
 											if(isset($fr['id_']) && isset($item['id_']) && $fr['id_']==$item['id_']){
 												$item['value']= $item['value']=='1' ?   $fr['on'] : $fr['off'];
@@ -1037,7 +1491,7 @@ class _Public {
 									}
 									$stated=0;
 									if(isset($item['value'])){
-										$item['value'] = sanitize_text_field($item['value']);
+										$item['value'] = sanitize_text_field(wp_unslash($item['value']));
 
 											if((isset($f['id_']) && isset($item['id_ob']) && $f['id_']==$item['id_ob'] )
 											||(isset($f['id_']) && isset($item['id_']) && $f['type']=="chlCheckBox"  && $f['id_']==$item['id_ob']) ){
@@ -1091,11 +1545,11 @@ class _Public {
 								case 'r_matrix':
 
 									$stated=0;
-									$item['value'] = sanitize_text_field($item['value']);
+									$item['value'] = sanitize_text_field(wp_unslash($item['value']));
 									if($item['value']<1 || $item['value']>5){
 										$m =  $this->lanText["somethingWentWrongPleaseRefresh"]. '<br>'. esc_html__('Error Code','easy-form-builder') .': 600';
 										$response = array( 'success' => false  , 'm'=>$m);
-										wp_send_json_success($response,$data_POST);
+										wp_send_json_success($response,200);
 									}
 									$stated=1;
 									$item['name'] = $f['value'];
@@ -1115,7 +1569,7 @@ class _Public {
 								case 'multiselect':
 									$stated=0;
 									if(isset($item['value'])){
-										$item['value'] = sanitize_text_field($item['value']);
+										$item['value'] = sanitize_text_field(wp_unslash($item['value']));
 										$rt=null;
 										$rs = explode("@efb!", $item['value']);
 										array_filter($formObj, function($fr) use($item,&$rt,$rs) {
@@ -1138,7 +1592,7 @@ class _Public {
 
 									$stated=0;
 									if(isset($item['value'])){
-										$item['value'] = sanitize_text_field($item['value']);
+										$item['value'] = sanitize_text_field(wp_unslash($item['value']));
 
 
 
@@ -1200,7 +1654,7 @@ class _Public {
 											$stated=0;
 											if(isset($item['value'])){
 												$stated=1;
-											$item['value']= sanitize_text_field($item['value']);
+											$item['value']= sanitize_text_field(wp_unslash($item['value']));
 											$rt=$item;
 											}
 
@@ -1215,9 +1669,9 @@ class _Public {
 								case 'persiapay':
 								case 'payment':
 									if($formObj[0]["type"]=='payment'){
-										$item['amount'] = sanitize_text_field($item['amount']);
-										$item['id_'] = sanitize_text_field($item['id_']);
-										$item['name'] = sanitize_text_field($item['name']);
+										$item['amount'] = sanitize_text_field( wp_unslash($item['amount']));
+										$item['id_'] = sanitize_text_field(wp_unslash($item['id_']));
+										$item['name'] = sanitize_text_field(wp_unslash($item['name']));
 										$rt= $item;
 										$in_loop=false;
 										$stated=1;
@@ -1227,7 +1681,7 @@ class _Public {
 									break;
 								case 'file':
 								case 'dadfile':
-									$d = $_SERVER['HTTP_HOST'];
+									$d = isset($_SERVER['HTTP_HOST']) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) :'';
 
 
 									if(isset($item['url']) && strlen($item['url'])>5 ){
@@ -1287,7 +1741,7 @@ class _Public {
 										$l=strlen($item['value']);
 										if(isset($item['value']) && strpos($item['value'],'#')==0 && $l==7){
 											$stated=1;
-											$item['value'] = sanitize_text_field($item['value']);
+											$item['value'] = sanitize_text_field( wp_unslash($item['value']));
 											$rt= $item;
 										}
 										$in_loop=false;
@@ -1298,7 +1752,7 @@ class _Public {
 										$stated=0;
 										if(isset($item['value']) && is_numeric($item['value'])){
 											$stated=1;
-											$item['value'] = sanitize_text_field($item['value']);
+											$item['value'] = sanitize_text_field(wp_unslash($item['value']));
 											$rt= $item;
 											$l=strlen($item['value']);
 											if(strcmp($f['type'],"range")!==0 && ((isset($f['milen']) && $f['milen']> $l)||( isset($f['mlen']) && $f['mlen']< $l))  ) {
@@ -1320,7 +1774,7 @@ class _Public {
 									}
 									if(isset($item['value']) ){
 										$stated=1;
-										$item['value'] = sanitize_text_field($item['value']);
+										$item['value'] = sanitize_text_field(wp_unslash($item['value']));
 										$l=mb_strlen($item['value'], 'UTF-8');
 										if(isset($f['milen'])!=true  &&   isset($f['mlen'])!=true){	$stated=1;	}
 										else if((isset($f['milen'])==true && $f['milen']>0 && $f['milen']> $l)) {
@@ -1364,37 +1818,38 @@ class _Public {
 						}
 					}
 				}
-				$this->id = $type=="payment" ? sanitize_text_field($data_POST['payid']) :$this->id ;
+				$this->id = $type=="payment" ? sanitize_text_field(wp_unslash($data_POST['payid'])) :$this->id ;
 				$not_captcha= $type!="payment" ? $formObj[0]["captcha"] : "";
 				if($stated==0){
 
 					$response = array( 'success' => false  , 'm'=>$mr);
-					wp_send_json_success($response,$data_POST);
+					wp_send_json_success($response,200);
 				}
 
 
 					$this->value = json_encode($valobj,JSON_UNESCAPED_UNICODE);
 					$this->value = str_replace('"', '\\"', $this->value);
 					if($form_condition=='booking'){
-						$table_name = $this->db->prefix . "emsfb_form";
+					$table_name = $this->db->prefix . "emsfb_form";
 
-						$id = sanitize_text_field($data_POST['id']);
-						$value =json_encode($formObj,JSON_UNESCAPED_UNICODE);
+					$id = sanitize_text_field( wp_unslash($data_POST['id']));
+					$value =json_encode($formObj,JSON_UNESCAPED_UNICODE);
 
-						$r = $this->db->update($table_name, ['form_structer' => $value], ['form_id' => $id]);
+					$r = $this->db->update($table_name, ['form_structer' => $value], ['form_id' => $id]);
 
-					}
 
-			}
+					$this->clear_form_cache_efb($id);
+
+				}			}
 		}else if ($fs==''){
 			$m = "Error 404 ";
 			$response = array( 'success' => false  , 'm'=>$m);
-			wp_send_json_success($response,$data_POST);
+			wp_send_json_success($response,200);
 		}
 		if(true){
 
 
-// here comper!
+
 
 					$captcha_success="null";
 					$r= $this->setting ;
@@ -1421,10 +1876,11 @@ class _Public {
 
 
 						$secretKey= isset($setting->secretKey) && strlen($setting->secretKey)>5 ? $setting->secretKey : null;
-						$server_name = str_replace("www.", "", $_SERVER['HTTP_HOST']);
+						$server_name = isset($_SERVER['HTTP_HOST']) ? str_replace("www.", "", sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) ): '';
 						if(isset($setting->activeCode) &&!empty($setting->activeCode) && md5($server_name) ==$setting->activeCode){
 							$pro=true;
 						}
+						update_option('emsfb_pro', $pro ? '1' : '2');
 						$response=$data_POST['valid'];
 						$args = array(
 							'secret'        => $secretKey,
@@ -1439,7 +1895,7 @@ class _Public {
 							}else{
 
 								$response = array( 'success' => false  , 'm'=>$this->lanText["errorSiteKeyM"]);
-								wp_send_json_success($response,$data_POST);
+								wp_send_json_success($response,200);
 								return;
 							}
 						}
@@ -1450,16 +1906,16 @@ class _Public {
 					}
 					if ($not_captcha==true && ( $captcha_success=="null" || $captcha_success->success!=true )  ) {
 					$response = array( 'success' => false  , 'm'=>$this->lanText["errorCaptcha"]);
-					wp_send_json_success($response,$data_POST);
+					wp_send_json_success($response,200);
 					die();
 					}else if ($not_captcha==false || ($not_captcha==true &&  $captcha_success->success==true)) {
 					if(empty($data_POST['value']) || empty($data_POST['name']) || empty($data_POST['id']) ){
 						$response = array( 'success' => false , "m"=>$this->lanText["pleaseEnterVaildValue"]);
-						wp_send_json_success($response,$data_POST);
+						wp_send_json_success($response,200);
 						die();
 					}
-					$this->name = sanitize_text_field($data_POST['name']);
-					$this->id = sanitize_text_field($data_POST['id']);
+					$this->name = sanitize_text_field(wp_unslash($data_POST['name']));
+					$this->id = sanitize_text_field(wp_unslash($data_POST['id']));
 					if($send_email_to_user_state){
 						array_filter($valobj, function($item) use($formObj ,&$emailuser){
 							if(isset($item['id_']) && $item['id_']==$formObj[0]["email_to"]){
@@ -1472,6 +1928,7 @@ class _Public {
 
 					switch($type){
 						case "form":
+
 							$check=	$this->insert_message_db(0,false);
 							$nnc = wp_create_nonce($check);
 
@@ -1493,16 +1950,17 @@ class _Public {
 								$state_of_email = ['newMessage',$state_email_user,$status_email['type']];
 								$this->send_email_Emsfb_( $email_user,$check ,$pro,$state_of_email,$url,$status_email['content'], $status_email['subject'] );
 							}
-							wp_send_json_success($response,$data_POST);
+							wp_send_json_success($response,200);
 						break;
 						case "payment":
-							$id = sanitize_text_field($data_POST['payid']);
+
+							$id = sanitize_text_field(wp_unslash($data_POST['payid']));
 							$table_name_ = $this->db->prefix . "emsfb_msg_";
-							$currentDateTime = date('Y-m-d H');
-							$payment_getWay =isset($data_POST['payment']) ? sanitize_text_field($data_POST['payment']) :'stripe';
+							$currentDateTime = wp_date('Y-m-d H');
+							$payment_getWay =isset($data_POST['payment']) ? sanitize_text_field(wp_unslash($data_POST['payment'])) :'stripe';
 							if( strlen($id)<7 && $payment_getWay=="zarinPal"){
 								$response = array( 'success' => false , "m"=>"خطای داده های پرداختی ، صفحه را رفرش کنید");
-								wp_send_json_success($response,$data_POST);
+								wp_send_json_success($response,200);
 								die();
 							}
 							$sql = $this->db->prepare(
@@ -1532,7 +1990,7 @@ class _Public {
 										$amount = $amount;
 									if( $fs!=''){
 										$TokenCode = $setting->payToken;
-										$data = array("merchant_id" => $TokenCode, "authority" => sanitize_text_field($data_POST['auth']), "amount" => $amount);
+										$data = array("merchant_id" => $TokenCode, "authority" => sanitize_text_field(wp_unslash($data_POST['auth'])), "amount" => $amount);
 										$jsonData = json_encode($data);
 										$msg="ok";
 										if(!is_dir(EMSFB_PLUGIN_DIRECTORY."/vendor/persiapay/")) {
@@ -1551,10 +2009,10 @@ class _Public {
 									}
 									if($msg!="ok"){
 										$response = array( 'success' => false , "m"=>$this->$msg);
-										wp_send_json_success($response,$data_POST);
+										wp_send_json_success($response,200);
 										die();
 									}
-									date_default_timezone_set('Iran');
+
 									$result=[
 										'id_' =>"payment",
 										'name' => "payment",
@@ -1562,9 +2020,9 @@ class _Public {
 										'total' => $amount,
 										'type' => "payment",
 										"paymentGateway"=>$payment_getWay,
-										"paymentCreated"=>wp_date( __( 'Y/m/d \a\t g:ia', 'textdomain' ) ),
+										"paymentCreated"=>wp_date( __( 'Y/m/d \a\t g:ia', 'easy-form-builder' ) ),
 										"paymentmethod"=>'کارت',
-										"paymentIntent"=>sanitize_text_field($data_POST['auth']),
+										"paymentIntent"=>sanitize_text_field(wp_unslash($data_POST['auth'])),
 										"paymentCard"=>$result['data']['card_pan'],
 										"refId"=>$result['data']['ref_id'],
 										"paymentcurrency"=>'IRR'
@@ -1582,7 +2040,7 @@ class _Public {
 								$fs = isset($fs[0]->form_structer) ? str_replace('\\', '', $fs[0]->form_structer) :'';
 								if($fs==''){
 									$response = array( 'success' => false  ,'m'=>'Error 406');
-									wp_send_json_success($response,$data_POST);
+									wp_send_json_success($response,200);
 									die();
 								}
 								$fs = json_decode ($fs,true);
@@ -1610,8 +2068,8 @@ class _Public {
 								array_push($fs,array('type'=>'w_link' , 'id_'=>'w_link' , 'id'=>'w_link','value'=>$url,'amount'=>-1));
 								$filtered=json_encode($fs ,JSON_UNESCAPED_UNICODE);
 								$fss=str_replace('"', '\\"', $filtered);
-								$this->value = sanitize_text_field($fss);
-								$this->id = sanitize_text_field($data_POST['payid']);
+								$this->value = sanitize_text_field(wp_unslash($fss));
+								$this->id = sanitize_text_field(wp_unslash($data_POST['payid']));
 								$check=$this->update_message_db();
 
 
@@ -1623,57 +2081,56 @@ class _Public {
 									$state_of_email = ['newMessage',$state_email_user,$status_email['type']];
 									 $this->send_email_Emsfb_( $email_user,$trackId ,$pro,$state_of_email,$url,$state_of_email['content'],$state_of_email['subject'] );
 								}
-								 if(isset($formObj[0]['smsnoti']) && $formObj[0]['smsnoti']==1 ) $this->efbFunction->sms_ready_for_send_efb($form_id, $phone_numbers,$url,'fform' ,'wpsms' ,$check);
+								 if(isset($formObj[0]['smsnoti']) && $formObj[0]['smsnoti']==1 ) $this->efbFunction->sms_ready_for_send_efb($form_id, $phone_numbers,$url,'fform' ,'wpsms' ,$trackId);
 								 $fs=[];
 
 
 							}else{
 								$response = array( 'success' => false  ,'m'=>esc_html__('Error Code','easy-form-builder').'</br>'. esc_html__('Payment Form','easy-form-builder'));
-								wp_send_json_success($response,$data_POST);
+								wp_send_json_success($response,200);
 							}
 
 							$m = "Error 500";
 							$response = $check == 1 ? array( 'success' => true  ,'ID'=>$data_POST['id'] , 'track'=>$this->id ,'nonce'=>wp_create_nonce($this->id)  , 'ip'=>$ip) :  array( 'success' => false  ,'m'=>$m);
 							$this->efbFunction->efb_code_validate_update($sid ,'pay' ,$check );
 							if($rePage!="null" && $check == 1){$response = array( 'success' => true  ,'m'=>$rePage); }
-							wp_send_json_success($response,$data_POST);
+							wp_send_json_success($response,200);
 
-						break;
-						case "register":
-							$username ;
-							$password;
-							$email = 'null';
-							$m = str_replace("\\","",$this->value);
-							$registerValues = json_decode($m,true);
-							foreach ($registerValues as &$rv) {
-								if(isset($rv['id_'])){
-									if ($rv['id_'] == 'passwordRegisterEFB'){
-										$password=$rv['value'];
-										$rv['value'] = str_repeat('*',strlen($rv['value']));
-									}else if($rv['id_'] == 'usernameRegisterEFB'){
-										$username=$rv['value'];
-									}else if($rv['id_'] == 'emailRegisterEFB'){
-										$email=$rv['value'];
-									}
+
+					break;
+					case "register":
+						$username ;
+						$password;
+						$email = 'null';
+						$m = str_replace("\\","",$this->value);
+						$registerValues = json_decode($m,true);
+						foreach ($registerValues as &$rv) {
+							if(isset($rv['id_'])){
+								if ($rv['id_'] == 'passwordRegisterEFB'){
+									$password=$rv['value'];
+									$rv['value'] = str_repeat('*',strlen($rv['value']));
+								}else if($rv['id_'] == 'usernameRegisterEFB'){
+									$username=$rv['value'];
+								}else if($rv['id_'] == 'emailRegisterEFB'){
+									$email=$rv['value'];
 								}
-
 							}
-							$r =$this->new_user_validate_efb($username,$email,$password);
-							if(gettype($r)=="string"){
-								$response = array( 'success' => false , 'm' =>$r);
-								wp_send_json_success($response,$data_POST);
-							}
-							$this->value=json_encode($registerValues,JSON_UNESCAPED_UNICODE);
-							$creds = array();
-							$creds['user_login'] =esc_sql($username);
-							$creds['user_pass'] = esc_sql($password);
-							$creds['user_email'] = esc_sql($email);
-							$creds['role'] = 'subscriber';
-							$creds['rich_editing '] = 'false';
-							$creds['user_registered'] = wp_date('Y-m-d H:i:s');
-							$state =wp_insert_user($creds);
 
-
+						}
+						$r =$this->new_user_validate_efb($username,$email,$password);
+						if(gettype($r)=="string"){
+							$response = array( 'success' => false , 'm' =>$r);
+							wp_send_json_success($response,200);
+						}
+						$this->value=json_encode($registerValues,JSON_UNESCAPED_UNICODE);
+						$creds = array();
+						$creds['user_login'] =esc_sql($username);
+						$creds['user_pass'] = esc_sql($password);
+						$creds['user_email'] = esc_sql($email);
+						$creds['role'] = 'subscriber';
+						$creds['rich_editing '] = 'false';
+						$creds['user_registered'] = wp_date('Y-m-d H:i:s');
+						$state =wp_insert_user($creds);
 
 							$response;
 
@@ -1727,7 +2184,7 @@ class _Public {
 								if($rePage!="null"){$response = array( 'success' => true  ,'m'=>$rePage); }
 							}
 
-							wp_send_json_success($response,$data_POST);
+							wp_send_json_success($response,200);
 						break;
 						case "login":
 							$username ;
@@ -1775,7 +2232,7 @@ class _Public {
 								}
 								$this->efbFunction->efb_code_validate_update($sid ,'login' ,'login' );
 								if(isset($formObj[0]['smsnoti']) && $formObj[0]['smsnoti']==1 ) $this->efbFunction->sms_ready_for_send_efb($this->id, $phone_numbers,$url,'fform' ,'wpsms' ,'');
-								wp_send_json_success($response,$data_POST);
+								wp_send_json_success($response,200);
 							}else{
 
 								$send=array();
@@ -1784,20 +2241,18 @@ class _Public {
 								$send['error']=$this->lanText["incorrectUP"];
 								$response = array( 'success' => true , 'm' =>$send);
 
-								wp_send_json_success($response,$data_POST);
+								wp_send_json_success($response,200);
 							}
 						break;
 						case "logout":
 							$this->efbFunction->efb_code_validate_update($sid ,'logout' ,'logout' );
 							wp_logout();
 							$response = array( 'success' => true  );
-							wp_send_json_success($response,$data_POST);
-						break;
-						case "recovery":
-							$m = str_replace("\\","",$this->value);
-							$userinfo = json_decode($m,true);
-
-							$email="null";
+							wp_send_json_success($response,200);
+					break;
+					case "recovery":
+						$m = str_replace("\\","",$this->value);
+						$userinfo = json_decode($m,true);							$email="null";
 							foreach($userinfo as $value){
 								if(is_email($value)){
 									$email = sanitize_email($value);
@@ -1813,10 +2268,11 @@ class _Public {
 									$to = $email;
 									$efb ='<p> '. $this->lanText["sentBy"] . home_url(). '</p>';
 									if($pro==false) $efb ='<p> '. esc_html__("from").''. home_url(). ' '. $this->lanText["sentBy"] .'<b>['. esc_html__('Easy Form Builder' , 'easy-form-builder') .']</b></p>' ;
-									$subject ="". esc_html__("Password recovery")."[".get_bloginfo('name')."]";
-									$from =get_bloginfo('name')." <no-reply@".$_SERVER['SERVER_NAME'].">";
+									$subject ="". esc_html__("Password recovery" , 'easy-form-builder')."[".get_bloginfo('name')."]";
+									$SERVER_NAME = isset($_SERVER['SERVER_NAME']) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_NAME'] ) ) : 'yourdomain.com';
+									$from =get_bloginfo('name')." <no-reply@".$SERVER_NAME.">";
 									if(isset($email_user[2]) && is_email($email_user[2])) $from =  blog_info('name')." <".$email_user[2].">";
-									$message ='<!DOCTYPE html> <html> <body><h3>'.  esc_html__('New Password')  .':'.$newpass.'</h3>
+									$message ='<!DOCTYPE html> <html> <body><h3>'.  esc_html__('New Password', 'easy-form-builder')  .':'.$newpass.'</h3>
 									<p> '.$efb. '</p>
 									</body> </html>';
 									$headers = array(
@@ -1824,18 +2280,16 @@ class _Public {
 									 '"Content-Type: text/html; charset=ISO-8859-1\r\n"',
 									 'From:'.$from.''
 									 );
-									$sent = wp_mail($to, $subject, strip_tags($message), $headers);
+									$sent = wp_mail($to, $subject, wp_kses_post($message), $headers);
 								}
 							}
 							$m=		$this->lanText["newPassM"];
 							$response = array( 'success' => true , 'm' =>$m);
 							$this->efbFunction->efb_code_validate_update($sid ,'repass' ,'repass' );
-							wp_send_json_success($response,$data_POST);
-						break;
-						case "subscribe":
-							$check=	$this->insert_message_db(0,false);
-
-							if($send_email_to_user_state){
+							wp_send_json_success($response,200);
+					break;
+					case "subscribe":
+						$check=	$this->insert_message_db(0,false);							if($send_email_to_user_state){
 								$status_email = $this->email_status_efb($formObj,$valobj,$check);
 								$state_of_email = ['newMessage','subscribe',$status_email['type']];
 								 $this->send_email_Emsfb_( $email_user,$check ,$pro,$state_of_email,$url,$status_email['content'],$status_email['subject'] );
@@ -1844,7 +2298,7 @@ class _Public {
 							$response = array( 'success' => true , 'm' =>$this->lanText["done"]);
 							if($rePage!="null"){$response = array( 'success' => true  ,'m'=>$rePage); }
 							$this->efbFunction->efb_code_validate_update($sid ,'nwltr' ,'nwltr' );
-							wp_send_json_success($response,$data_POST);
+							wp_send_json_success($response,200);
 						break;
 						case "survey":
 
@@ -1861,37 +2315,37 @@ class _Public {
 							$response = array( 'success' => true , 'm' =>$this->lanText["surveyComplatedM"]);
 							if($rePage!="null"){$response = array( 'success' => true  ,'m'=>$rePage); }
 							$this->efbFunction->efb_code_validate_update($sid ,'poll' ,'poll' );
-							wp_send_json_success($response,$data_POST);
+							wp_send_json_success($response,200);
 						break;
 						case "reservation":
 						break;
 						default:
 						$response = array( 'success' => false  ,'m'=>$this->lanText["somethingWentWrongPleaseRefresh"]);
-						wp_send_json_success($response,$data_POST);
+						wp_send_json_success($response,200);
 					}
 		}
 
 		}else{
 			$response = array( 'success' => false , "m"=>$this->lanText["errorSettingNFound"]);
-			wp_send_json_success($response,$data_POST);
+			wp_send_json_success($response,200);
 		}
 	  }
 	  public function get_track_public_api($data_POST_) {
-
+		//phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce is verified via permission_callback in REST API route registration
 		$data_POST = $data_POST_->get_json_params();
 
 		$this->get_efbFunction(0);
 		$text_ = ["spprt","somethingWentWrongPleaseRefresh",'error403',"errorMRobot","enterVValue","guest","cCodeNFound"];
 		$lanText= $this->efbFunction->text_efb($text_);
-		$sid = sanitize_text_field($data_POST['sid']);
+		$sid = '';
 
-		$s_sid = $this->efbFunction->efb_code_validate_select($sid , 0);
 
-		if ($s_sid !=1 || $sid==null){
+
+		/* if ($s_sid !=1 || $sid==null){
 			$m =  $lanText["somethingWentWrongPleaseRefresh"]. '<br>'. esc_html__('Error Code','easy-form-builder') .': 403';
 		$response = array( 'success' => false  , 'm'=>$m);
-		wp_send_json_success($response,$data_POST);
-		}
+		wp_send_json_success($response,200);
+		} */
 		$response=$data_POST['valid'];
 		$captcha_success =[];
 		$not_captcha=true;
@@ -1903,15 +2357,15 @@ class _Public {
 		 $strR = json_encode($captcha_success);
 		 if (!empty($captcha_success) &&$captcha_success->success==false &&  $not_captcha==false ) {
 		  $response = array( 'success' => false  , 'm'=> $lanText["errorMRobot"]);
-		  wp_send_json_success($response,$data_POST);
+		  wp_send_json_success($response,200);
 		 }
 		 else if ((!empty($captcha_success) && $captcha_success->success==true) ||  $not_captcha==true) {
 			if(empty($data_POST['value']) ){
 				$response = array( 'success' => false , "m"=>$lanText["enterVValue"]);
-				wp_send_json_success($response,$data_POST);
+				wp_send_json_success($response,200);
 				die();
 			}
-			$id = sanitize_text_field($data_POST['value']);
+			$id = sanitize_text_field(wp_unslash($data_POST['value']));
 			$this->ip=$this->get_ip_address();
 			$ip = $this->ip;
 
@@ -1956,7 +2410,7 @@ class _Public {
 			}else{
 				$response = array( 'success' => false  , "m" =>$lanText["cCodeNFound"]);
 			}
-			wp_send_json_success($response,$data_POST);
+			wp_send_json_success($response,200);
 			}
 
 	  }
@@ -1964,7 +2418,7 @@ class _Public {
 
 	public function insert_message_db($read,$uniqid){
 		if(isset($read)==false) $read=0;
-		if($uniqid==false) $uniqid= date("ymd").substr(str_shuffle("0123456789ASDFGHJKLQWERTYUIOPZXCVBNM"), 0, 5) ;
+		if($uniqid==false) $uniqid= wp_date("ymd").substr(str_shuffle("0123456789ASDFGHJKLQWERTYUIOPZXCVBNM"), 0, 5) ;
 		$table_name = $this->db->prefix . "emsfb_msg_";
 		$this->db->insert($table_name, array(
 			'form_title_x' => $this->name,
@@ -1986,9 +2440,9 @@ class _Public {
 	public function get_ip_address() {
 
         $ip='1.1.1.1';
-		if (!empty($_SERVER['HTTP_CLIENT_IP'])) {$ip = $_SERVER['HTTP_CLIENT_IP'];
-        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) { $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
-        } else {$ip = $_SERVER['REMOTE_ADDR'];}
+		if (!empty($_SERVER['HTTP_CLIENT_IP'])) {$ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_CLIENT_IP'] ) );
+        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) { $ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) );
+        } else {$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );}
         $ip = strval($ip);
         $check =strpos($ip,',');
         if($check!=false){$ip = substr($ip,0,$check);}
@@ -1996,23 +2450,19 @@ class _Public {
     }
 	public function file_upload_public(){
 
-        $_POST['id']=intval($_POST['id']);
-        $_POST['pl']=sanitize_text_field($_POST['pl']);
-        $_POST['nonce_msg']=sanitize_text_field($_POST['nonce_msg']);
-		$page_id = sanitize_text_field($_POST['page_id']);
+        $_POST['id']= isset($_POST['id']) ? intval( wp_unslash( $_POST['id'] ) ) : 0;
+        $_POST['pl']= isset($_POST['pl']) ? sanitize_text_field(wp_unslash($_POST['pl'])) : '';
+        $_POST['nonce_msg']= isset($_POST['nonce_msg']) ? sanitize_text_field(wp_unslash($_POST['nonce_msg'])) : '';
+		$page_id = isset($_POST['page_id']) ? sanitize_text_field(wp_unslash($_POST['page_id'])) : '';
         $vl=null;
 
         if($_POST['pl']!="msg"){
             $vl ='efb'. $_POST['id'];
         }else{
-            $id = $_POST['id'];
-            $table_name = $this->db->prefix . "emsfb_form";
-            $vl = $this->db->get_var(
-				$this->db->prepare(
-					"SELECT form_structer FROM `$table_name` WHERE form_id = %d",
-					$id
-				)
-			);
+            $id = isset($_POST['id']) ? intval( wp_unslash( $_POST['id'] ) ) : 0;
+            $id = intval($id);
+            $vl_data = $this->get_form_data_efb($id, array('form_structer'));
+            $vl = isset($vl_data->form_structer) ? $vl_data->form_structer : null;
             if($vl!=null){
                 if(strpos($vl , '\"type\":\"dadfile\"') || strpos($vl , '\"type\":\"file\"')){
                     $vl ='efb'.$id;
@@ -2022,7 +2472,7 @@ class _Public {
         }
 		if (check_ajax_referer('public-nonce','nonce')!=1 && check_ajax_referer($vl,"nonce_msg")!=1){
 			$response = array( 'success' => false  , 'm'=>$this->lanText["error403"]);
-			wp_send_json_success($response,$_POST);
+			wp_send_json_success($response,200);
 			die();
 		}
 		$this->text_ = empty($this->text_)==false ? $this->text_ :['error403',"errorMRobot","errorFilePer"];
@@ -2040,42 +2490,46 @@ class _Public {
 		 'application/vnd.oasis.opendocument.spreadsheet','application/vnd.oasis.opendocument.presentation','application/vnd.oasis.opendocument.text',
 		 'application/zip', 'application/octet-stream', 'application/x-zip-compressed', 'multipart/x-zip'
 		);
-		if (in_array($_FILES['file']['type'], $arr_ext)) {
-			$name = 'efb-PLG-'. date("ymd"). '-'.substr(str_shuffle("0123456789ASDFGHJKLQWERTYUIOPZXCVBNM"), 0, 8).'.'.pathinfo($_FILES["file"]["name"], PATHINFO_EXTENSION) ;
-			$upload = wp_upload_bits($name, null, file_get_contents($_FILES["file"]["tmp_name"]));
+		$file_type = isset($_FILES['file']['type']) ? sanitize_text_field( wp_unslash( $_FILES['file']['type'] ) ) : '';
+		if (in_array($file_type, $arr_ext)) {
+			$file_name_raw = isset($_FILES['file']['name']) ? sanitize_file_name( wp_unslash( $_FILES['file']['name'] ) ) : '';
+
+			$file_tmp = isset($_FILES['file']['tmp_name']) ? $_FILES['file']['tmp_name'] : '';
+
+			if (empty($file_tmp) || !is_uploaded_file($file_tmp) || !is_readable($file_tmp)) {
+				$response = array( 'success' => false  ,'error'=>$this->lanText["errorFilePer"]);
+				wp_send_json_success($response,200);
+			}
+
+			$name = 'efb-PLG-'. wp_date("ymd"). '-'.substr(str_shuffle("0123456789ASDFGHJKLQWERTYUIOPZXCVBNM"), 0, 8).'.'.pathinfo($file_name_raw, PATHINFO_EXTENSION) ;
+			$contents = file_get_contents($file_tmp);
+			if ($contents === false) {
+				$response = array( 'success' => false  ,'error'=>$this->lanText["errorFilePer"]);
+				wp_send_json_success($response,200);
+			}
+
+			$upload = wp_upload_bits($name, null, $contents);
 			if(is_ssl()==true){
 				$upload['url'] = str_replace('http://', 'https://', $upload['url']);
 			}
-			$response = array( 'success' => true  ,'ID'=>"id" , "file"=>$upload ,"name"=>$name ,'type'=>$_FILES['file']['type']);
-			  wp_send_json_success($response,$_POST);
+			  $response = array( 'success' => true  ,'ID'=>"id" , "file"=>$upload ,"name"=>$name ,'type'=>$file_type);
+			  wp_send_json_success($response,200);
 		}else{
 			$response = array( 'success' => false  ,'error'=>$this->lanText["errorFilePer"]);
-			wp_send_json_success($response,$_POST);
-			die('invalid file '.$_FILES['file']['type']);
+			wp_send_json_success($response,200);
+			die('invalid file ' . esc_html( $file_type ) );
 		}
 	}
 
 	public function file_upload_api(){
+		//phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce is verified via permission_callback in REST API route registration
 		$efbFunction =  $this->get_efbFunction(1);
-		$_POST['id']=intval($_POST['id']);
-        $_POST['pl']=sanitize_text_field($_POST['pl']);
-        $fid=intval($_POST['fid']);
-		$sid = sanitize_text_field($_POST['sid']);
-		$page_id = sanitize_text_field($_POST['page_id']);
-
-
-
-
-
-
+		$_POST['id']= isset($_POST['id']) ? intval( wp_unslash( $_POST['id'] ) ) : 0;
+        $_POST['pl']= isset($_POST['pl']) ? sanitize_text_field(wp_unslash($_POST['pl'])) : '';
+        $fid= isset($_POST['fid']) ? intval( wp_unslash( $_POST['fid'] ) ) : 0;
+		$sid = '';
+		$page_id = isset($_POST['page_id']) ? sanitize_text_field(wp_unslash($_POST['page_id'])) : '';
 		$s_sid = $this->efbFunction->efb_code_validate_select($sid ,  $fid);
-
-		if ($s_sid !=1 || $sid==null){
-
-
-		$response = array( 'success' => false  , 'm'=>esc_html__('Something went wrong. Please refresh the page and try again.','easy-form-builder') .'<br>'. esc_html__('Error Code','easy-form-builder') . ": 402");
-		wp_send_json_success($response,200);
-		}
 
 		$this->cache_cleaner_Efb($page_id);
 
@@ -2086,12 +2540,10 @@ class _Public {
             $vl ='efb'. $_POST['id'];
         }else{
 
-            $id = $_POST['id'];
-            $table_name = $this->db->prefix . "emsfb_form";
-			$vl = $this->db->get_var( $this->db->prepare(
-				"SELECT form_structer FROM `$table_name` WHERE form_id = %d",
-				$fid
-			));
+            $id = isset($_POST['id']) ? intval( wp_unslash( $_POST['id'] ) ) : 0;
+            $fid = intval($fid);
+            $vl_data = $this->get_form_data_efb($fid, array('form_structer'));
+            $vl = isset($vl_data->form_structer) ? $vl_data->form_structer : null;
             if($vl!=null){
 				if(gettype($vl)=="string"){
 					$temp = strpos($vl , '\"type\":\"dadfile\"') || strpos($vl , '\"type\":\"file\"') ? true : false;
@@ -2128,7 +2580,7 @@ class _Public {
             }
         }
 		$valid=false;
-		$_FILES['async-upload']['name'] = sanitize_file_name($_FILES['async-upload']['name']);
+		$_FILES['async-upload']['name'] = sanitize_file_name( wp_unslash( $_FILES['async-upload']['name'] ) );
 
 
 			$this->text_ = empty($this->text_)==false ? $this->text_ :['error403',"errorMRobot","errorFilePer"];
@@ -2146,7 +2598,8 @@ class _Public {
 			     'gz', 'tgz', 'tar.gz', 'tar.gzip', 'tar.z', 'tar.Z', 'tar.bz2', 'tar.bz', 'tar.bzip2', 'tar.bzip', 'tbz2', 'tbz', 'bz2', 'bz', 'bzip2', 'bzip', 'tz2', 'tz', 'z', 'war', 'jar', 'ear', 'sar'
 
 				);
-				$valid = in_array($_FILES['async-upload']['type'], $arr_ext);
+				$async_file_type = isset($_FILES['async-upload']['type']) ? sanitize_text_field( wp_unslash( $_FILES['async-upload']['type'] ) ) : '';
+				$valid = in_array($async_file_type, $arr_ext);
 			}
 
 
@@ -2164,7 +2617,7 @@ class _Public {
 
 					$valid_types = explode(',', str_replace(' ', '', $val->file_ctype));
 
-					$file_name = $_FILES['async-upload']['name'];
+					$file_name = isset($_FILES['async-upload']['name']) ? sanitize_file_name( wp_unslash( $_FILES['async-upload']['name'] ) ) : '';
 
 					$ext = strtolower(substr($file_name, strrpos($file_name, '.') + 1));
 
@@ -2184,22 +2637,37 @@ class _Public {
 		}
 
 		if ($valid) {
+			$async_file_name = isset($_FILES['async-upload']['name']) ? sanitize_file_name( wp_unslash( $_FILES['async-upload']['name'] ) ) : '';
 
-			$name = 'efb-PLG-'. date("ymd"). '-'.substr(str_shuffle("0123456789ASDFGHJKLQWERTYUIOPZXCVBNM"), 0, 8).'.'.pathinfo($_FILES["async-upload"]["name"], PATHINFO_EXTENSION) ;
-			$upload = wp_upload_bits($name, null, file_get_contents($_FILES["async-upload"]["tmp_name"]));
+			$async_file_tmp = isset($_FILES['async-upload']['tmp_name']) ? $_FILES['async-upload']['tmp_name'] : '';
+
+
+			if (empty($async_file_tmp) || !is_uploaded_file($async_file_tmp) || !is_readable($async_file_tmp)) {
+				$response = array( 'success' => false, 'error' => $this->lanText["errorFilePer"]);
+				wp_send_json_success($response,200);
+			}
+
+			$name = 'efb-PLG-'. wp_date("ymd"). '-'.substr(str_shuffle("0123456789ASDFGHJKLQWERTYUIOPZXCVBNM"), 0, 8).'.'.pathinfo($async_file_name, PATHINFO_EXTENSION) ;
+			$file_contents = file_get_contents($async_file_tmp);
+			if ($file_contents === false) {
+				$response = array( 'success' => false, 'error' => $this->lanText["errorFilePer"]);
+				wp_send_json_success($response,200);
+			}
+			$upload = wp_upload_bits($name, null, $file_contents);
 			if(is_ssl()==true){
 				$upload['url'] = str_replace('http://', 'https://', $upload['url']);
 			}
-			$response = array( 'success' => true  ,'ID'=>"id" , "file"=>$upload ,"name"=>$name ,'type'=>$_FILES['async-upload']['type']);
+			$response = array( 'success' => true  ,'ID'=>"id" , "file"=>$upload ,"name"=>$name ,'type'=>$async_file_type);
 			  wp_send_json_success($response,200);
 		}else{
 			$response = array( 'success' => false  ,'error'=>$this->lanText["errorFilePer"]);
 			wp_send_json_success($response,200);
-			die('invalid file '.$_FILES['async-upload']['type']);
+			die('invalid file ' . esc_html( $async_file_type ) );
 		}
 	}
 
 	public function set_rMessage_id_Emsfb_api($data_POST_) {
+		//phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce is verified via permission_callback in REST API route registration
 		$data_POST = $data_POST_->get_json_params();
 		$this->text_ = empty($this->text_)==false ? $this->text_ :["error400","somethingWentWrongPleaseRefresh","atcfle","cpnnc","tfnapca", "icc","cpnts","cpntl","clcdetls","vmgs","required","mcplen","mmxplen","mxcplen","mmplen","offlineSend","settingsNfound","error405","error403","videoDownloadLink","downloadViedo","pleaseEnterVaildValue","errorSomthingWrong","nAllowedUseHtml","guest","messageSent","MMessageNSendEr",
 		"youRecivedNewMessage","trackNo","WeRecivedUrM","thankFillForm","msgdml","spprt"];
@@ -2209,19 +2677,19 @@ class _Public {
 
 
 		$this->lanText= $this->efbFunction->text_efb($this->text_);
-		$sid = sanitize_text_field($data_POST['sid']);
-		$rsp_by = sanitize_text_field($data_POST['user_type']);
-		$sc = isset($data_POST['sc']) ? sanitize_text_field($data_POST['sc']) : 'null';
-		$track = sanitize_text_field($data_POST['track']);
+		$sid = '';
+		$rsp_by = sanitize_text_field(wp_unslash($data_POST['user_type']));
+		$sc = isset($data_POST['sc']) ? sanitize_text_field(wp_unslash($data_POST['sc'])) : 'null';
+		$track = sanitize_text_field(wp_unslash($data_POST['track']));
 
-		$s_sid = $this->efbFunction->efb_code_validate_select($sid , 0);
-		$page_id = sanitize_text_field($data_POST['page_id']);
-		if ($s_sid !=1 || $sid==null){
+
+		$page_id = sanitize_text_field( wp_unslash($data_POST['page_id']));
+		/* if ($s_sid !=1 || $sid==null){
 			$m = '<b>'. $this->lanText["somethingWentWrongPleaseRefresh"]. '<br> '. esc_html__('Error Code','easy-form-builder') .': 403 </br></b>';
 		$response = array( 'success' => false  , 'm'=>$m );
 		wp_send_json_success($response,200);
-		}
-		$this->id =sanitize_text_field($data_POST['id']);
+		} */
+		$this->id =sanitize_text_field( wp_unslash($data_POST['id']));
 		$by ="";
 		if(empty($data_POST['message']) ){
 			$response = array( 'success' => false , "m"=>$this->lanText["pleaseEnterVaildValue"]);
@@ -2282,10 +2750,10 @@ class _Public {
 			}else{
 
 			}
-			$response = isset($data_POST['valid']) ? sanitize_text_field($data_POST['valid']) : '';
+			$response = isset($data_POST['valid']) ? sanitize_text_field(wp_unslash($data_POST['valid'])) : '';
 			$id;
-				$id=number_format(sanitize_text_field($data_POST['id']));
-				$m=sanitize_text_field($data_POST['message']);
+				$id=number_format(sanitize_text_field(wp_unslash($data_POST['id'])));
+				$m=sanitize_text_field(wp_unslash($data_POST['message']));
 				$m = str_replace("\\","",$m);
 				$message =json_decode($m);
 				$valobj=[];
@@ -2295,7 +2763,7 @@ class _Public {
 					if($stated==0){break;}
 						switch ($f->type) {
 							case 'allformat':
-								$d = $_SERVER['HTTP_HOST'];
+								$d = isset($_SERVER['HTTP_HOST']) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) : '';
 
 
 								$stated=1;
@@ -2324,7 +2792,7 @@ class _Public {
 								$stated=0;
 								if(isset($f->value) && $f->id_=="message"){
 									$stated=1;
-									$f->value = sanitize_text_field($f->value);
+									$f->value = sanitize_text_field( wp_unslash($f->value));
 								}
 
 								$in_loop=false;
@@ -2366,6 +2834,21 @@ class _Public {
 				$lst = end($msg_obj);
 				$link_w = $lst['type']=="w_link" ? $lst['value'] : 'null';
 
+				$table_emsfb_msg_ = $this->db->prefix . "emsfb_msg_";
+				$exists = (int) $this->db->get_var(
+					$this->db->prepare(
+						"SELECT EXISTS(SELECT 1 FROM `$table_emsfb_msg_` WHERE msg_id = %d AND track = %s LIMIT 1)",
+						$id,
+						$track
+					)
+				);
+
+				if (!$exists) {
+					wp_send_json_success(
+						array('success' => false, 'm' => esc_html__('Not allowed to respond to this message.', 'easy-form-builder')),
+						200
+					);
+				}
 
 				$table_name = $this->db->prefix . "emsfb_rsp_";
 
@@ -2396,8 +2879,8 @@ class _Public {
 					'date'=>wp_date('Y-m-d H:i:s'),
 				));
 				$track = $value[0]->track;
-				$table_name = $this->db->prefix . "emsfb_msg_";
-				$this->db->update($table_name,array('read_'=>$read_s), array('msg_id' => $id) );
+
+				$this->db->update($table_emsfb_msg_,array('read_'=>$read_s), array('msg_id' => $id ,'track' => $track) );
 
 				$email_usr ="";
 
@@ -2407,14 +2890,9 @@ class _Public {
 					$email_usr = $usr->user_email;
 				}
 				$form_id = intval($value[0]->form_id);
-				$table_name = $this->db->prefix . "emsfb_form";
-				$vald = $this->db->get_results(
-					$this->db->prepare(
-						"SELECT form_structer ,form_type FROM `$table_name` WHERE form_id = %d",
-						$form_id
-					)
-				);
-				$valb =str_replace('\\', '', $vald[0]->form_structer);
+				$form_id = intval($form_id);
+				$vald_data = $this->get_form_data_efb($form_id, array('form_structer', 'form_type'));
+				$valb = $vald_data ? str_replace('\\', '', $vald_data->form_structer) : '';
 				$valn= json_decode($valb,true);
 
 				$usr;
@@ -2528,7 +3006,7 @@ class _Public {
 			$response = array( 'success' => false , "m"=>$m, "by"=>$by);
 			wp_send_json_success($response,200);
 		}
-	}//end function
+	}
 
 	public function send_email_Emsfb_($to , $track ,$pro , $state,$link ,$content ='null' , $sub ='null'){
 		$link_w=[];
@@ -2618,6 +3096,7 @@ class _Public {
 
 			}
 		}
+
 		$check =  $this->efbFunction->send_email_state_new( $to,$subject ,$cont,$pro,$state,$link_w,$this->setting);
 	}
 
@@ -2638,10 +3117,11 @@ class _Public {
 			$r =json_decode($r);
 			if($state=="pub"){
 				$this->setting =$value;
-				$server_name = str_replace("www.", "", $_SERVER['HTTP_HOST']);
+				$server_name = str_replace("www.", "", isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '');
 				$pro = false;
 				if(isset($r->activeCode) &&  md5($server_name) ==$r->activeCode){$pro=true;}
 				$this->pro_efb = $pro;
+				update_option('emsfb_pro', $pro ? '1' : '2');
 				$trackingCode = isset($r->trackingCode) ? $r->trackingCode : "";
 				$siteKey = isset($r->siteKey) ? $r->siteKey : "";
 				$mapKey = isset($r->apiKeyMap) ? $r->apiKeyMap : "";
@@ -2710,17 +3190,13 @@ class _Public {
 	 return $rtrn;
 	}
 	public function pay_stripe_sub_Emsfb_api($data_POST_) {
+		//phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce is verified via permission_callback in REST API route registration
 		$data_POST = $data_POST_->get_json_params();
 		$user = wp_get_current_user();
 		$uid= $user->exists() ? $user->user_nicename :  esc_html__('Guest','easy-form-builder') ;
-		$this->id =sanitize_text_field($data_POST['id']);
-		$sid = sanitize_text_field($data_POST['sid']);
-		$s_sid = $this->efbFunction->efb_code_validate_select($sid , $this->id);
-		if ($s_sid !=1){
-			$m = esc_html__('error', 'easy-form-builder') . ' 403';
-			$response = array( 'success' => false  , 'm'=>$m);
-			wp_send_json_success($response,$data_POST);
-		}
+		$this->id =sanitize_text_field( wp_unslash($data_POST['id']));
+		$sid = '';
+
 		$r= $this->setting!=NULL  && empty($this->setting)!=true ? $this->setting:  $this->get_setting_Emsfb('setting');
 		$Sk ='null';
 		if(gettype($r)=="string"){
@@ -2739,16 +3215,11 @@ class _Public {
 			 return "<div id='body_efb' class='efb card-public row pb-3 efb px-2'  style='color: #9F6000; background-color: #FEEFB3;  padding: 5px 10px;'> <div class='efb text-center my-5'><h2 style='text-align: center;'></h2><h3 class='efb warning text-center text-darkb fs-4'>".esc_html__('We have some changes. Please wait a few minutes before you try again.', 'easy-form-builder')."</h3><p class='efb fs-5  text-center my-1 text-pinkEfb' style='text-align: center;'><p></div></div>";
 		}
 		require_once(EMSFB_PLUGIN_DIRECTORY."/vendor/autoload.php");
-		$this->id = intval($data_POST['id']);
-		$val_ = sanitize_text_field($data_POST['value']);
-		$table_name = $this->db->prefix . "emsfb_form";
-		$value_form = $this->db->get_results(
-			$this->db->prepare(
-				"SELECT form_structer ,form_type FROM `$table_name` WHERE form_id = %d",
-				$this->id
-			)
-		);
-		$fs =str_replace('\\', '', $value_form[0]->form_structer);
+		$this->id = intval(wp_unslash($data_POST['id']));
+		$val_ = sanitize_text_field( wp_unslash($data_POST['value']));
+		$this->id = intval($this->id);
+		$value_form_data = $this->get_form_data_efb($this->id, array('form_structer', 'form_type'));
+		$fs = $value_form_data ? str_replace('\\', '', $value_form_data->form_structer) : '';
 		$fs_ = json_decode($fs,true);
 		$val =str_replace('\\', '', $val_);
 		$val_ = json_decode($val,true);
@@ -2813,14 +3284,15 @@ class _Public {
 		$this->ip = $ip;
 		if($price_c != $price_f) {
 			$t=time();
-			$from =get_bloginfo('name')." <Alert@".$_SERVER['SERVER_NAME'].">";
+			$SERVER_NAME = isset($_SERVER['SERVER_NAME']) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_NAME'] ) ) : 'yourdomain.com';
+			$from =get_bloginfo('name')." <Alert@".$SERVER_NAME.">";
 				$headers = array(
 				   'MIME-Version: 1.0\r\n',
 				   'From:'.$from.'',
 				);
 			$to =get_option('admin_email');
 			$message="This message from Easy Form Builder, This IP:".$this->ip.
-			" try to enter invalid value like fee of the service of the form id:" .$this->id. " at :".date("Y-m-d-h:i:s",$t) ;
+			" try to enter invalid value like fee of the service of the form id:" .$this->id. " at :".wp_date("Y-m-d H:i:s",$t) ;
 			wp_mail( $to,"Warning Entry[Easy Form Builder]", $message, $headers );
 		}
 		$price_f = $price_f*100;
@@ -2843,10 +3315,10 @@ class _Public {
 				if(strlen($email)>1){$newPay=array_merge($newPay , array('receipt_email'=>$email));}
 				$paymentIntent = $stripe->paymentIntents->create($newPay);
 				$amount = $paymentIntent->amount/100;
-				$created= date("Y-m-d-h:i:s",$paymentIntent->created);
+				$created= wp_date("Y-m-d H:i:s",$paymentIntent->created);
 				$val = $paymentIntent->amount/100 . ' ' . $paymentIntent->currency;
 			}else{
-				$token= sanitize_text_field($data_POST['token']);
+				$token= sanitize_text_field( wp_unslash($data_POST['token']));
 
 
 				$product = $stripe->products->create([
@@ -2872,18 +3344,18 @@ class _Public {
 						],
 					  ]);
 					  $amount = $paymentIntent->plan->amount/100;
-					  $created= date("Y-m-d-h:i:s",$paymentIntent->created);
+					  $created= wp_date("Y-m-d H:i:s",$paymentIntent->created);
 					  $val =  $amount . ' ' . $paymentIntent->currency;
 			}
 			$filtered = array_filter($valobj, function($item) {
 				if(isset($item['price']))	return $item;
 			});
-			$created= date("Y-m-d-h:i:s",$paymentIntent->created);
+			$created= wp_date("Y-m-d H:i:s",$paymentIntent->created);
 			$response;
 			if($paymentmethod!='charge'){
 				$amount = $price->unit_amount/100;
 				$payA =  $amount  . ' '. $price->currency;
-				$nextdate = date("Y-m-d-h:i:s",$paymentIntent->current_period_end);
+				$nextdate = wp_date("Y-m-d H:i:s",$paymentIntent->current_period_end);
 				$ar = (object)['id_'=>'payment','amount'=>0,'name'=> esc_html__('Payment','easy-form-builder') ,'type'=>'payment',
 				'value'=> $payA , 'paymentIntent'=>$paymentIntent->id , 'paymentGateway'=>'stripe' ,
 				'paymentAmount'=>$amount,'paymentCreated'=>$created ,'paymentcurrency' =>$price->currency, 'gateway'=>'stripe',
@@ -2906,7 +3378,7 @@ class _Public {
 			$ip = $this->ip;
 			$val_ = json_encode($filtered ,JSON_UNESCAPED_UNICODE);
 			$this->value = str_replace('"', '\\"', $val_);
-			$this->name = sanitize_text_field($data_POST['name']);
+			$this->name = sanitize_text_field( wp_unslash($data_POST['name']));
 			$check=	$this->insert_message_db(2,false);
 
 
@@ -2919,22 +3391,18 @@ class _Public {
 		}
 	}
 	public function pay_persia_sub_Emsfb_api($data_POST_){
+		//phpcs:ignore WordPress.Security.NonceVerification.Missing -- Nonce is verified via permission_callback in REST API route registration
 		$data_POST = $data_POST_->get_json_params();
 		$r= $this->setting!=NULL  && empty($this->setting)!=true ? $this->setting:  $this->get_setting_Emsfb('setting');
 
 		$efbFunction =  $this->get_efbFunction(1);
 
-		$sid = sanitize_text_field($data_POST['sid']);
-		$this->id = sanitize_text_field($data_POST['id']);
-		$s_sid = $this->efbFunction->efb_code_validate_select($sid , $this->id);
+		$sid = '';
+		$this->id = sanitize_text_field(wp_unslash($data_POST['id']));
+
 		$text_=['somethingWentWrongPleaseRefresh'];
 		$this->lanText= $this->efbFunction->text_efb($text_);
-		if ($s_sid !=1){
 
-			$m =  $this->lanText["somethingWentWrongPleaseRefresh"]. '<br>'. esc_html__('Error Code','easy-form-builder') .': 403';
-		$response = array( 'success' => false  , 'm'=>$m);
-		wp_send_json_success($response,$data_POST);
-		}
 		$Sk ='null';
 		if(gettype($r)=="string"){
 			$setting =str_replace('\\', '', $r);
@@ -2948,17 +3416,12 @@ class _Public {
 				die("secure!");
 		}
 
-		$this->id = intval($data_POST['id']);
-		$val_ = sanitize_text_field($data_POST['value']);
+		$this->id = intval(wp_unslash($data_POST['id']));
+		$val_ = sanitize_text_field( wp_unslash($data_POST['value']));
 		$url = sanitize_url($data_POST['url']);
-		$table_name = $this->db->prefix . "emsfb_form";
-		$value_form = $this->db->get_results(
-			$this->db->prepare(
-				"SELECT form_structer ,form_type FROM `$table_name` WHERE form_id = %d",
-				$this->id
-			)
-		);
-		$fs =str_replace('\\', '', $value_form[0]->form_structer);
+		$this->id = intval($this->id);
+		$value_form_data = $this->get_form_data_efb($this->id, array('form_structer', 'form_type'));
+		$fs = $value_form_data ? str_replace('\\', '', $value_form_data->form_structer) : '';
 		$fs_ = json_decode($fs,true);
 		$val =str_replace('\\', '', $val_);
 		$val_ = json_decode($val,true);
@@ -3028,14 +3491,15 @@ class _Public {
 		$ip = $this->ip;
 		if($price_c != $price_f) {
 			$t=time();
-			$from =get_bloginfo('name')." <Alert@".$_SERVER['SERVER_NAME'].">";
+			$SERVER_NAME = isset($_SERVER['SERVER_NAME']) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_NAME'] ) ) : 'yourdomain.com';
+			$from =get_bloginfo('name')." <Alert@".$SERVER_NAME.">";
 				$headers = array(
 				   'MIME-Version: 1.0\r\n',
 				   'From:'.$from.'',
 				);
 			$to =get_option('admin_email');
 			$message="This message from Easy Form Builder, This IP:".$this->ip.
-			" try to enter invalid value like fee of the service of a form at :".date("Y-m-d-h:i:s",$t) ;
+			" try to enter invalid value like fee of the service of a form at :".wp_date("Y-m-d H:i:s",$t) ;
 			wp_mail( $to,"Warning Entry[Easy Form Builder]", $message, $headers );
 		}
 		$price_f = $price_f;
@@ -3072,7 +3536,7 @@ class _Public {
 					$val_ = json_encode($filtered ,JSON_UNESCAPED_UNICODE);
 
 						$this->value = str_replace('"', '\\"', $val_);
-						$this->name = sanitize_text_field($data_POST['name']);
+						$this->name = sanitize_text_field( wp_unslash($data_POST['name']));
 						$check=	$this->insert_message_db(2,$clientRefId);
 						if(isset($check)!=true){
 							$response = array('success' => false, 'm' => 'خطا در ارتباط با دیتابیس ، شماره خطا DB-403');
@@ -3111,17 +3575,12 @@ class _Public {
 				die("secure!");
 		}
 
-		$this->id = intval($_POST['id']);
-		$val_ = sanitize_text_field($_POST['value']);
-		$url = sanitize_url($_POST['url']);
-		$table_name = $this->db->prefix . "emsfb_form";
-		$value_form = $this->db->get_results(
-			$this->db->prepare(
-				"SELECT form_structer ,form_type FROM `$table_name` WHERE form_id = %d",
-				$this->id
-			)
-		);
-		$fs =str_replace('\\', '', $value_form[0]->form_structer);
+		$this->id = isset($_POST['id']) ? intval(wp_unslash($_POST['id'])) : 0;
+		$val_ = isset($_POST['value']) ? sanitize_text_field( wp_unslash($_POST['value'])) : '';
+		$url = isset($_POST['url']) ? sanitize_url(wp_unslash($_POST['url'])) : '';
+		$this->id = intval($this->id);
+		$value_form_data = $this->get_form_data_efb($this->id, array('form_structer', 'form_type'));
+		$fs = $value_form_data ? str_replace('\\', '', $value_form_data->form_structer) : '';
 		$fs_ = json_decode($fs,true);
 		$val =str_replace('\\', '', $val_);
 		$val_ = json_decode($val,true);
@@ -3186,14 +3645,15 @@ class _Public {
 		$ip = $this->ip;
 		if($price_c != $price_f) {
 			$t=time();
-			$from =get_bloginfo('name')." <Alert@".$_SERVER['SERVER_NAME'].">";
+			$SERVER_NAME = isset($_SERVER['SERVER_NAME']) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_NAME'] ) ) : 'yourdomain.com';
+			$from =get_bloginfo('name')." <Alert@".$SERVER_NAME.">";
 				$headers = array(
 				   'MIME-Version: 1.0\r\n',
 				   'From:'.$from.'',
 				);
 			$to =get_option('admin_email');
 			$message="This message from Easy Form Builder, This IP:".$this->ip.
-			" try to enter invalid value like fee of the service of a form at :".date("Y-m-d-h:i:s",$t) ;
+			" try to enter invalid value like fee of the service of a form at :".wp_date("Y-m-d H:i:s",$t) ;
 			wp_mail( $to,"Warning Entry[Easy Form Builder]", $message, $headers );
 		}
 		$price_f = $price_f;
@@ -3230,7 +3690,7 @@ class _Public {
 					$val_ = json_encode($filtered ,JSON_UNESCAPED_UNICODE);
 
 						$this->value = str_replace('"', '\\"', $val_);
-						$this->name = sanitize_text_field($_POST['name']);
+						$this->name = isset($_POST['name']) ? sanitize_text_field( wp_unslash($_POST['name'])) : '';
 						$check=	$this->insert_message_db(2,$clientRefId);
 						if(isset($check)!=true){
 							$response = array('success' => false, 'm' => 'خطا در ارتباط با دیتابیس ، شماره خطا DB-403');
@@ -3477,13 +3937,13 @@ class _Public {
 	function email_get_content_efb($content, $track){
 		$m  = '<table border="0" cellpadding="0" cellspacing="0" width="100%" class="container containerEmailEfb" >';
 
-			// ترجمه‌ها و متغیرها
-			$text_     = ['msgemlmp','paymentCreated','videoDownloadLink','downloadViedo','payment','id','payAmount','ddate','updated','methodPayment','interval'];
+
+			$text_     = ['msgemlmp','paymentCreated','videoDownloadLink','downloadViedo','payment','id','payAmount','ddate','updated','methodPayment','interval','atcfle'];
 			$list      = [];
 			$checboxs  = [];
 			$total_amount = 0;
 
-			// لینک پیگیری/نقشه
+
 			$lst    = end($content);
 			$link_w = (isset($lst['type']) && $lst['type']==="w_link") ? ($lst['value'] ?? '') : '';
 			if (strlen($link_w)>5){
@@ -3492,23 +3952,25 @@ class _Public {
 				$link_w = home_url();
 			}
 
-			// ارز پیش‌فرض
+
 			$currency = (isset($content[0]['paymentcurrency'])) ? $content[0]['paymentcurrency'] : 'usd';
 
-			// دسترسی به متن‌ها
+
 			$this->get_efbFunction(0);
 			$lanText = $this->efbFunction->text_efb($text_);
 
-			// در صورت وجود amount مرتب‌سازی ملایم
+
 			usort($content, function($a,$b){
 				$aa = isset($a['amount']) ? $a['amount'] : 0;
 				$bb = isset($b['amount']) ? $b['amount'] : 0;
 				return $aa <=> $bb;
 			});
 
-			// افزودن یک جفت عنوان/مقدار به دو ستون
+
 			$addPair = function($title, $value) use (&$m){
+
 				$title = $this->efbFunction->ensure_trailing_colon_efb($title);
+
 				if($title==='' && $value===''){ return; }
 				$m .= '<tr>';
 				$m .= '<td valign="top" width="50%" class="columnEmailEfb" style="padding:5px; line-height:20px;">';
@@ -3522,7 +3984,7 @@ class _Public {
 			};
 
 			foreach ($content as $c){
-				// If the type is "w_link", skip it
+
 				if (isset($c['type']) && $c['type']==="w_link"){ continue; }
 
 
@@ -3539,7 +4001,7 @@ class _Public {
 				$title = isset($c['name']) ? $c['name'] : '';
 				$q     = '';
 
-				// Replace special characters in title
+
 				if (isset($c['value']) && is_string($c['value'])) {
 					$q = str_replace('@efb!', ',', $c['value']);
 					$q = str_replace('@n#', '<br>', $q);
@@ -3549,7 +4011,7 @@ class _Public {
 					$q .= ($q ? ' ' : '') . ': <b>'.$c['qty'].'</b>';
 				}
 
-				// If is a file url
+
 				if (isset($c['value']) && $c['value']==='@file@' && !in_array(($c['url'] ?? ''), $list)) {
 					$url = $c['url'] ?? '';
 					$nm  = $c['name'] ?? (substr($url, strrpos($url,'/')+1));
@@ -3562,7 +4024,7 @@ class _Public {
 					} elseif ($t==='document' || $t==='allformat') {
 						$q = '<a href="'.$url.'" target="_blank" style="text-decoration:none;">'.$nm.'</a>';
 					} elseif ($t==='media') {
-						// ایمیل‌ها غالباً ویدیو را پخش نمی‌کنند → لینک دانلود
+
 						$audios = ['mp3','wav','ogg'];
 						$isAudio = false;
 						foreach($audios as $a){ if(strpos($url,$a)!==false){ $isAudio=true; break; } }
@@ -3578,14 +4040,14 @@ class _Public {
 					continue;
 				}
 
-				// signature
+
 				if (isset($c['type']) && $c['type']==='esign'){
 					$q = '<img src="'.($c['value'] ?? '').'" alt="'.htmlspecialchars($title).'" style="display:block;max-width:100%;height:auto;border:0;">';
 					$addPair($title, $q);
 					continue;
 				}
 
-				// color
+
 				if (isset($c['type']) && $c['type']==='color'){
 					$q = '<span style="display:inline-block;width:50px;height:20px;vertical-align:middle;background:'.($c['value'] ?? '#000').'"></span> '
 					. '<span style="vertical-align:middle;">'.($c['value'] ?? '').'</span>';
@@ -3593,7 +4055,7 @@ class _Public {
 					continue;
 				}
 
-				// maps
+
 				if (isset($c['type']) && $c['type']==='maps'){
 					if (is_array($c['value'] ?? null)){
 						$q = '<a href="'.$link_w.'" style="text-decoration:none;">'.$lanText['msgemlmp'].'</a>';
@@ -3602,7 +4064,7 @@ class _Public {
 					continue;
 				}
 
-				// Rating
+
 				if (isset($c['type']) && $c['type']==='rating'){
 					$stars = intval($c['value'] ?? 0);
 					$q = str_repeat('⭐', $stars);
@@ -3610,7 +4072,7 @@ class _Public {
 					continue;
 				}
 
-				// Payment Fields
+
 				if (isset($c['type']) && ($c['type']==='payCheckbox' || $c['type']==='payRadio')){
 					$price = intval($c['price'] ?? 0);
 					$total_amount += $price;
@@ -3620,14 +4082,14 @@ class _Public {
 					continue;
 				}
 
-				// Price Field
+
 				if (isset($c['type']) && $c['type']==='prcfld'){
 					$numberformat = $this->formatPrice_efb(number_format(intval($c['price'] ?? 0),0,'.',','), $currency);
 					$addPair($c['name'] ?? 'Price', '<b>'.$numberformat.'</b>');
 					continue;
 				}
 
-				// Matriz field
+
 				if (isset($c['type']) && $c['type']==='r_matrix' && !in_array(($c['id_'] ?? ''), $checboxs)){
 					$checboxs[] = $c['id_'] ?? '';
 					$vals = [];
@@ -3640,7 +4102,7 @@ class _Public {
 					continue;
 				}
 
-				// Payment
+
 				if (isset($c['type']) && $c['type']==='payment'){
 					if (($c['paymentGateway'] ?? '')==='stripe'){
 						$numberformat = $this->formatPrice_efb(number_format(intval($c['paymentAmount'] ?? 0),0,'.',','), ($c['paymentcurrency'] ?? $currency));
@@ -3658,12 +4120,12 @@ class _Public {
 					continue;
 				}
 
-				// Handling password register
+
 				if (isset($c['id_']) && $c['id_']==='passwordRegisterEFB'){
 					$q = '**********';
 				}
 
-				// Handling other fields
+
 				if (
 					(!isset($c['type']) || $c['type']!=='checkbox') &&
 					(!isset($c['value']) || $c['value']!=='@file@') &&
@@ -3677,16 +4139,16 @@ class _Public {
 						$addPair($title, $q);
 					}
 
-					// imgRadio
+
 					if (isset($c['type']) && strpos($c['type'],'imgRadio')!==false){
 						$q = '<b>'.($c['value'] ?? '').'</b>';
 					}else if (isset($c['value']) && strpos($c['type'],'imgRadio')){
-							// + imgRadio
+
 						$q = $this->fun_imgRadio_efb($c['id_'], $c['src'] ?? '', $c);
 						$addPair('', $q);
 					}
 
-					if ($title==='file'){ $title = 'atcfle'; }
+					if ($title==='file'){ $title = $lanText['atcfle']; }
 
 					if ($title!=='' || $q!==''){
 						$addPair($title, $q);
@@ -3754,6 +4216,139 @@ class _Public {
 			</style>
 	';
 	}
+
+	public function output_bootstrap_icons_style_efb($form_id = null, $state = 'normal') {
+
+		if (defined('REST_REQUEST') && REST_REQUEST) {
+			return;
+		}
+
+
+		if (self::$icons_rendered === true) {
+			return;
+		}
+
+
+		if ($form_id !== null) {
+
+		} else {
+
+			global $post;
+
+
+			if (!$post && is_singular()) {
+				$post = get_post();
+			}
+
+			if (!$post) {
+
+				$queried_object = get_queried_object();
+				if ($queried_object && isset($queried_object->post_content)) {
+					$post_content = $queried_object->post_content;
+				} else {
+					return;
+				}
+			} else {
+				$post_content = $post->post_content;
+			}
+
+
+			if (!has_shortcode($post_content, 'emsfb') && !has_shortcode($post_content, 'emsfb_t')) {
+				return;
+			}
+		}
+
+
+		$default_icons = array(
+			'bi-clipboard-check',
+			'bi-shield-lock-fill',
+			'bi-exclamation-triangle-fill',
+			'bi-exclamation-diamond-fill',
+			'bi-check2-square',
+			'bi-hourglass-split',
+			'bi-chat-square-text',
+			'bi-download',
+			'bi-star-fill',
+			'bi-hand-thumbs-up',
+			'bi-envelope',
+			'bi-arrow-right',
+			'bi-arrow-left',
+			'bi-upload',
+			'bi-x-lg',
+			'bi-file-earmark-richtext',
+			'bi-check-square',
+			'bi-square',
+			'bi-chevron-down',
+			'bi-check-lg',
+			'bi-crosshair',
+		);
+
+
+
+
+		$custom_icons = array();
+
+
+		if ($form_id !== null) {
+
+			if ($state === 'tracker') {
+
+				$custom_icons =array('bi-paperclip',"bi-search","bi-envelope");
+			} elseif ($state === 'private') {
+
+
+				$custom_icons = array();
+			} else {
+
+				$custom_icons = $this->get_form_icons_efb($form_id);
+			}
+		} else {
+
+			$custom_icons = $this->get_icons_from_post($post_content);
+		}
+
+
+		$all_icons = array_unique(array_merge($default_icons, $custom_icons));
+
+		if (!empty($all_icons)) {
+			echo $this->bootstrap_icon_efb($all_icons);
+
+			self::$icons_rendered = true;
+		}
+	}
+
+	private function get_icons_from_post($post_content) {
+
+		preg_match_all('/\[emsfb[^\]]*\sid=["\']?(\d+)["\']?[^\]]*\]/i', $post_content, $matches);
+
+		$icons = array();
+		if (!empty($matches[1])) {
+			foreach ($matches[1] as $form_id) {
+				$form_icons = $this->get_form_icons_efb($form_id);
+				if ($form_icons) {
+					$icons = array_merge($icons, $form_icons);
+				}
+			}
+		}
+
+		return array_unique($icons);
+	}
+
+	private function get_form_icons_efb($form_id) {
+		$form_id = intval($form_id);
+		$data_cached = $this->get_form_data_efb($form_id, array('form_structer'));
+
+		if (!$data_cached) return array();
+
+		$form_structure = str_replace('\\', '', $data_cached->form_structer);
+
+
+		$pattern = '/bi-[a-zA-Z0-9-]+/';
+		preg_match_all($pattern, $form_structure, $matches);
+
+		return isset($matches[0]) ? $matches[0] : array();
+	}
+
 	public function bootstrap_style_efb($w){
 
 		return "
@@ -3818,35 +4413,261 @@ class _Public {
 		';
 	}
 	public function cache_cleaner_Efb($page_id){
-		if (defined('LSCWP_V') || defined('LSCWP_BASENAME' )){
+		$page_id = intval($page_id);
 
-			do_action( 'litespeed_purge_post', $page_id );
-		}else if (function_exists('rocket_clean_post')){
+		if ($page_id <= 0) {
 
-			$r = rocket_clean_post($page_id);
-		}elseif (function_exists('wp_cache_post_change')){
-
-
-			$GLOBALS["super_cache_enabled"]=1;
-			wp_cache_post_change($page_id);
-		}elseif(function_exists('autoptimize_filter_js_noptimize ')){
-
-			autoptimize_filter_js_exclude(['jquery.min-efb.js','core-efb.js']);
-			autoptimize_filter_js_noptimize();
-		}elseif(class_exists('WPO_Page_Cache')){
-
-			\WPO_Page_Cache::delete_single_post_cache($page_id);
-		}elseif(function_exists('w3tc_flush_post')){
-
-			w3tc_flush_post($page_id);
-		}elseif(function_exists('wpfc_clear_post_cache_by_id')){
-
-			wpfc_clear_post_cache_by_id($page_id);
-		}elseif(has_action('wphb_clear_page_cache')){
-
-			do_action( 'wphb_clear_page_cache', $page_id );
+			return;
 		}
 
+
+
+		/**
+		 * Cache detection - calculated once per request
+		 */
+		static $env = null;
+
+		if ($env === null) {
+			$env = array(
+
+				'litespeed'      => (defined('LSCWP_V') || defined('LSCWP_BASENAME')),
+				'rocket'         => function_exists('rocket_clean_post'),
+				'w3tc'           => function_exists('w3tc_flush_post'),
+				'supercache'     => function_exists('wp_cache_post_change'),
+				'wpo'            => class_exists('WPO_Page_Cache'),
+				'wpfc_post'      => function_exists('wpfc_clear_post_cache_by_id'),
+				'wpfc_all'       => function_exists('wpfc_clear_all_cache'),
+				'wphb_page'      => has_action('wphb_clear_page_cache'),
+				'wphb_all'       => has_action('wphb_clear_cache'),
+				'sg_post'        => function_exists('sg_cachepress_purge_post'),
+				'sg_all'         => function_exists('sg_cachepress_purge_cache'),
+				'breeze'         => (class_exists('Breeze_PurgeCache') || has_action('breeze_clear_all_cache')),
+				'cache_enabler'  => class_exists('Cache_Enabler'),
+				'comet_plugin'   => class_exists('\\comet_cache\\plugin'),
+				'comet_clear'    => (class_exists('comet_cache') && method_exists('comet_cache', 'clear')),
+				'comet_func'     => function_exists('comet_cache_clear_cache'),
+				'autoptimize'    => class_exists('autoptimizeCache'),
+				'powered_page'   => function_exists('powered_cache_flush_page_cache'),
+				'powered_all'    => function_exists('powered_cache_flush'),
+				'hyper'          => function_exists('hyper_cache_flush'),
+				'bigscoots'      => (class_exists('BigScoots_Cache') && method_exists('BigScoots_Cache', 'clear_cache')),
+				'cloudflare_pc'  => class_exists('SW_CLOUDFLARE_PAGECACHE'),
+
+
+				'nitropack_clean' => function_exists('nitropack_clean_post_cache'),
+				'nitropack_sdk'   => function_exists('nitropack_sdk_purge'),
+
+
+				'wp_rest_cache'  => class_exists('\\WP_REST_Cache_Plugin\\Includes\\Caching\\Caching'),
+
+
+				'ccfm'           => function_exists('ccfm_clear_cache_for_me'),
+
+
+				'speedycache'    => class_exists('SpeedyCache\\Delete'),
+
+
+				'atec_cache'     => (function_exists('atec_wpca_delete_page') && function_exists('atec_wpca_settings')),
+
+
+				'wpspeed'        => class_exists('WPSpeed\\Platform\\Cache'),
+
+
+				'swift_full'     => (class_exists('Swift_Performance_Cache') && method_exists('Swift_Performance_Cache', 'clear_all_cache')),
+			);
+		}
+
+
+		if (!in_array(true, $env, true)) {
+
+			return;
+		}
+
+
+		if ($env['litespeed']) {
+
+			do_action('litespeed_purge_post', $page_id);
+		}
+
+
+		if ($env['rocket']) {
+
+			rocket_clean_post($page_id);
+		}
+
+
+		if ($env['w3tc']) {
+
+			w3tc_flush_post($page_id);
+		}
+
+
+		if ($env['supercache']) {
+
+			$GLOBALS['super_cache_enabled'] = 1;
+			wp_cache_post_change($page_id);
+		}
+
+
+		if ($env['wpo']) {
+
+
+			if (method_exists('WPO_Page_Cache', 'delete_single_post_cache')) {
+				\WPO_Page_Cache::delete_single_post_cache($page_id);
+			} else {
+				do_action('wpo_purge_all');
+			}
+		}
+
+
+		if ($env['wpfc_post']) {
+
+			wpfc_clear_post_cache_by_id($page_id);
+		} elseif ($env['wpfc_all']) {
+
+			wpfc_clear_all_cache();
+		}
+
+
+		if ($env['wphb_page']) {
+
+			do_action('wphb_clear_page_cache', $page_id);
+		} elseif ($env['wphb_all']) {
+
+			do_action('wphb_clear_cache');
+		}
+
+
+		if ($env['sg_post']) {
+
+			sg_cachepress_purge_post($page_id);
+		} elseif ($env['sg_all']) {
+
+			sg_cachepress_purge_cache();
+		}
+
+
+		if ($env['breeze']) {
+
+			do_action('breeze_clear_all_cache');
+		}
+
+
+		if ($env['cache_enabler']) {
+
+
+			if (method_exists('Cache_Enabler', 'clear_page_cache_by_post_id')) {
+				\Cache_Enabler::clear_page_cache_by_post_id($page_id);
+			} elseif (method_exists('Cache_Enabler', 'clear_cache')) {
+				\Cache_Enabler::clear_cache();
+			} else {
+				\Cache_Enabler::clear_total_cache();
+			}
+		}
+
+
+		if ($env['swift_full']) {
+
+			\Swift_Performance_Cache::clear_all_cache();
+		}
+
+
+		if ($env['comet_plugin']) {
+
+
+			if ($env['comet_clear']) {
+				\comet_cache::clear();
+			} elseif ($env['comet_func']) {
+				comet_cache_clear_cache();
+			}
+		}
+
+
+		if ($env['autoptimize']) {
+
+			\autoptimizeCache::clearall();
+		}
+
+
+		if ($env['powered_page']) {
+
+			powered_cache_flush_page_cache($page_id);
+		} elseif ($env['powered_all']) {
+
+			powered_cache_flush();
+		}
+
+
+		if ($env['hyper']) {
+
+			hyper_cache_flush();
+		}
+
+
+		if ($env['bigscoots']) {
+
+			\BigScoots_Cache::clear_cache($page_id);
+		}
+
+
+		if ($env['cloudflare_pc']) {
+
+			$url = get_permalink($page_id);
+			if ($url) {
+				do_action('swcfpc_purge_cache', array($url));
+			}
+		}
+
+
+		if ($env['nitropack_sdk'] || $env['nitropack_clean']) {
+
+			$url  = get_permalink($page_id);
+			$post = get_post($page_id);
+
+
+			if ($env['nitropack_sdk'] && $url) {
+				nitropack_sdk_purge($url);
+			}
+
+			elseif ($env['nitropack_clean'] && $post) {
+				nitropack_clean_post_cache($post);
+			}
+		}
+
+
+		if ($env['wp_rest_cache']) {
+
+			$page_type = get_post_type($page_id);
+			\WP_REST_Cache_Plugin\Includes\Caching\Caching::get_instance()->delete_related_caches($page_id, $page_type);
+		}
+
+
+		if ($env['ccfm']) {
+
+			ccfm_clear_cache_for_me();
+		}
+
+
+		if ($env['speedycache']) {
+
+			\SpeedyCache\Delete::cache($page_id);
+		}
+
+
+		if ($env['atec_cache']) {
+
+			$settings = atec_wpca_settings('cache');
+			if ($settings) {
+				$suffix = (isset($settings['salt']) ? $settings['salt'] : '') . '_p';
+				atec_wpca_delete_page($suffix, $page_id);
+			}
+		}
+
+
+		if ($env['wpspeed']) {
+
+			\WPSpeed\Platform\Cache::deleteCache();
+		}
 	}
 
 	public function comper_version_efb($v){
@@ -3860,14 +4681,14 @@ class _Public {
 
 	public function form_preview_efb(){
 
-		if (  check_ajax_referer('admin-nonce', 'nonce') != 1) {
+		if (  check_ajax_referer('wp_rest', 'nonce') != 1) {
 			die();
 		}
 		$new_page_id = 0;
 
 		$current_user = get_current_user_id();
 		if(!isset($_POST['id'])) return;
-		$id = sanitize_text_field($_POST['id']);
+		$id = sanitize_text_field(wp_unslash($_POST['id']));
 
 		$r = 'preview@'. str_replace([' ', '[', ']', '='], '', $id);
 		$r = strtolower($r);
@@ -4139,9 +4960,9 @@ class _Public {
 			}
 			if(isset($formObj[0]["email_sub"]) && $formObj[0]["email_sub"]!=''){
 				$msg_sub = $formObj[0]["email_sub"];
-			}
-			return ['subject'=>$msg_sub,'content'=>$msg_content,'type'=>$msg_type];
 		}
+		return ['subject'=>$msg_sub,'content'=>$msg_content,'type'=>$msg_type];
+	}
 
 }
 

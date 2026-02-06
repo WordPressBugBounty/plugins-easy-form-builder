@@ -43,6 +43,9 @@ function fun_render_view_efb(val, check) {
     setTimeout(() => {
       fun_total_pay_efb()
     }, valj_efb.length *2);
+    if(typeof get_authority_efb !== 'undefined' && get_authority_efb!==null){
+      if(typeof fun_after_bankpay_persia_ui_efb === "function") fun_after_bankpay_persia_ui_efb();
+    }
   }
 }
 
@@ -59,7 +62,12 @@ function check_body_efb_timer (){
 function fun_efb_run(){
   g_timeout_efb=100;
   if (typeof window.jQuery != "function" || typeof jQuery != "function") {
-    let msg = `<div class="efb alert alert-warning alert-dismissible fade show " role="alert" id="alarm_emsFormBuilder">  <strong>${ajax_object_efm.text.alert} </strong>${ajax_object_efm.text.jqinl}</div>`
+    let msg = '';
+    if (typeof ajax_object_efm !== 'undefined' && ajax_object_efm && ajax_object_efm.text) {
+      msg = `<div class="efb alert alert-warning alert-dismissible fade show " role="alert" id="alarm_emsFormBuilder">  <strong>${ajax_object_efm.text.alert} </strong>${ajax_object_efm.text.jqinl}</div>`;
+    } else {
+      msg = '<div class="efb alert alert-warning alert-dismissible fade show " role="alert" id="alarm_emsFormBuilder">jQuery is required for this form to work properly.</div>';
+    }
      if(document.getElementById('body_efb')) document.getElementById('body_efb').innerHTML = msg;
      if(document.getElementById('body_tracker_emsFormBuilder')) document.getElementById('body_tracker_emsFormBuilder').innerHTML = msg;
   }
@@ -90,7 +98,7 @@ function fun_efb_run(){
                 document.getElementById('body_efb').innerHTML =vd;
                 return;
               }
-              if(sitekye_emsFormBuilder==2)alert(c_r_efb);
+              if(typeof sitekye_emsFormBuilder !== 'undefined' && sitekye_emsFormBuilder==2)alert(c_r_efb);
               sitekye_emsFormBuilder = vs.siteKey;
             } else { sitekye_emsFormBuilder = ""; }
           } else {
@@ -220,6 +228,7 @@ function alarm_emsFormBuilder(val) {
     </div>`
 }
  function endMessage_emsFormBuilder_view() {
+
   let counter = 0;
   const btn_prev =valj_efb[0].hasOwnProperty('logic') &&  valj_efb[0].logic==true  ? "logic_fun_prev_send()":"fun_prev_send()"
   const stepMax = currentTab_emsFormBuilder + 1;
@@ -291,6 +300,7 @@ function alarm_emsFormBuilder(val) {
   }
 }
 function actionSendData_emsFormBuilder() {
+
   if (efb_var.type == "userIsLogin") return 0;
   if (form_type_emsFormBuilder != 'login') localStorage.setItem('sendback', JSON.stringify(sendBack_emsFormBuilder_pub));
   recaptcha_emsFormBuilder = valueJson_ws.length > 1 && valueJson_ws[0].hasOwnProperty('captcha') == true && valueJson_ws[0].captcha == true && typeof grecaptcha == "object" ? grecaptcha.getResponse() : "";
@@ -298,6 +308,13 @@ function actionSendData_emsFormBuilder() {
     response_fill_form_efb({ success: false, data: { success: false, m: efb_var.text.offlineMSend } });
     return;
   }
+
+
+  if(typeof payment_completed_efb !== 'undefined' && payment_completed_efb === true) {
+
+    return;
+  }
+
   form_type_emsFormBuilder = typeof valj_efb.length>2 ? valj_efb[0].type : form_type_emsFormBuilder;
   let  data = {
       action: "get_form_Emsfb",
@@ -312,12 +329,13 @@ function actionSendData_emsFormBuilder() {
     };
     if(valj_efb.length>0 && valj_efb[0].hasOwnProperty('type') && valj_efb[0].type=="payment" ){
       if(valj_efb[0].getway=="persiaPay"){
+        payment_completed_efb=true;
         data = {
           action: "get_form_Emsfb",
           value: JSON.stringify(sendBack_emsFormBuilder_pub),
           name: formNameEfb,
           payid: sessionStorage.getItem("payId"),
-          id: sessionStorage.getItem("id"),
+          id: efb_var.id,
           valid: recaptcha_emsFormBuilder,
           type:  form_type_emsFormBuilder,
           payment: 'persiaPay',
@@ -531,7 +549,7 @@ function fun_vaid_tracker_check_emsFormBuilder() {
     noti_message_efb(efb_var.text.trackingCodeIsNotValid, 'danger' ,'body_efb-track')
   } else {
     if (currentTab_emsFormBuilder == 0) {
-      const response = sitekye_emsFormBuilder ? grecaptcha.getResponse() || null : 'not';
+      const response = typeof sitekye_emsFormBuilder !== 'undefined' && sitekye_emsFormBuilder ? grecaptcha.getResponse() || null : 'not';
       if (response == null) {
         document.getElementById('vaid_check_emsFormBuilder').innerHTML = innrBtn
         document.getElementById('vaid_check_emsFormBuilder').classList.toggle('disabled')
@@ -571,7 +589,7 @@ function emsFormBuilder_show_content_message(value, content) {
   <div class="efb col text-right row my-2 mx-1">
   <button type="submit" class="efb btn fs-5 round-2 btn-primary btn-lg" id="replayB_emsFormBuilder" OnClick="fun_send_replayMessage_emsFormBuilder(${msg_id})">${efb_var.text.reply} </button>
   <!-- recaptcha  -->
-  ${sitekye_emsFormBuilder ? `<div class="efb row mx-3"><div class="efb g-recaptcha my-2 mx-2" data-sitekey="${sitekye_emsFormBuilder}" id="recaptcha"></div><small class="efb text-danger" id="recaptcha-message"></small></div>` : ``}
+  ${typeof sitekye_emsFormBuilder !== 'undefined' && sitekye_emsFormBuilder.length > 1 ? `<div class="efb row mx-3"><div class="efb g-recaptcha my-2 mx-2" data-sitekey="${sitekye_emsFormBuilder}" id="recaptcha"></div><small class="efb text-danger" id="recaptcha-message"></small></div>` : ``}
   <!-- recaptcha end  -->
   <p class="efb mx-2 my-1 text-pinkEfb efb fs-7" id="replay_state__emsFormBuilder">  </p>
   </div></div>
@@ -1003,10 +1021,12 @@ window.addEventListener("popstate",e=>{
   return  r;
  }
  post_api_forms_efb=(data)=>{
+
     const url = efb_var.rest_url+'Emsfb/v1/forms/message/add';
-const headers = new Headers({
-  'Content-Type': 'application/json',
-});
+    const headers = new Headers({
+      'Content-Type': 'application/json',
+      'X-WP-Nonce': efb_var.nonce,
+    });
 const jsonData = JSON.stringify(data);
 const requestOptions = {
   method: 'POST',
@@ -1015,18 +1035,27 @@ const requestOptions = {
 };
   fetch(url, requestOptions)
   .then(response => {
+    if (response.status === 403) {
+      throw new Error('NONCE_EXPIRED');
+    }
     if (!response.ok) {
       throw new Error('Network response was not ok');
     }
     return response.json();
   })
   .then(responseData => {
+
     response_fill_form_efb(responseData);
     if(localStorage.getItem('sendback'))localStorage.removeItem('sendback')
   })
   .catch(error => {
     console.error(error);
-    response_fill_form_efb({ success: false, data: { success: false, m: efb_var.text.eJQ500 }});
+    if (error.message === 'NONCE_EXPIRED') {
+      const nonceMsg = efb_var.text.nonceExpired;
+      response_fill_form_efb({ success: false, data: { success: false, m: nonceMsg }});
+    } else {
+      response_fill_form_efb({ success: false, data: { success: false, m: efb_var.text.eJQ500 }});
+    }
   });
   if(document.getElementById('prev_efb') && document.getElementById('prev_efb').classList.contains('d-none')==false)document.getElementById('prev_efb').classList.add('d-none')
   if(document.getElementById('next_efb') && document.getElementById('next_efb').classList.contains('d-none')==false)document.getElementById('next_efb').classList.add('d-none')
@@ -1035,6 +1064,7 @@ post_api_tracker_check_efb=(data,innrBtn)=>{
   const url = efb_var.rest_url+'Emsfb/v1/forms/response/get';
   const headers = new Headers({
     'Content-Type': 'application/json',
+    'X-WP-Nonce': efb_var.nonce,
   });
   const jsonData = JSON.stringify(data);
   const requestOptions = {
@@ -1044,6 +1074,9 @@ post_api_tracker_check_efb=(data,innrBtn)=>{
   };
   fetch(url, requestOptions)
   .then(response => {
+    if (response.status === 403) {
+      throw new Error('NONCE_EXPIRED');
+    }
     if (!response.ok) {
       throw new Error(`Network response was not ok (HTTP ${response.status})`);
     }
@@ -1064,13 +1097,19 @@ post_api_tracker_check_efb=(data,innrBtn)=>{
       document.getElementById('vaid_check_emsFormBuilder').innerHTML = innrBtn;
       document.getElementById('vaid_check_emsFormBuilder').classList.toggle('disabled');
     }
-    response_Valid_tracker_efb({ success: false, data: { success: false, m: error.message } });
+    if (error.message === 'NONCE_EXPIRED') {
+      const nonceMsg = efb_var.text.nonceExpired || 'Your session has expired. Please refresh the page and try again.';
+      response_Valid_tracker_efb({ success: false, data: { success: false, m: nonceMsg } });
+    } else {
+      response_Valid_tracker_efb({ success: false, data: { success: false, m: error.message } });
+    }
   });
 }
 post_api_r_message_efb=(data,message)=>{
   const url = efb_var.rest_url+'Emsfb/v1/forms/response/add';
   const headers = new Headers({
     'Content-Type': 'application/json',
+    'X-WP-Nonce': efb_var.nonce,
   });
   const jsonData = JSON.stringify(data);
   const requestOptions = {
@@ -1080,6 +1119,9 @@ post_api_r_message_efb=(data,message)=>{
   };
     fetch(url, requestOptions)
     .then(response => {
+      if (response.status === 403) {
+        throw new Error('NONCE_EXPIRED');
+      }
       if (!response.ok) {
         throw new Error(`Network response was not ok (HTTP ${response.status})`);
       }
@@ -1091,7 +1133,12 @@ post_api_r_message_efb=(data,message)=>{
     })
     .catch(error => {
       console.error(error.message);
-      response_Valid_tracker_efb({ success: false, data: { success: false, m: error.message } });
+      if (error.message === 'NONCE_EXPIRED') {
+        const nonceMsg = efb_var.text.nonceExpired || 'Your session has expired. Please refresh the page and try again.';
+        response_Valid_tracker_efb({ success: false, data: { success: false, m: nonceMsg } });
+      } else {
+        response_Valid_tracker_efb({ success: false, data: { success: false, m: error.message } });
+      }
     });
 }
 sendback_state_handler_efb=(id_,state,step)=>{

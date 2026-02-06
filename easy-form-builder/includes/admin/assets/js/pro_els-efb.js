@@ -102,7 +102,7 @@ countryList_el_pro_efb = ( rndm,rndm_1,op_3,op_4,editState)=>{
             }
           }
           optn += `<option value="${value}" id="${i.id_}" data-iso="${i.id_op}" data-id="${i.id_}" data-op="${i.id_}" class="efb ${valj_efb[indx_parent].el_text_color} emsFormBuilder_v efb"  ${valj_efb[indx_parent].value==i.id_ ||( i.hasOwnProperty('id_old') && valj_efb[indx_parent].value==i.id_old) ? "selected" :''}>${value}</option>`
-        }//end for
+        }
       } else {
         if (typeof counstries_list_efb  != 'object') {
           optn = `
@@ -142,7 +142,7 @@ statePrevion_el_pro_efb = (rndm,rndm_1,temp,op_4,editState)=>{
             }
           }
           optn += `<option id="${i.id_}" value="${value}" data-iso="${i.s2}" data-isoc='${iso_con}'  data-id="${i.id_}" data-op="${i.id_}" class="efb ${valj_efb[indx_parent].el_text_color} emsFormBuilder_v efb" ${valj_efb[indx_parent].value==i.id_ || ( i.hasOwnProperty('id_old') && valj_efb[indx_parent].value==i.id_old) ? "selected" :''}>${value}</option>`
-        }//end for
+        }
       } else {
           state_local=optns_obj;
           state_local.sort();
@@ -174,7 +174,7 @@ cityList_el_pro_efb = (rndm,rndm_1,temp,op_4,editState)=>{
           }
           optn += `<option value="${value}" data-iso="${i.id_}" id="${i.id_}" data-id="${i.id_}"  data-iso='${valj_efb[indx_parent].country}' data-statepov='${valj_efb[indx_parent].statePov}' data-op="${i.id_}" class="efb ${valj_efb[indx_parent].el_text_color} emsFormBuilder_v efb" ${valj_efb[indx_parent].value==i.id_ || ( i.hasOwnProperty('id_old') && valj_efb[indx_parent].value==i.id_old) ? "selected" :''}>${value}</option>`
 
-        }//end for
+        }
       } else {
           state_local=optns_obj;
           state_local.sort();
@@ -220,7 +220,7 @@ html_el_pro_efb = (previewSate, rndm,iVJ)=>{
             <div class="efb noCode-efb m-5 text-center efb" id="${rndm}_noCode">
               ${efb_var.text.noCodeAddedYet} <button type="button" class="efb BtnSideEfb btn efb btn-edit efb btn-sm" id="settingElEFb"
               data-id="${rndm}-id" data-bs-toggle="tooltip" title="${efb_var.text.edit}"
-              onclick="show_setting_window_efb('${rndm}-id')">
+              onclick="show_setting_window_efb('${rndm}-id')" data-action="setting" data-target="${rndm}-id">
               <div class="icon-container efb"><i class="efb   bi-gear-wide-connected text-success" id="efbSetting"></i></div></button>${efb_var.text.andAddingHtmlCode}
           </div></div></div>`;
       } else {
@@ -350,7 +350,7 @@ function removeFileEfb(id, indx) {
       }
     }
     fun_removeProgessiveEl_efb(id);
-  }//end function
+  }
 function gm_authFailure() {
     const body = `<p class="efb fs-6 efb">${efb_var.text.aPIkeyGoogleMapsFeild} <a href="https://developers.google.com/maps/documentation/javascript/error-messages" target="blank">${efb_var.text.clickHere}</a> </p>`
     alert_message_efb(efb_var.text.error, body, 15, 'danger')
@@ -977,7 +977,6 @@ function efbCreateMap(id ,r ,viewState) {
     }
   }else{
     Object.assign(r ,{mark:r.value.length});
-    console
     for (let i = 0; i < r.value.length; i++) {
       efbAddMarker(r.value[i].lat, r.value[i].lng, efbMap._leaflet_id, i+1 ,r);
     }

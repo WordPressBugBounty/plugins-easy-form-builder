@@ -99,12 +99,15 @@ class Create {
 										<a class="mt-3 mx-3 efb  text-danger position-absolute top-0 <?php echo is_rtl() ? 'start-0' : 'end-0' ?>" id="settingModalEfb-close" onclick="state_modal_show_efb(0)" role="button"><i class="efb bi-x-lg"></i></a>
 									</div>
 									<div class="efb modal-body row" id="settingModalEfb-body">
-									<?php echo  do_action('efb_loading_card'); ?>
+									<?php  do_action('efb_loading_card'); ?>
 									</div>
 					</div></div></div>
             <div id="tab_container_efb">
 				<div class="efb card-body text-center efb mt-5 pt-3">
-				<?php echo   do_action('efb_loading_card'); ?>
+				<?php
+				//phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- do_action is safe
+				do_action('efb_loading_card');
+				?>
 				</div>
         	</div>
 			<datalist id="color_list_efb">
@@ -146,7 +149,7 @@ class Create {
 
 		$lang = $efbFunction->text_efb(1);
 		if(gettype($ac)!="string"){
-			$server_name = str_replace("www.", "", $_SERVER['HTTP_HOST']);
+			$server_name = isset($_SERVER['HTTP_HOST']) ? str_replace("www.", "", sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) ) : '';
 
 			if (isset($ac->activeCode)==true && strlen($ac->activeCode)>5 && md5($server_name)==$ac->activeCode){
 				$pro=true;
@@ -220,11 +223,11 @@ class Create {
 
 
 
-		wp_register_script('countries-js', 'https://cdn.jsdelivr.net/gh/hassantafreshi/Json-List-of-countries-states-and-cities-in-the-world@main/js/wp/countries.js', null, null, true);
+		wp_register_script('countries-js', 'https://cdn.jsdelivr.net/gh/hassantafreshi/Json-List-of-countries-states-and-cities-in-the-world@main/js/wp/countries.js', array(), '1.0', true);
 		wp_enqueue_script('countries-js');
 
 
-		wp_register_script('intlTelInput-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/intlTelInput.min-efb.js', null, null, true);
+		wp_register_script('intlTelInput-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/intlTelInput.min-efb.js', array(), EMSFB_PLUGIN_VERSION, true);
 		wp_enqueue_script('intlTelInput-js');
 
 
@@ -232,7 +235,7 @@ class Create {
         wp_enqueue_style('intlTelInput-css');
 
 		if( false){
-			wp_register_script('logic-efb',EMSFB_PLUGIN_URL.'/vendor/logic/assets/js/logic.js', null, null, true);
+			wp_register_script('logic-efb',EMSFB_PLUGIN_URL.'/vendor/logic/assets/js/logic.js', array(), EMSFB_PLUGIN_VERSION, true);
 			wp_enqueue_script('logic-efb');
 		}
 
@@ -282,9 +285,9 @@ class Create {
 		$plugins['cache'] =$efbFunction->check_for_active_plugins_cache();
 
 		$location ='';
-		wp_enqueue_script( 'Emsfb-admin-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/admin-efb.js',false,EMSFB_PLUGIN_VERSION);
+		wp_enqueue_script( 'Emsfb-admin-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/admin-efb.js', false, EMSFB_PLUGIN_VERSION, true);
 		wp_localize_script('Emsfb-admin-js','efb_var',array(
-			'nonce'=> wp_create_nonce("admin-nonce"),
+			'nonce'=> wp_create_nonce("wp_rest"),
 			'check' => 1,
 			'pro' => $pro,
 			'rtl' => is_rtl() ,
@@ -302,28 +305,29 @@ class Create {
 			'v_efb'=>EMSFB_PLUGIN_VERSION,
 			'setting'=>$ac,
 			'colors'=>$colors,
-			'plugins'=>$plugins
+			'plugins'=>$plugins,
+			'none_mesge'=> wp_create_nonce("wp-rest")
 
 		));
 
-		wp_enqueue_script('efb-val-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/val-efb.js',false,EMSFB_PLUGIN_VERSION);
+		wp_enqueue_script('efb-val-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/val-efb.js', false, EMSFB_PLUGIN_VERSION, true);
 
 
-		wp_enqueue_script('efb-pro-els', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/pro_els-efb.js',false,EMSFB_PLUGIN_VERSION);
+		wp_enqueue_script('efb-pro-els', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/pro_els-efb.js', false, EMSFB_PLUGIN_VERSION, true);
 
 
 
-		wp_enqueue_script('efb-forms-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/forms-efb.js',false,EMSFB_PLUGIN_VERSION);
+		wp_enqueue_script('efb-forms-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/forms-efb.js', false, EMSFB_PLUGIN_VERSION, true);
 
-		 wp_enqueue_script( 'Emsfb-core-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/core-efb.js',false,EMSFB_PLUGIN_VERSION);
+		 wp_enqueue_script( 'Emsfb-core-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/core-efb.js', false, EMSFB_PLUGIN_VERSION, true);
 		 wp_localize_script('Emsfb-core-js','ajax_object_efm_core',array(
-			'nonce'=> wp_create_nonce("admin-nonce"),
-			'check' => 1		));
+			'nonce'=> wp_create_nonce("wp_rest"),
+			'check' => 1	));
 
-		wp_enqueue_script('efb-main-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/new-efb.js',false,EMSFB_PLUGIN_VERSION);
+		wp_enqueue_script('efb-main-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/new-efb.js', false, EMSFB_PLUGIN_VERSION, true);
 
 
-		wp_enqueue_script('efb-bootstrap-select-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/bootstrap-select.min-efb.js',false,EMSFB_PLUGIN_VERSION);
+		wp_enqueue_script('efb-bootstrap-select-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/bootstrap-select.min-efb.js', false, EMSFB_PLUGIN_VERSION, true);
 
 
 
@@ -348,8 +352,9 @@ class Create {
 
 		$email = '';
 
-		$nonce = $_POST['nonce'];
-		if ( !wp_verify_nonce( $nonce, 'admin-nonce' )  || !current_user_can('Emsfb')) {
+		$nonce = isset($_POST['nonce']) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+		$currrent_user_can = $efbFunction->user_permission_efb_admin_dashboard();
+		if ( !wp_verify_nonce( $nonce, 'wp_rest' )  && !$currrent_user_can) {
             $response = ['success' => false, 'm' =>  $lang['error403']];
             wp_send_json_success($response, 200);
 		}
@@ -357,16 +362,16 @@ class Create {
 		if( empty($_POST['name']) || empty($_POST['value']) ){
 			$m =$lang["errorCheckInputs"];
 			$response = array( 'success' => false , "m"=>$m);
-			wp_send_json_success($response,$_POST);
+			wp_send_json_success($response,200);
 		}
 
-		if(isset($_POST['email']) ){$email =sanitize_email($_POST['email']);}
+		if(isset($_POST['email']) ){$email =sanitize_email(wp_unslash($_POST['email']));}
 		$this->id_ ="hid";
-		$this->name =  sanitize_text_field($_POST['name']);
+		$this->name = isset($_POST['name']) ? sanitize_text_field(wp_unslash($_POST['name'])) : '';
 		$this->email =  $email;
 
 
-		$valp =str_replace('\\', '', $_POST['value']);
+		$valp = isset($_POST['value']) ? str_replace('\\', '', wp_unslash($_POST['value'])) : '';
 
 
 		$valp = json_decode($valp,true);
@@ -378,10 +383,12 @@ class Create {
 
 
 
-		$this->formtype =  sanitize_text_field($_POST['type']);
-		if($this->isScript($_POST['value']) ||$this->isScript($_POST['type'])){
+		$this->formtype = isset($_POST['type']) ? sanitize_text_field(wp_unslash($_POST['type'])) : '';
+		$postValue = isset($_POST['value']) ? sanitize_text_field(wp_unslash($_POST['value'])) : '';
+		$postType = isset($_POST['type']) ? sanitize_text_field(wp_unslash($_POST['type'])) : '';
+		if($this->isScript($postValue) ||$this->isScript($postType)){
 			$response = array( 'success' => false , "m"=> $lang["NAllowedscriptTag"]);
-			wp_send_json_success($response,$_POST);
+			wp_send_json_success($response,200);
 		}
 
 
@@ -412,8 +419,11 @@ class Create {
 		$valx =json_encode($valp,JSON_UNESCAPED_UNICODE);
 		$this->value=str_replace('"', '\\"', $valx);
 		$this->insert_db();
-
-		if(isset($valp[0]['smsnoti']) && intval($valp[0]['smsnoti'])==1 ){
+		$sms_file_exist=false;
+		if (file_exists(EMSFB_PLUGIN_DIRECTORY . '/vendor/smssended/smsefb.php')) {
+			$sms_file_exist=true;
+		}
+		if(isset($valp[0]['smsnoti']) && intval($valp[0]['smsnoti'])==1 && $sms_file_exist){
 
 
 
@@ -435,7 +445,7 @@ class Create {
 		if($this->id_ !=0){
 			$response = array( 'success' => true ,'r'=>"insert" , 'value' => "[EMS_Form_Builder id=$this->id_]" , "id"=>$this->id_);
 		}else{$response = array( 'success' => false , "m"=> $lang["formNcreated"]);}
-		wp_send_json_success($response,$_POST);
+		wp_send_json_success($response,200);
 	}
 
 	public function isScript( $str ) { return preg_match( "/<script.*type=\"(?!text\/x-template).*>(.*)<\/script>/im", $str ) != 0; }
@@ -468,7 +478,7 @@ class Create {
             }
         }
         return  $s;
-    }//end fun
+    }
 
 
 	public function get_efbFunction(){

@@ -7,6 +7,21 @@
 /*   .entry-content{
   width: 500px;
 } */
+
+#body_emsFormBuilder, #tab_container_efb {
+	-webkit-user-select: none !important;
+	-moz-user-select: none !important;
+	-ms-user-select: none !important;
+	user-select: none !important;
+	-webkit-touch-callout: none !important;
+}
+#body_emsFormBuilder img, #tab_container_efb img {
+   -webkit-user-drag: none !important;
+   -khtml-user-drag: none !important;
+   -moz-user-drag: none !important;
+   -o-user-drag: none !important;
+   pointer-events: none !important;
+}
 #wpfooter.efb {
   position: fixed!important;
 }
@@ -632,6 +647,24 @@ i.efb {	font-size: 1.2rem;
 }
 @media (max-width: 990px) {	.header.efb {		margin-top: 0;
    }
+}
+
+
+@media (max-width: 768px) {
+    .btn-edit-holder {
+        gap: 8px !important;
+        padding: 5px;
+    }
+
+    .btn-edit, .BtnSideEfb {
+        padding: 8px 12px !important;
+        font-size: 14px !important;
+        border-radius: 6px !important;
+    }
+
+    .btn-edit + .btn-edit {
+        margin-left: 5px;
+    }
 }
 
 .input-efb {	color: #07070ca8 !important;
@@ -1319,6 +1352,7 @@ label.yesno-efb.h-l-efb,label.yesno-efb.h-xl-efb,label.yesno-efb.h-xxl-efb,label
  }
 .nmsgefb{	transform-origin: 50% 50%;
    animation:nmsgefb 1.5s alternate infinite;
+   pointer-events: none;
  }
 .efb.navbar {	z-index: 10;
 }

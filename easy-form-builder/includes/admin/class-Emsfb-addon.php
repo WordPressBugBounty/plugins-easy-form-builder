@@ -68,9 +68,9 @@ class Addon {
 
 
 	public function render_settings() {
-		$server_name = str_replace("www.", "", $_SERVER['HTTP_HOST']);
+		$server_name = isset($_SERVER['HTTP_HOST']) ? str_replace("www.", "", sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) ) : '';
 
-		wp_register_script('whiteStudioAddone', 'https://whitestudio.team/wp-json/wl/v1/addons.js' .$server_name, null, null, true);
+		wp_register_script('whiteStudioAddone', 'https://whitestudio.team/wp-json/wl/v1/addons.js' .$server_name, array(), '1.0', true);
         wp_enqueue_script('whiteStudioAddone');
 	?>
 
@@ -83,13 +83,19 @@ class Addon {
 										<h5 class="efb modal-title efb" ><i class="efb bi-ui-checks mx-2" id="settingModalEfb-icon"></i><span id="settingModalEfb-title"></span></h5>
 										<a class="mt-3 mx-3 efb  text-danger position-absolute top-0 <?php echo is_rtl() ? 'start-0' : 'end-0' ?>" id="settingModalEfb-close" onclick="state_modal_show_efb(0)" role="button" role="button"><i class="efb bi-x-lg"></i></a>
 									</div>
-									<div class="efb modal-body row" id="settingModalEfb-body">
-										<?php echo   do_action('efb_loading_card'); ?>
-									</div>
+								<div class="efb modal-body row" id="settingModalEfb-body">
+									<?php
+									//phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- do_action is safe
+									 do_action('efb_loading_card');
+									?>
+								</div>
 	</div></div></div>
 	<div id="tab_container_efb">
 			<div class="efb card-body text-center efb">
-				<?php echo   do_action('efb_loading_card'); ?>
+				<?php
+				//phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- do_action is safe
+				 do_action('efb_loading_card');
+				?>
 			</div>
     </div>
 
@@ -200,9 +206,9 @@ class Addon {
 		}else{$smtp_m =$lang["goToEFBAddEmailM"];}
 
 
-		wp_enqueue_script( 'Emsfb-admin-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/admin-efb.js',false,EMSFB_PLUGIN_VERSION);
+		wp_enqueue_script( 'Emsfb-admin-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/admin-efb.js', false, EMSFB_PLUGIN_VERSION, true);
 		wp_localize_script('Emsfb-admin-js','efb_var',array(
-			'nonce'=> wp_create_nonce("admin-nonce"),
+			'nonce'=> wp_create_nonce("wp_rest"),
 			'check' => 2,
 			'pro' => $pro,
 			'rtl' => is_rtl() ,
@@ -221,15 +227,15 @@ class Addon {
 
 		));
 
-		wp_enqueue_script('efb-val-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/val-efb.js',false,EMSFB_PLUGIN_VERSION);
+		wp_enqueue_script('efb-val-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/val-efb.js', false, EMSFB_PLUGIN_VERSION, true);
 
 
-		 wp_enqueue_script( 'Emsfb-core-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/core-efb.js',false,EMSFB_PLUGIN_VERSION);
+		 wp_enqueue_script( 'Emsfb-core-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/core-efb.js', false, EMSFB_PLUGIN_VERSION, true);
 		 wp_localize_script('Emsfb-core-js','ajax_object_efm_core',array(
-			'nonce'=> wp_create_nonce("admin-nonce"),
+			'nonce'=> wp_create_nonce("wp_rest"),
 			'check' => 1		));
 
-		wp_enqueue_script('efb-main-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/new-efb.js',false,EMSFB_PLUGIN_VERSION);
+		wp_enqueue_script('efb-main-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/new-efb.js', false, EMSFB_PLUGIN_VERSION, true);
 
 
 
@@ -261,20 +267,20 @@ class Addon {
 		if( empty($_POST['name']) || empty($_POST['value']) ){
 			$m =$lang["errorCheckInputs"];
 			$response = array( 'success' => false , "m"=>$m);
-			wp_send_json_success($response,$_POST);
+			wp_send_json_success($response,200);
 			die();
 		}
 
-		if(isset($_POST['email']) ){$email =sanitize_email($_POST['email']);}
+		if(isset($_POST['email']) ){$email =sanitize_email( wp_unslash($_POST['email']));}
 		$this->id_ ="hid";
-		$this->name =  sanitize_text_field($_POST['name']);
+		$this->name = isset($_POST['name']) ? sanitize_text_field( wp_unslash($_POST['name'])) : '';
 		$this->email =  $email;
-		$this->value = $_POST['value'];
+		$this->value = isset($_POST['value']) ? sanitize_text_field( wp_unslash( $_POST['value'] ) ) : '';
 
-		$this->formtype =  sanitize_text_field($_POST['type']);
-		if($this->isScript($_POST['value']) ||$this->isScript($_POST['type'])){
+		$this->formtype = isset($_POST['type']) ? sanitize_text_field( wp_unslash($_POST['type'])) : '';
+		if($this->isScript($this->value) ||$this->isScript($this->formtype)){
 			$response = array( 'success' => false , "m"=> $lang["NAllowedscriptTag"]);
-			wp_send_json_success($response,$_POST);
+			wp_send_json_success($response,200);
 			die();
 		}
 
@@ -283,7 +289,7 @@ class Addon {
 		if($this->id_ !=0){
 			$response = array( 'success' => true ,'r'=>"insert" , 'value' => "[EMS_Form_Builder id=$this->id_]" , "id"=>$this->id_);
 		}else{$response = array( 'success' => false , "m"=> $lang["formNcreated"]);}
-		wp_send_json_success($response,$_POST);
+		wp_send_json_success($response,200);
 		die();
 	}
 
@@ -313,7 +319,7 @@ class Addon {
             }
         }
         return  $s;
-    }//end fun
+    }
 
 	public function get_efbFunction(){
 			if(!class_exists('Emsfb\efbFunction')){

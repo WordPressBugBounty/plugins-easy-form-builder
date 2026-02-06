@@ -991,7 +991,7 @@ function fun_show_setting__emsFormBuilder() {
   const mxCSize = !mobile_view_efb ? 'mx-5' : 'mx-1';
   const mxCSize4 = !mobile_view_efb ? 'mx-4' : 'mx-1';
 
-  let msg_email = efb_var.text.mlntip.replace('%s1', `<a class="efb pointer-efb ec-efb" data-eventform="links" data-linkname="EmailSpam" >`).replace('%s2', '</a>').replace('%s3', `<a class="efb pointer-efb ec-efb" data-eventform="links" data-linkname="support" >`).replace('%s4', '</a>');
+  let msg_email = efb_var.text.mlntip.replace('%1$s', `<a class="efb pointer-efb ec-efb" data-eventform="links" data-linkname="EmailSpam" >`).replace('%2$s', '</a>').replace('%3$s', `<a class="efb pointer-efb ec-efb" data-eventform="links" data-linkname="support" >`).replace('%4$s', '</a>');
 
   const proChckEvent =efb_var.pro!=true && efb_var.pro!="true" ? `onChange="pro_show_efb('${efb_var.text.proUnlockMsg}')"` :'';
   document.getElementById('content-efb').innerHTML = `
@@ -1759,7 +1759,7 @@ function fun_find_track_emsFormBuilder() {
 
 
   }
-}//end function
+}
 
 
 search_trackingcode_fun_efb =(el)=>{
@@ -1961,7 +1961,7 @@ function fun_export_rows_for_Subscribe_emsFormBuilder(value) {
 
 
 
-        }//end else
+        }
 
       }
 
@@ -2012,7 +2012,7 @@ function exportCSVFile_emsFormBuilder(items, fileTitle) {
     }
   }
 
-}//end function
+}
 
 
 function convertToCSV_emsFormBuilder(objArray) {
@@ -2163,7 +2163,7 @@ function emsFormBuilder_chart(titles, colname, colvalue) {
 
         rows[r][0] = colname[t][r];
         rows[r][1] = colvalue[t][r];
-      }//end for 2
+      }
 
       rowsOfCharts[t] = rows;
 
@@ -2198,7 +2198,7 @@ function emsFormBuilder_chart(titles, colname, colvalue) {
   }, 1000);
 
 
-}//end function
+}
 
 function googleCloudOffer() { return `<p>${efb_var.text.offerGoogleCloud} <a href="https://gcpsignup.page.link/8cwn" target="blank">${efb_var.text.getOfferTextlink}</a> </p> ` }
 
