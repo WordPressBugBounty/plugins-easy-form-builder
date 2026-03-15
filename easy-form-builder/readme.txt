@@ -2,9 +2,9 @@
 Contributors: hassantafreshi, mostafas1990, mrlast, aminkhadivar, presskopp
 Donate link: https://whitestudio.team/donate-easy-form-builder/
 Tags: form builder, form plugin, multi step form, survey form, payment form
-Requires at least: 4.7
+Requires at least: 5.0
 Tested up to: 6.9
-Stable tag: 3.9.6
+Stable tag: 4.0.0
 Requires PHP: 7.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.en.html
@@ -23,7 +23,7 @@ This form builder plugin can be used to create contact forms, support request fo
 
 == What Can This Form Plugin Do? ==
 
-With  Easy Form Builder, you can use a single form plugin to build and manage multiple types of forms and form-based workflows:
+With Easy Form Builder, you can use a single form plugin to build and manage multiple types of forms and form-based workflows:
 
 - Contact forms for general inquiries
 - Support and feedback forms with message tracking
@@ -135,11 +135,20 @@ These fields allow you to build complex, region-aware, and structured forms with
 
 - Stripe add-on for extended payment workflows
 
+- PayPal add-on for creating payment forms and managing transactions through PayPal
+
 - Offline forms add-on for collecting data without an active internet connection
 
 - Hijri (Qamari) date picker add-on
 
 - Jalali (Shamsi) date picker add-on
+
+- Autofill add-on for auto-completing form fields based on user input using internal datasets (CSV) or external API connections
+
+- Telegram notification add-on for sending instant form submission alerts and admin response notifications to Telegram using a bot
+
+- Shield Security plugin silentCAPTCHA integration for invisible bot and spam protection without user interaction
+
 
 
 == Available Versions ==
@@ -151,18 +160,28 @@ The Free version provides essential form-building tools. It is suitable for user
 
 This version is suitable for personal websites, blogs, and small business sites.
 
+= Free Plus Version =
+The Free Plus version extends the Free version by enabling advanced form fields and features available in the form builder, while excluding external add-ons.
+
+This version is suitable for users who need advanced form layouts and surveys without add-on-based extensions. A small “Powered by Easy Form Builder” credit is displayed on the form output.
+
 = Pro Version =
 The Pro version includes all Free Plus features and adds support for official add-ons and integrations.
 
 This version is suitable for professional websites, service platforms, and projects that require extended workflows such as SMS notifications, payment forms, and advanced integrations.
 
 
+As of this release, we have partnered with the following WordPress plugins:
+
+- [Shield security](https://wordpress.org/plugins/wp-simple-firewall/)
+
+
 == Frequently Asked Questions ==
 
-= What is  Easy Form Builder used for? =
+= What is Easy Form Builder used for? =
 It is a WordPress form plugin used to create contact forms, survey forms, payment forms,subscription forms and login or registration forms using a drag-and-drop form builder.
 
-= Is  Easy Form Builder WCAG(ADA) compliant? =
+= Is Easy Form Builder WCAG(ADA) compliant? =
 Form Builder has tried to add necessary standards to the forms, making them accessible to individuals with disabilities during form display.
 
  = Is my form data sent to external services? =
@@ -196,7 +215,7 @@ Yes. Stripe payment fields are supported.
 Yes. The form builder includes survey and poll fields such as rating stars and NPS.
 
 = Do the country, state, and city fields load data from an external source? =
-Yes. The country, state/province, and city lists used in  Easy Form Builder are automatically loaded from an external CDN-hosted JSON source maintained on GitHub.
+Yes. The country, state/province, and city lists used in Easy Form Builder are automatically loaded from an external CDN-hosted JSON source maintained on GitHub.
 
 These lists are fetched from the following public repository:
 https://github.com/hassantafreshi/Json-List-of-countries-states-and-cities-in-the-world
@@ -216,8 +235,8 @@ For full setup instructions, and guides visit [ Easy Form Builder Documentation]
 **Bootstrap Notice:**
 If your theme uses Bootstrap, go to “Easy Form Builder” → “Settings” and enable the Bootstrap option.
 
-1. Download [*Easy Form Builder by whitestudio*](https://downloads.wordpress.org/plugin/easy-form-builder.zip)
-2. Navigate to Dashboard → “Plugins” → “Add New” → “Upload Plugin” → select  *Easy Form Builder by whitestudio* zip file then “Activate”.
+1. Download [*Easy Form Builder*](https://downloads.wordpress.org/plugin/easy-form-builder.zip)
+2. Navigate to Dashboard → “Plugins” → “Add New” → “Upload Plugin” → select *Easy Form Builder* zip file then “Activate”.
 3. In the menu bar, navigate to “Easy Form Builder” → “Settings'' → “Add Google recaptcha keys”
 4. For local testing environments, you may use the key and secret below. For online websites, [click here to obtain the API keys for reCAPTCHA v2](https://www.google.com/recaptcha).
 
@@ -241,7 +260,6 @@ https://github.com/hassantafreshi/easy-form-builder/issues
 Official website:
 https://whitestudio.team
 
-
 == Screenshots ==
 
 1. Form Builder
@@ -252,39 +270,25 @@ https://whitestudio.team
 6. Setting of Easy Form Builder
 7. Present chart of poll
 8. Form submitted and Confirmation Code (tracking pixels)
-9. Create a contact-us form
+9. Create a contact us form
 10. Localization Easy Form Builder to your language
 11. Email template Editor of Easy Form Builder
 12. Order payment forms
 13. configuration Response box of Easy Form Builder
 14. Email Setting of Easy Form Builder
 15. SMS configuration of Easy From Builder
+16. Confirmation Code Search Field
+17. WordPress Support Ticket Conversation and Reply Form
 
+
+== Upgrade Notice ==
+
+= 4.0.0 =
+Major update. New form rendering engine, Gutenberg block, Elementor/WPBakery/Visual Composer widgets, email template builder, background processing, and Shield Security integration added. Database schema upgraded (v1.1). Settings API and internal functions restructured — all official addons will be update to their latest versions.
+**Backup your site before updating. Not backward-compatible with v3.x addons.**
 
 
 == Changelog ==
-
-= 3.9.6 =
-
-* Fixed issues
-
-* Enhanced Security Features in the Easy Form Builder WordPress Plugin
-
-
-= 3.9.3 =
-
-* Fixed issues
-
-= 3.9.2 =
-
-* Fixed issues
-
-* Enhance the user interface for loading forms.
-
-= 3.9.0 =
-
-* Enhanced Security Features in the Easy Form Builder WordPress Plugin
-
 = 3.8.22 =
 
 * Enhanced Security Features in the Easy Form Builder WordPress Plugin
@@ -413,8 +417,11 @@ https://whitestudio.team
 
 
 = 3.7.20 =
+* Fixed issues of UI Easy Form Builder
 
 = 3.7.19 =
+
+* Fixed issues of UI Easy Form Builder
 
 = 3.7.18 =
 
@@ -423,6 +430,8 @@ https://whitestudio.team
 * Resolved issues related to sending email notifications for forms.
 
 = 3.7.17 =
+
+* Fixed issues of UI Easy Form Builder
 
 = 3.7.16 =
 
@@ -461,205 +470,6 @@ https://whitestudio.team
 
 * Fixed issues
 
-
-= 3.7.8 =
-= 3.7.7 =
-= 3.7.6 =
-
-* Fixed issues with validation forms.
-
-* Fixed issues of performance conflicts with popular cache plugins.
-
-* Enhance the user interface for loading forms.
-
-
-= 3.7.5 =
-
-* Improved Security of Easy Form Builder
-
-* Fixed issues
-
-= 3.7.4 =
-
-* Fixed issues
-
-* Remove dependency on jQuery
-
-* Fixed File Uploads issues and improve security of file upload forms of Easy Form Builder
-
-
-= 3.7.3 =
-
-* Resolved issues related to sending email notifications for forms.
-
-
-= 3.7.2 =
-
-* Improved install addons  of Easy Form Builder
-
-* Fixed issues
-
-
-= 3.7.1 =
-
-* Resolved issues related to sending email notifications for forms.
-
-* Fixed issues
-= 3.7.0 =
-
-
-* Added new features of SMS (Text message) notification  for forms
-
-* Bootstrap Icons v1.11.2 added to Easy Form Builder
-
-* Added new features, including smart city dropdowns, to the Easy Form Builder.
-
-* Fixed UI bugs of State/Province Drop Down list in Easy Form Builder
-
-* "Removed size file limitations for file uploads in Easy Form Builder.
-
-* Resolved the issue of sanitizing links in responses submitted through forms in non-Latin languages
-
-* Optimized the loading speed of forms.
-
-* Resolved issues related to sending email notifications for forms.
-
-
-
-=3.6.16=
-
-* Fixed issues
-
-=3.6.15=
-
-The Easy Form Builder plugin now includes a new email content selector feature, allowing admin to choose whether to send tracking codes or completed forms to the admin's email.
-
-=3.6.14=
-
-* Fixed issues
-
-=3.6.9=
-
-* Improved UX of Easy Form Builder
-
-* Fixed issues of UI Easy Form Builder
-
-
-=3.6.8=
-
-* Improved UX of Easy Form Builder
-
-=3.6.7=
-
-* email structer of easy form builder is improved
-
-* Improved UX of Easy Form Builder
-
-=3.6.6=
-
-* Resolved Google ReCaptcha loading issues in Easy Form Builder's forms.
-
-=3.6.4=
-
-* Improved Security of form builder of WordPress Plugin
-
-* Fixed issues of UI Easy Form Builder
-
-
-=3.6.3=
-
-* Improved Security of form builder of WordPress Plugin
-
-=3.6.2=
-
-* Fixed issues of UI Easy Form Builder
-
-* Improved Security of form builder of WordPress Plugin
-
-=3.6.1=
-
-* Improved UX of Easy Form Builder
-
-* Remove dependency on jQuery
-
-=3.5.33=
-
-* Fixed issues
-
-=3.5.32=
-
-* Fixed issues
-
-* Fixed issues of UI Easy Form Builder
-
-=3.5.31=
-
-* Fixed issues
-
-=3.5.30=
-* Fixed issues of UI Easy Form Builder
-
-* Fixed issues
-
-=3.5.28=
-* Added new feature image picker field to form builder
-
-* Fixed issues of UI Easy Form Builder
-
-=3.5.26=
-* Fixed issues of UI Easy Form Builder
-
-=3.5.24=
-* Fixed issues of UI Easy Form Builder
-
-* Improved UX of Easy Form Builder
-
-* Added international telephone picker to admin WP form builder
-
-
-
-=3.5.23=
-=3.5.22=
-
-* Improved UX of Easy Form Builder
-
-=3.5.21=
-
-* Improved install addons  of Easy Form Builder
-
-=3.5.18=
-
-* Improved UX of Easy Form Builder
-
-* Improved Security of form builder of WordPress Plugin
-
-* Fixed issues
-
-=3.5.17=
-=3.5.16=
-
-* Improve UX of Easy Form Builder
-* Fixed issues
-* Added Jalali date Input for create Persian date form
-* Added Hijri date  input for create Arabic or Islamic date form
-
-
-=3.5.13=
-
-* Improved UX of Easy Form Builder
-
-=3.5.12=
-* Improved UX of Easy Form Builder
-* Improved UI of Easy Form Builder
-* Fixed issues of UI Easy Form Builder
-* Added backward features for forms and Easy Form Builder Plugin.
-
-=3.5.11=
-* Fixed issues of loading time of Easy Form Builder
-
-=3.5.10=
-* Improved UX of Easy Form Builder
-* Fixed issues of UI Easy Form Builder
 
 
 == Upgrade Notice ==

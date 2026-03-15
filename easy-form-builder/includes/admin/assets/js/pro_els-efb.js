@@ -1,3 +1,19 @@
+async function fetch_json_from_url_efb(url) {
+  let r = { s: false, r: "false" };
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    r.s = true;
+    r.r = data;
+  } catch (error) {
+    r.r = error.message;
+  }
+  return r;
+}
+
 let marker_maps_efb;
 maps_el_pro_efb =(previewSate, pos , rndm,iVJ)=>{
     return `
@@ -7,13 +23,7 @@ maps_el_pro_efb =(previewSate, pos , rndm,iVJ)=>{
       </div>
     `
  }
- maps_os_pro_efb =(previewSate, pos , rndm,iVJ)=>{
-    return `
-    <div class="efb  ${previewSate == true ? pos[3] : `col-md-12`} col-sm-12 maps-os "  id='${rndm}-f'>
 
-      </div>
-    `
- }
  dadfile_el_pro_efb =(previewSate , rndm,iVJ)=>{
   const corner = valj_efb[iVJ].hasOwnProperty('corner') ? valj_efb[iVJ].corner: 'efb-square'
   let disabled =  valj_efb[iVJ].hasOwnProperty('disabled') &&  valj_efb[iVJ].disabled==true? 'disabled' : ''
@@ -29,12 +39,12 @@ esign_el_pro_efb =(previewSate, pos , rndm,iVJ,desc)=>{
     const corner = valj_efb[iVJ].hasOwnProperty('corner') ? valj_efb[iVJ].corner: 'efb-square'
     let disabled = valj_efb[iVJ].hasOwnProperty('disabled') &&  valj_efb[iVJ].disabled==1? 'disabled' : ''
     return `<div class="efb  ${pos[3]} col-sm-12" id ="${rndm}-f">
-    <canvas class="efb  sign-efb bg-white ${valj_efb[iVJ].el_height} ${corner} ${valj_efb[iVJ].el_text_color} ${valj_efb[iVJ].el_border_color} efb1 ${valj_efb[iVJ].classes.replace(`,`, ` `)}" data-css="${rndm}" data-code="${rndm}"  data-id="${rndm}-el" id="${rndm}_"  ${valj_efb[iVJ].message!='' ? `aria-describedby="${valj_efb[iVJ].id_}-des"` : ""} width="600" height="200">
+    <canvas class="efb  sign-efb bg-white ${valj_efb[iVJ].el_height} ${corner} ${valj_efb[iVJ].el_text_color} ${valj_efb[iVJ].el_border_color} efb1 ${valj_efb[iVJ].classes.replace(`,`, ` `)}" data-css="${rndm}" data-code="${rndm}"  data-id="${rndm}-el" id="${rndm}_"  ${valj_efb[iVJ].message!='' ? `aria-describedby="${valj_efb[iVJ].id_}-des"` : ""} >
         ${efb_var.text.updateUrbrowser}
     </canvas>
    ${previewSate == true ? `<input type="hidden" data-type="esign" data-vid='${rndm}' class="efb  emsFormBuilder_v ${valj_efb[iVJ].required == 1 || valj_efb[iVJ].required == true ? 'required' : ''}" id="${rndm}-sig-data" value="Data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==">` : ``}
     <div class="efb  mx-1">${desc}</div>
-    <div class="efb  mb-3"><button type="button" class="efb  btn ${corner} ${valj_efb[iVJ].button_color} efb-btn-lg mt-1 fs-6 ${disabled}" id="${rndm}_b" onClick="fun_clear_esign_efb('${rndm}')">  <i class="efb  ${valj_efb[iVJ].icon} mx-2 ${valj_efb[iVJ].icon_color != "default" ? valj_efb[iVJ].icon_color : ''} " id="${rndm}_icon"></i><span id="${rndm}_button_single_text" class="efb  ${valj_efb[iVJ].icon_color} efb " ${disabled}>${valj_efb[iVJ].button_single_text}</span></button></div>
+    <div class="efb  mb-3"><button type="button" class="efb  btn ${corner} ${valj_efb[iVJ].button_color} efb-btn-lg mt-1 fs-6 ${disabled}" id="${rndm}_b" onclick="fun_clear_esign_efb('${rndm}')">  <i class="efb  ${valj_efb[iVJ].icon} mx-2 ${valj_efb[iVJ].icon_color != "default" ? valj_efb[iVJ].icon_color : ''} " id="${rndm}_icon"></i><span id="${rndm}_button_single_text" class="efb  ${valj_efb[iVJ].icon_color} efb " ${disabled}>${valj_efb[iVJ].button_single_text}</span></button></div>
       `;
 }
 rating_el_pro_efb =(previewSate,pos, rndm,iVJ)=>{
@@ -42,15 +52,15 @@ rating_el_pro_efb =(previewSate,pos, rndm,iVJ)=>{
     return ` <div class="efb  ${pos[3]} col-sm-12" id ="${rndm}-f">
       <div class="efb  star-efb d-flex justify-content-center ${disabled} efb1 ${valj_efb[iVJ].classes.replace(`,`, ` `)}" data-css="${rndm}"  ${valj_efb[iVJ].message!='' ? `aria-describedby="${valj_efb[iVJ].id_}-des"` : ""}>
                         <input type="radio" id="${rndm}-star5" data-vid='${rndm}' data-type="rating" class="efb "   data-star='star'  name="${rndm}-star-efb" value="5" data-name="star"  data-id="${rndm}-el" ${previewSate != true ? 'disabled' : ''}  ${disabled}>
-                        <label id="${rndm}_star5" for="${rndm}-star5"  ${previewSate == true && disabled==false ? `onClick="fun_get_rating_efb('${rndm}',5)"` : ''} title="5stars" class="efb  ${valj_efb[iVJ].el_height} star ${disabled}">5 ${efb_var.text.stars}</label>
+                        <label id="${rndm}_star5" for="${rndm}-star5"  ${previewSate == true && disabled==false ? `onclick="fun_get_rating_efb('${rndm}',5)"` : ''} title="5stars" class="efb  ${valj_efb[iVJ].el_height} star ${disabled}">5 ${efb_var.text.stars}</label>
                         <input type="radio" id="${rndm}-star4" data-vid='${rndm}' data-type="rating" class="efb "  data-star='star' name="${rndm}-star-efb" value="4" data-name="star"  data-id="${rndm}-el" ${previewSate != true ? 'disabled' : ''}  ${disabled}>
-                        <label id="${rndm}_star4"  for="${rndm}-star4" ${previewSate == true  && disabled==false ? `onClick="fun_get_rating_efb('${rndm}',4)"` : ''} title="4stars" class="efb  ${valj_efb[iVJ].el_height} star ${disabled}">4 ${efb_var.text.stars}</label>
+                        <label id="${rndm}_star4"  for="${rndm}-star4" ${previewSate == true  && disabled==false ? `onclick="fun_get_rating_efb('${rndm}',4)"` : ''} title="4stars" class="efb  ${valj_efb[iVJ].el_height} star ${disabled}">4 ${efb_var.text.stars}</label>
                         <input type="radio" id="${rndm}-star3" data-vid='${rndm}' data-type="rating" class="efb "  data-star='star' name="${rndm}-star-efb" data-name="star" value="3"  data-id="${rndm}-el" ${previewSate != true ? 'disabled' : ''}  ${disabled}>
-                        <label id="${rndm}_star3" for="${rndm}-star3"  ${previewSate == true  && disabled==false ? `onClick="fun_get_rating_efb('${rndm}',3)"` : ''} title="3stars" class="efb  ${valj_efb[iVJ].el_height} star ${disabled}">3 ${efb_var.text.stars}</label>
+                        <label id="${rndm}_star3" for="${rndm}-star3"  ${previewSate == true  && disabled==false ? `onclick="fun_get_rating_efb('${rndm}',3)"` : ''} title="3stars" class="efb  ${valj_efb[iVJ].el_height} star ${disabled}">3 ${efb_var.text.stars}</label>
                         <input type="radio" id="${rndm}-star2" data-vid='${rndm}' data-type="rating" class="efb "  data-star='star' data-name="star" name="${rndm}-star-efb" value="2"  data-id="${rndm}-el" ${previewSate != true ? 'disabled' : ''}  ${disabled}>
-                        <label id="${rndm}_star2" for="${rndm}-star2" ${previewSate == true  && disabled==false ? `onClick="fun_get_rating_efb('${rndm}',2)"` : ''} title="2stars" class="efb  ${valj_efb[iVJ].el_height} star ${disabled}">2 ${efb_var.text.stars}</label>
+                        <label id="${rndm}_star2" for="${rndm}-star2" ${previewSate == true  && disabled==false ? `onclick="fun_get_rating_efb('${rndm}',2)"` : ''} title="2stars" class="efb  ${valj_efb[iVJ].el_height} star ${disabled}">2 ${efb_var.text.stars}</label>
                         <input type="radio" id="${rndm}-star1" data-vid='${rndm}' data-type="rating" class="efb " data-star='star' data-name="star" name="${rndm}-star-efb" value="1"  data-id="${rndm}-el" ${previewSate != true ? 'disabled' : ''}  ${disabled}>
-                        <label id="${rndm}_star1" for="${rndm}-star1" ${previewSate == true && disabled==false ? `onClick="fun_get_rating_efb('${rndm}',1)"` : ''} title="1star" class="efb   ${valj_efb[iVJ].el_height} star ${disabled}">1 ${efb_var.text.star}</label>
+                        <label id="${rndm}_star1" for="${rndm}-star1" ${previewSate == true && disabled==false ? `onclick="fun_get_rating_efb('${rndm}',1)"` : ''} title="1star" class="efb   ${valj_efb[iVJ].el_height} star ${disabled}">1 ${efb_var.text.star}</label>
       </div>
       <input type="hidden" data-vid="${rndm}" data-type="rating" class="efb emsFormBuilder_v ${valj_efb[iVJ].required == 1 || valj_efb[iVJ].required == true ? 'required' : ''}" id="${rndm}-stared" >`
 }
@@ -126,11 +136,28 @@ countryList_el_pro_efb = ( rndm,rndm_1,op_3,op_4,editState)=>{
       }
       return optn;
 }
-statePrevion_el_pro_efb = (rndm,rndm_1,temp,op_4,editState)=>{
+statePrevion_el_pro_efb = (rndm,rndm_1,temp,op_4,editState,autofilled)=>{
     let optn ='<!--states-->'
     const optns_obj = valj_efb.filter(obj => { return obj.parent === rndm })
-        const indx_parent = valj_efb.findIndex(x => x.id_ == rndm);
+    const indx_parent = valj_efb.findIndex(x => x.id_ == rndm);
     const iso_con = valj_efb[indx_parent].country;
+    check_autofilled =(id , i ,iso_con)=>{
+      let value = i.value;
+      let s2 = i.s2;
+      let row= sendBack_emsFormBuilder_pub.findIndex(r=>r.id_==rndm);
+      const row_value = sendBack_emsFormBuilder_pub[row].value.replace(/\s/g, '');
+      value = value.replace(/\s/g, '');
+      let re =false;
+      if(row_value==value){
+        re=true;
+        sendBack_emsFormBuilder_pub[row].hasOwnProperty('statePrev_') ? sendBack_emsFormBuilder_pub[row].statePrev_=s2 : Object.assign(sendBack_emsFormBuilder_pub[row], {statePrev_: s2})
+        sendBack_emsFormBuilder_pub[row].hasOwnProperty('cont_') ? sendBack_emsFormBuilder_pub[row].cont_=iso_con : Object.assign(sendBack_emsFormBuilder_pub[row], {cont_: iso_con})
+        if(sendBack_emsFormBuilder_pub[row].type=='cityList'){
+          sendBack_emsFormBuilder_pub[row].hasOwnProperty('city_') ? sendBack_emsFormBuilder_pub[row].city_=s2 : Object.assign(sendBack_emsFormBuilder_pub[row], {city_: s2})
+        }
+      }
+      return re
+    }
     if (editState != false) {
         for (const i of optns_obj) {
           let value = i.value;
@@ -141,7 +168,12 @@ statePrevion_el_pro_efb = (rndm,rndm_1,temp,op_4,editState)=>{
               value = `<span class="efb">${i.n}</span>`
             }
           }
-          optn += `<option id="${i.id_}" value="${value}" data-iso="${i.s2}" data-isoc='${iso_con}'  data-id="${i.id_}" data-op="${i.id_}" class="efb ${valj_efb[indx_parent].el_text_color} emsFormBuilder_v efb" ${valj_efb[indx_parent].value==i.id_ || ( i.hasOwnProperty('id_old') && valj_efb[indx_parent].value==i.id_old) ? "selected" :''}>${value}</option>`
+          let autofill_check='' ;
+          if(autofilled==true){
+            autofill_check=check_autofilled(i.id_,i,iso_con);
+           }
+          const selected = valj_efb[indx_parent].value==i.id_ || ( i.hasOwnProperty('id_old') && valj_efb[indx_parent].value==i.id_old) || (autofill_check ) ? "selected" :''
+          optn += `<option id="${i.id_}" value="${value}" data-iso="${i.s2}" data-isoc='${iso_con}'  data-id="${i.id_}" data-op="${i.id_}" class="efb ${valj_efb[indx_parent].el_text_color} emsFormBuilder_v efb" ${selected}>${value}</option>`
         }
       } else {
           state_local=optns_obj;
@@ -165,7 +197,7 @@ cityList_el_pro_efb = (rndm,rndm_1,temp,op_4,editState)=>{
     if (editState != false) {
         for (const i of optns_obj) {
           let value = i.value;
-          if (i.hasOwnProperty('stylish')) {
+      if (i.hasOwnProperty('stylish')) {
             if (stylish == '2') {
               value = `<span class="efb">${i.l}</span>`
             }else if(stylish == '3'){
@@ -173,7 +205,6 @@ cityList_el_pro_efb = (rndm,rndm_1,temp,op_4,editState)=>{
             }
           }
           optn += `<option value="${value}" data-iso="${i.id_}" id="${i.id_}" data-id="${i.id_}"  data-iso='${valj_efb[indx_parent].country}' data-statepov='${valj_efb[indx_parent].statePov}' data-op="${i.id_}" class="efb ${valj_efb[indx_parent].el_text_color} emsFormBuilder_v efb" ${valj_efb[indx_parent].value==i.id_ || ( i.hasOwnProperty('id_old') && valj_efb[indx_parent].value==i.id_old) ? "selected" :''}>${value}</option>`
-
         }
       } else {
           state_local=optns_obj;
@@ -204,10 +235,10 @@ yesNi_el_pro_efb = (previewSate,pos, rndm,iVJ)=>{
   let disabled = valj_efb[iVJ].hasOwnProperty('disabled') &&  valj_efb[iVJ].disabled==1? 'disabled' : ''
     return `<div class="efb ${pos[3]} col-sm-12 efb  ${disabled} efb1 ${valj_efb[iVJ].classes.replace(`,`, ` `)}" data-css="${rndm}"  id='${rndm}-f'  ${valj_efb[iVJ].message!='' ? `aria-describedby="${valj_efb[iVJ].id_}-des"` : ""}>
     <div class="efb  btn-group  btn-group-toggle w-100  col-md-12 col-sm-12  ${valj_efb[iVJ].required == 1 || valj_efb[iVJ].required == true ? 'required' : ''}" data-toggle="buttons" data-id="${rndm}-id" id="${rndm}_yn">
-    <label for="${rndm}_1" data-lid="${rndm}" data-value="${valj_efb[iVJ].button_1_text}" onClick="yesNoGetEFB('${valj_efb[iVJ].button_1_text}', '${rndm}' ,'${rndm}_b_1')" class="efb  btn ${valj_efb[iVJ].button_color} ${valj_efb[iVJ].el_text_color} ${valj_efb[iVJ].el_height} ${corner} yesno-efb left-efb  ${disabled} ${previewSate != true ? 'disabled' : ''}" id="${rndm}_b_1">
+    <label for="${rndm}_1" data-lid="${rndm}" data-value="${valj_efb[iVJ].button_1_text}" onclick="yesNoGetEFB('${valj_efb[iVJ].button_1_text}', '${rndm}' ,'${rndm}_b_1')" class="efb  btn ${valj_efb[iVJ].button_color} ${valj_efb[iVJ].el_text_color} ${valj_efb[iVJ].el_height} ${corner} yesno-efb left-efb  ${disabled} ${previewSate != true ? 'disabled' : ''}" id="${rndm}_b_1">
       <input type="radio" name="${rndm}" data-type="switch" class="efb opButtonEfb elEdit emsFormBuilder_v efb" data-vid='${rndm}' data-id="${rndm}-id" id="${rndm}_1" value="${valj_efb[iVJ].button_1_text}"><span id="${rndm}_1_lab">${valj_efb[iVJ].button_1_text}</span></label>
     <span class="efb border-right border border-light efb"></span>
-    <label for="${rndm}_2" data-lid="${rndm}" data-value="${valj_efb[iVJ].button_2_text}" onClick="yesNoGetEFB('${valj_efb[iVJ].button_2_text}' ,'${rndm}','${rndm}_b_2')" class="efb  btn ${valj_efb[iVJ].button_color} ${valj_efb[iVJ].el_text_color} ${valj_efb[iVJ].el_height} ${corner} yesno-efb right-efb  ${disabled} ${previewSate != true ? 'disabled' : ''}" id="${rndm}_b_2">
+    <label for="${rndm}_2" data-lid="${rndm}" data-value="${valj_efb[iVJ].button_2_text}" onclick="yesNoGetEFB('${valj_efb[iVJ].button_2_text}' ,'${rndm}','${rndm}_b_2')" class="efb  btn ${valj_efb[iVJ].button_color} ${valj_efb[iVJ].el_text_color} ${valj_efb[iVJ].el_height} ${corner} yesno-efb right-efb  ${disabled} ${previewSate != true ? 'disabled' : ''}" id="${rndm}_b_2">
       <input type="radio" name="${rndm}" data-type="switch" class="efb opButtonEfb elEdit emsFormBuilder_v efb" data-vid='${rndm}' data-id="${rndm}-id" id="${rndm}_2" value="${valj_efb[iVJ].button_2_text}"> <span id="${rndm}_2_lab">${valj_efb[iVJ].button_2_text}</span></label>
     </div>`
 }
@@ -220,7 +251,7 @@ html_el_pro_efb = (previewSate, rndm,iVJ)=>{
             <div class="efb noCode-efb m-5 text-center efb" id="${rndm}_noCode">
               ${efb_var.text.noCodeAddedYet} <button type="button" class="efb BtnSideEfb btn efb btn-edit efb btn-sm" id="settingElEFb"
               data-id="${rndm}-id" data-bs-toggle="tooltip" title="${efb_var.text.edit}"
-              onclick="show_setting_window_efb('${rndm}-id')" data-action="setting" data-target="${rndm}-id">
+              onclick="show_setting_window_efb('${rndm}-id')">
               <div class="icon-container efb"><i class="efb   bi-gear-wide-connected text-success" id="efbSetting"></i></div></button>${efb_var.text.andAddingHtmlCode}
           </div></div></div>`;
       } else {
@@ -230,30 +261,36 @@ html_el_pro_efb = (previewSate, rndm,iVJ)=>{
       }
       return ui;
 }
- function ui_dadfile_efb(indx, previewSate) {
-    let n = valj_efb[indx].file;
-    n = efb_var.text[n];
-    if(valj_efb[indx].file=='customize'){
-      n = valj_efb[indx].file_ctype;
-    }
-    let types = ""
-    let disabled =  valj_efb[indx].hasOwnProperty('disabled') &&  valj_efb[indx].disabled==true? 'disabled' : ''
-    filetype_efb={'image':'image/png, image/jpeg, image/jpg, image/gif, image/heic',
-    'media':'audio/mpeg, audio/wav, audio/ogg, video/mp4, video/webm, video/x-matroska, video/avi, video/mpeg , video/mpg, audio/mpg, video/mov, video/quicktime',
-    'document':'.xlsx,.xls,.doc,.docx,.ppt, pptx,.pptm,.txt,.pdf,.dotx,.rtf,.odt,.ods,.odp,application/pdf,  text/plain, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/vnd.ms-excel, application/vnd.ms-powerpoint, application/vnd.openxmlformats-officedocument.presentationml.presentation, application/vnd.ms-powerpoint.presentation.macroEnabled.12, application/vnd.openxmlformats-officedocument.wordprocessingml.template,application/vnd.oasis.opendocument.spreadsheet, application/vnd.oasis.opendocument.presentation, application/vnd.oasis.opendocument.text',
-    'zip':'.zip, application/zip, application/octet-stream, application/x-zip-compressed, multipart/x-zip, rar, application/x-rar-compressed, application/x-rar, application/rar, application/x-compressed, .rar, .zip, .7z, .tar, .gz, .gzip, .tgz, .tar.gz, .tar.gzip, .tar.z, .tar.Z, .tar.bz2, .tar.bz, .tar.bzip2, .tar.bzip, .tbz2, .tbz, .bz2, .bz, .bzip2, .bzip, .tz2, .tz, .z, .war, .jar, .ear, .sar, .rar, .zip, .7z, .tar, .gz, .gzip, .tgz, .tar.gz, .tar.gzip, .tar.z, .tar.Z, .tar.bz2, .tar.bz, .tar.bzip2, .tar.bzip, .tbz2, .tbz, .bz2, .bz, .bzip2, .bzip, .tz2, .tz, .z, .war, .jar, .ear, .sar',
-    'allformat':'image/png, image/jpeg, image/jpg, image/gif audio/mpeg, audio/wav, audio/ogg, video/mp4, video/webm, video/x-matroska, video/avi, video/mpeg , video/mpg, audio/mpg .xlsx,.xls,.doc,.docx,.ppt, pptx,.pptm,.txt,.pdf,.dotx,.rtf,.odt,.ods,.odp,application/pdf,  text/plain, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/vnd.ms-excel, application/vnd.ms-powerpoint, application/vnd.openxmlformats-officedocument.presentationml.presentation, application/vnd.ms-powerpoint.presentation.macroEnabled.12, application/vnd.openxmlformats-officedocument.wordprocessingml.template,application/vnd.oasis.opendocument.spreadsheet, application/vnd.oasis.opendocument.presentation, application/vnd.oasis.opendocument.text, .zip, application/zip, application/octet-stream, application/x-zip-compressed, multipart/x-zip, rar, application/x-rar-compressed, application/x-rar, application/rar, application/x-compressed, .rar, .zip, .7z, .tar, .gz, .gzip, .tgz, .tar.gz, .tar.gzip, .tar.z, .tar.Z, .tar.bz2, .tar.bz, .tar.bzip2, .tar.bzip, .tbz2, .tbz, .bz2, .bz, .bzip2, .bzip, .tz2, .tz, .z, .war, .jar, .ear, .sar, .rar, .zip, .7z, .tar, .gz, .gzip, .tgz, .tar.gz, .tar.gzip, .tar.z, .tar.Z, .tar.bz2, .tar.bz, .tar.bzip2, .tar.bzip, .tbz2, .tbz, .bz2, .bz, .bzip2, .bzip, .tz2, .tz, .z, .war, .jar, .ear, .sar, .heic, image/heic, video/mov, .mov, video/quicktime, video/quicktime',
-    'customize':`${valj_efb[indx].file_ctype}`
-      }
-    return `<div class="efb icon efb"><i class="efb  fs-3 ${valj_efb[indx].icon} ${valj_efb[indx].icon_color}" id="${valj_efb[indx].id_}_icon"></i></div>
-    <h6 id="${valj_efb[indx].id_}_txt" class="efb text-center m-1 fs-6">${efb_var.text.dragAndDropA} ${n} </h6> <span class="efb fs-7">${efb_var.text.or}</span>
-    <button type="button" class="efb  btn ${valj_efb[indx].button_color} efb-btn-lg fs-6" id="${valj_efb[indx].id_}_b" ${disabled}>
-        <i class="efb  bi-upload mx-2 fs-6"></i>${efb_var.text.browseFile}
-    </button>
-   <input type="file" hidden="" accept="${filetype_efb[valj_efb[indx].value]}" data-type="dadfile" data-vid='${valj_efb[indx].id_}' data-ID='${valj_efb[indx].id_}' class="efb  emsFormBuilder_v   ${valj_efb[indx].required == 1 || valj_efb[indx].required == true ? 'required' : ''}" id="${valj_efb[indx].id_}_" data-id="${valj_efb[indx].id_}-el" ${previewSate != true ? 'disabled' : ''} ${disabled}>`
+function ui_dadfile_efb(indx, previewSate,form_id) {
+  let valj_efb_
+  if (form_id){
+    valj_efb_ = get_structure_by_form_id_efb(form_id);
+  }else{
+   valj_efb_ = valj_efb;
   }
-function viewfileEfb(id, indx ,filed) {
-
+  let n = valj_efb_[indx].file ?? 'Zip';
+  n = efb_var.text[n];
+  if(valj_efb_[indx].file=='customize'){
+    n = valj_efb_[indx].file_ctype;
+  }
+  let types = ""
+  let disabled =  valj_efb_[indx].hasOwnProperty('disabled') &&  valj_efb_[indx].disabled==true? 'disabled' : ''
+  filetype_efb={'image':'image/png, image/jpeg, image/jpg, image/gif, image/heic',
+  'media':'audio/mpeg, audio/wav, audio/ogg, video/mp4, video/webm, video/x-matroska, video/avi, video/mpeg , video/mpg, audio/mpg, video/mov, video/quicktime',
+  'document':'.xlsx,.xls,.doc,.docx,.ppt, pptx,.pptm,.txt,.pdf,.dotx,.rtf,.odt,.ods,.odp,application/pdf,  text/plain, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/vnd.ms-excel, application/vnd.ms-powerpoint, application/vnd.openxmlformats-officedocument.presentationml.presentation, application/vnd.ms-powerpoint.presentation.macroEnabled.12, application/vnd.openxmlformats-officedocument.wordprocessingml.template,application/vnd.oasis.opendocument.spreadsheet, application/vnd.oasis.opendocument.presentation, application/vnd.oasis.opendocument.text',
+  'zip':'.zip, application/zip, application/octet-stream, application/x-zip-compressed, multipart/x-zip, rar, application/x-rar-compressed, application/x-rar, application/rar, application/x-compressed, .rar, .zip, .7z, .tar, .gz, .gzip, .tgz, .tar.gz, .tar.gzip, .tar.z, .tar.Z, .tar.bz2, .tar.bz, .tar.bzip2, .tar.bzip, .tbz2, .tbz, .bz2, .bz, .bzip2, .bzip, .tz2, .tz, .z, .war, .jar, .ear, .sar, .rar, .zip, .7z, .tar, .gz, .gzip, .tgz, .tar.gz, .tar.gzip, .tar.z, .tar.Z, .tar.bz2, .tar.bz, .tar.bzip2, .tar.bzip, .tbz2, .tbz, .bz2, .bz, .bzip2, .bzip, .tz2, .tz, .z, .war, .jar, .ear, .sar',
+  'allformat':'image/png, image/jpeg, image/jpg, image/gif, image/heic, audio/mpeg, audio/wav, audio/ogg, video/mp4, video/webm, video/x-matroska, video/avi, video/mpeg, video/mpg, audio/mpg, video/mov, video/quicktime, .xlsx,.xls,.doc,.docx,.ppt, pptx,.pptm,.txt,.pdf,.dotx,.rtf,.odt,.ods,.odp,application/pdf, text/plain, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document, application/vnd.ms-excel, application/vnd.ms-powerpoint, application/vnd.openxmlformats-officedocument.presentationml.presentation, application/vnd.ms-powerpoint.presentation.macroEnabled.12, application/vnd.openxmlformats-officedocument.wordprocessingml.template,application/vnd.oasis.opendocument.spreadsheet, application/vnd.oasis.opendocument.presentation, application/vnd.oasis.opendocument.text, .zip, application/zip, application/octet-stream, application/x-zip-compressed, multipart/x-zip, rar, application/x-rar-compressed, application/x-rar, application/rar, application/x-compressed, .rar, .zip, .7z, .tar, .gz, .gzip, .tgz, .tar.gz, .tar.gzip, .tar.z, .tar.Z, .tar.bz2, .tar.bz, .tar.bzip2, .tar.bzip, .tbz2, .tbz, .bz2, .bz, .bzip2, .bzip, .tz2, .tz, .z, .war, .jar, .ear, .sar, .rar, .zip, .7z, .tar, .gz, .gzip, .tgz, .tar.gz, .tar.gzip, .tar.z, .tar.Z, .tar.bz2, .tar.bz, .tar.bzip2, .tar.bzip, .tbz2, .tbz, .bz2, .bz, .bzip2, .bzip, .tz2, .tz, .z, .war, .jar, .ear, .sar, .heic, image/heic, video/mov, .mov, video/quicktime, video/quicktime',
+  'customize':`${valj_efb_[indx].file_ctype}`
+    }
+  return `<div class="efb icon efb"><i class="efb  fs-3 ${valj_efb_[indx].icon} ${valj_efb_[indx].icon_color}" id="${valj_efb_[indx].id_}_icon"></i></div>
+  <h6 id="${valj_efb_[indx].id_}_txt" class="efb text-center m-1 fs-6">${efb_var.text.dragAndDropA} ${n} </h6> <span class="efb fs-7">${efb_var.text.or}</span>
+  <div class="efb  btn ${valj_efb_[indx].button_color} efb-btn-lg fs-6" id="${valj_efb_[indx].id_}_b" ${disabled}>
+      <i class="efb  bi-upload mx-2 fs-6"></i>${efb_var.text.browseFile}
+  </div>
+ <input type="file" hidden="" accept="${filetype_efb[valj_efb_[indx].value]}" data-type="dadfile" data-vid='${valj_efb_[indx].id_}' data-ID='${valj_efb_[indx].id_}' class="efb  emsFormBuilder_v   ${valj_efb_[indx].required == 1 || valj_efb_[indx].required == true ? 'required' : ''}" id="${valj_efb_[indx].id_}_" data-id="${valj_efb_[indx].id_}-el" ${previewSate != true ? 'disabled' : ''} ${disabled}>`
+}
+function viewfileEfb(id, indx ,filed,form_id) {
+  const valj_efb = get_structure_by_form_id_efb(form_id);
     if(filed==undefined) {
       document.getElementById(`${valj_efb[indx].id_}_-message`).classList.remove('show')
       return;}
@@ -265,7 +302,7 @@ function viewfileEfb(id, indx ,filed) {
     <text x="50%" y="67%" dominant-baseline="middle" text-anchor="middle" fill="black" font-size="4">${filename.slice(filename.lastIndexOf('.') + 1)}</text>
   </svg>`
     let box_v = `<div class="efb ">
-    <button type="button" class="efb btn btn-delete btn-sm bi-x-lg efb" id="rmvFileEfb" onClick="removeFileEfb('${id}',${indx})"
+    <button type="button" class="efb btn btn-delete btn-sm bi-x-lg efb" id="rmvFileEfb" onclick="removeFileEfb('${id}',${indx} ,${form_id})"
          aria-label="Close" data-bs-toggle="tooltip" data-bs-placement="top" title="${efb_var.text.removeTheFile}"></button>
          <div class="efb card p-2">
           <i class="efb  ico-file ${valj_efb[indx].icon_color} text-center fs-2">${svg_file}</i>
@@ -280,7 +317,7 @@ function viewfileEfb(id, indx ,filed) {
         const box = document.getElementById(`${id}_box`)
         if (valj_efb[indx].file == "image") {
           box.innerHTML = `<div class="efb ">
-              <button type="button" class="efb btn btn-delete btn-sm bi-x-lg efb" id="rmvFileEfb" onClick="removeFileEfb('${id}',${indx})"
+              <button type="button" class="efb btn btn-delete btn-sm bi-x-lg efb" id="rmvFileEfb" onclick="removeFileEfb('${id}',${indx},${form_id})"
                    aria-label="Close" data-bs-toggle="tooltip" data-bs-placement="top" title=${efb_var.text.removeTheFile}"></button>
               <img src="${fileURL}" alt="image">
               </div>`;
@@ -288,9 +325,10 @@ function viewfileEfb(id, indx ,filed) {
           box.innerHTML = box_v;
         }
       }
-      fileReader.readAsDataURL(fileEfb);
+      fileReader.readAsDataURL(filed);
       document.getElementById(`${id}_-message`).innerHTML = "";
       document.getElementById(`${id}_-message`).classList.remove('show')
+
     } else {
       let t_m = valj_efb[indx].file!='customize'? valj_efb[indx].file : valj_efb[indx].file_ctype;
       t_m = t_m.replaceAll(',',` ${efb_var.text.or} `);
@@ -313,22 +351,22 @@ function viewfileReplyEfb(id, indx) {
          fileURL = fileReader.result;
       }
       fileReader.readAsDataURL(fileEfb);
-      files_emsFormBuilder=[{ id_: 'resp_file_efb', value: "@file@", state: 0, url: "", type: "file", name: 'file', session: sessionPub_emsFormBuilder , amount:0 }];
+      files_emsFormBuilder.push({ id_: 'resp_file_efb', value: "@file@", state: 0, url: fileURL, type: "file", name: 'file', session: sessionPub_emsFormBuilder , amount:0 });
       fun_upload_file_api_emsFormBuilder('resp_file_efb', 'allformat' ,'resp',fileEfb);
       document.getElementById('name_attach_efb').innerHTML = fileEfb.name.length > 10 ? `${fileEfb.name.slice(0,7)}..` :fileEfb.name;
     } else {
-      const m  = efb_var.text.pleaseUploadA.replace('NN', `${efb_var.text['media']} | ${efb_var.text['document']} | ${efb_var.text['zip']}`);
+      const m  = efb_var.text.pleaseUploadA.replace('NN', `${efb_var.text['media']} , ${efb_var.text['document']} ${efb_var.text['or']} ${efb_var.text['zip']}`);
       alert_message_efb('', m, 4, 'danger')
       fileEfb = [];
     }
   }
-function removeFileEfb(id, indx) {
+function removeFileEfb(id, indx,form_id) {
     fileEfb = "";
-    document.getElementById(`${id}_box`).innerHTML = ui_dadfile_efb(indx)
+    document.getElementById(`${id}_box`).innerHTML = ui_dadfile_efb(indx,true,form_id)
     setTimeout(() => {
-      create_dadfile_efb(id, indx);
+      create_dadfile_efb(id, indx,form_id);
       document.getElementById(`${id}_`).addEventListener('change', () => {
-        valid_file_emsFormBuilder(id ,'msg' ,'');
+        valid_file_emsFormBuilder(id ,'msg' ,'',form_id);
       })
     }, 500)
     if (typeof (sendBack_emsFormBuilder_pub) != "undefined") {
@@ -336,17 +374,29 @@ function removeFileEfb(id, indx) {
       if (inx != -1) {
         sendBack_emsFormBuilder_pub.splice(inx, 1)
         inx = files_emsFormBuilder.findIndex(x => x.id_ == id)
-        files_emsFormBuilder[inx].url = "";
+        if (inx != -1) {
+          files_emsFormBuilder[inx].url = "";
+          files_emsFormBuilder[inx].state = 0;
+        }
       }
       else {
         inx = files_emsFormBuilder.findIndex(x => x.id_ == id)
         if (inx != -1) {
           files_emsFormBuilder[inx].url = "";
+          files_emsFormBuilder[inx].state = 0;
           setTimeout(() => {
             inx = get_row_sendback_by_id_efb(id);
             if (inx != -1) { sendBack_emsFormBuilder_pub.splice(inx, 1) }
           }, 100);
         }
+      }
+    }
+    let fileIndx = files_emsFormBuilder.findIndex(x => x.id_ == id);
+    if (fileIndx === -1) {
+      const valj_efb_rm = get_structure_by_form_id_efb(form_id);
+      const ob = valj_efb_rm ? valj_efb_rm.find(x => x.id_ === id) : null;
+      if (ob) {
+        files_emsFormBuilder.push({ id_: id, value: "@file@", state: 0, url: "", type: "file", name: ob.name, session: sessionPub_emsFormBuilder, form_id: form_id });
       }
     }
     fun_removeProgessiveEl_efb(id);
@@ -355,23 +405,28 @@ function gm_authFailure() {
     const body = `<p class="efb fs-6 efb">${efb_var.text.aPIkeyGoogleMapsFeild} <a href="https://developers.google.com/maps/documentation/javascript/error-messages" target="blank">${efb_var.text.clickHere}</a> </p>`
     alert_message_efb(efb_var.text.error, body, 15, 'danger')
   }
-set_dadfile_fun_efb = (id, indx) => {
-    setTimeout(() => { create_dadfile_efb(id, indx) }, 50)
+set_dadfile_fun_efb = (id, indx,form_id=0) => {
+    setTimeout(() => {
+      create_dadfile_efb(id, indx,form_id)
+      document.getElementById(`${id}_`).addEventListener('change', () => {
+        valid_file_emsFormBuilder(id ,'msg' ,'',form_id);
+      })
+     }, 100)
   }
-  create_dadfile_efb = (id, indx) => {
+  create_dadfile_efb = (id, indx,form_id) => {
+    const valj_efb =get_structure_by_form_id_efb(form_id);
     let dropAreaEfb = document.getElementById(`${id}_box`);
     let dragTextEfb = dropAreaEfb.querySelector("h6");
-    let  dragbtntEfb = dropAreaEfb.querySelector("button");
+    let  dragbtntEfb = document.getElementById(`${id}_b`);
     let dragInptEfb = dropAreaEfb.querySelector("input");
     dropAreaEfb.classList.remove("active");
     dragInptEfb.disabled = false;
     dragbtntEfb.onclick = () => {
-      dragInptEfb.click();
     }
     dragInptEfb.addEventListener("change", function () {
       fileEfb = this.files[0];
       dropAreaEfb.classList.add("active");
-      viewfileEfb(id, indx ,fileEfb);
+      viewfileEfb(id, indx ,fileEfb,form_id);
     });
     dropAreaEfb.addEventListener("dragover", (event) => {
       event.preventDefault();
@@ -379,6 +434,7 @@ set_dadfile_fun_efb = (id, indx) => {
       dragTextEfb.textContent = "Release to Upload File";
     });
     dropAreaEfb.addEventListener("dragleave", () => {
+
       let n = valj_efb[indx].file;
       n = efb_var.text[n];
       dragTextEfb.textContent = `${efb_var.text.dragAndDropA} ${n}`;
@@ -388,15 +444,15 @@ set_dadfile_fun_efb = (id, indx) => {
       fileEfb = event.dataTransfer.files[0];
       document.getElementById(`${id}_`).files=event.dataTransfer.files;
       dropAreaEfb.classList.add("active");
-      viewfileEfb(id, indx ,fileEfb);
-      valid_file_emsFormBuilder(id ,'msg',fileEfb)
+      viewfileEfb(id, indx ,fileEfb,form_id);
+      valid_file_emsFormBuilder(id ,'msg',fileEfb,form_id)
     });
   }
     reply_attach_efb = (id, indx) => {
         const v= reply_upload_efb(id);
         const lenV=(v.length/20)+10;
         let l = document.getElementById('replay_section__emsFormBuilder');
-        if(l)l.innerHTML +=v  ;
+        if(l)l.insertAdjacentHTML('beforeend', v);
         setTimeout(() => {
           let  dragbtntEfb = document.getElementById("attach_efb");
           let dragInptEfb =  document.getElementById(`resp_file_efb_`);
@@ -409,14 +465,7 @@ set_dadfile_fun_efb = (id, indx) => {
         }, lenV);
       }
   function renderCanvas_efb() {
-    if (draw_mouse_efb) {
-      c2d_contex_efb.moveTo(lastMousePostion_efb.x, lastMousePostion_efb.y);
-      c2d_contex_efb.lineTo(mousePostion_efb.x, mousePostion_efb.y);
-      c2d_contex_efb.stroke();
-      lastMousePostion_efb = mousePostion_efb;
-      const data = document.getElementById(`${canvas_id_efb}_`).toDataURL();
-      document.getElementById(`${canvas_id_efb}-sig-data`).value = data;
-    }
+    return;
   }
 function fun_clear_esign_efb(id) {
     const canvas = document.getElementById(`${id}_`);
@@ -469,19 +518,16 @@ function fun_clear_esign_efb(id) {
        fun_sendBack_emsFormBuilder(o[0])
     }
   }
-  function fun_get_rating_efb(v, no) {
+  async function fun_get_rating_efb(v, no,form_id=0) {
     document.getElementById(`${v}-stared`).value = no;
     document.getElementById(`${v}-star${no}`).checked = true;
     if (typeof (sendBack_emsFormBuilder_pub) != "undefined") {
-      const indx = valj_efb.findIndex(x => x.id_ == v)
-      const o = [{ id_: v, name: valj_efb[indx].name, amount: valj_efb[indx].amount, type: "rating", value: no, session: sessionPub_emsFormBuilder }];
-      fun_sendBack_emsFormBuilder(o[0])
+       if(form_ID_emsFormBuilder!=parseInt(form_id) || valj_efb.length<1)valj_efb = await fun_valj_efb_run(form_id);
+      const indx = valj_efb.findIndex(x => x.id_ == v);
+      const o = [{ id_: v, name: valj_efb[indx].name, amount: valj_efb[indx].amount, type: "rating", value: no, session: sessionPub_emsFormBuilder,form_id:form_id }];
+      fun_sendBack_emsFormBuilder(o[0]);
     }
   }
-
-
-
-
 
   fun_addProgessiveEl_efb=(id,state)=>{
   let newEl = document.createElement('div');
@@ -508,6 +554,8 @@ function fun_clear_esign_efb(id) {
        <button type="button" class="efb btn mt-1 efb ${stock_state_efb ==true ? 'btn-outline-success' :"btn-outline-pink"} fs-6" onclick="closed_resp_emsFormBuilder(${msg_id})" data-state="${stock_state_efb ==true ? 1 :0}" id="respStateEfb" disabled>
            ${stock_state_efb ==true ?  efb_var.text.open : efb_var.text.close}
       </button></div>`
+      const attach_efb = document.getElementById('attach_efb');
+      if(attach_efb) return '';
       if(setting_emsFormBuilder.hasOwnProperty('dsupfile')  && setting_emsFormBuilder.dsupfile==false && efb_var.hasOwnProperty('setting')==false) return '';
       return  `<div class="efb form-check">
       <div class="efb btn btn-light text-dark fs-6 cursor-hand" id="attach_efb">
@@ -533,8 +581,9 @@ function fun_clear_esign_efb(id) {
     }
 }
 function closed_resp_emsFormBuilder(msg_id){
-  const body = `<div class="efb   mb-3"><div class="efb  clearfix">${stock_state_efb==false ? efb_var.text.clsdrspnsM : efb_var.text.clsdrspnsMo }</div></div>`
-  show_modal_efb(body, efb_var.text.close, 'efb bi-x-octagon-fill mx-2', 'deleteBox')
+  const msg = stock_state_efb==false ? efb_var.text.clsdrspnsM : efb_var.text.clsdrspnsMo;
+  const body = efb_build_confirm_body('warning', 'bi-exclamation-triangle', efb_var.text.close, msg, '');
+  show_modal_efb(body, efb_var.text.close, 'efb bi-exclamation-triangle mx-2', 'deleteBox')
   const confirmBtn = document.getElementById('modalConfirmBtnEfb');
   state_modal_show_efb(1)
   confirmBtn.addEventListener("click", (e) => {
@@ -549,7 +598,7 @@ close_resp_efb=(id,s)=>{
   sendBack_emsFormBuilder_pub= ob;
   fun_send_replayMessage_ajax_emsFormBuilder(sendBack_emsFormBuilder_pub, id)
 }
-function fun_point_rating(el) {
+async function fun_point_rating(el) {
   const id = el.dataset.id;
   for (let l of document.querySelectorAll(`[data-id="${id}"]`)) {
       if (Number(l.dataset.point) <= Number(el.dataset.point)) {
@@ -559,10 +608,15 @@ function fun_point_rating(el) {
       }
   }
   document.getElementById(id + '-point-rating').value = el.dataset.point;
+  let form_id =0;
   if(state_efb=='run'){
+    if(valj_efb_new){
+        form_id = el.dataset.formid;
+         if(form_ID_emsFormBuilder!=parseInt(form_id) || valj_efb.length<1) valj_efb= await fun_valj_efb_run(form_id)
+    }
       const v = valj_efb.find(x=>x.id_ ==id);
       if(v.type=="r_matrix"){
-          const o = [{ id_ob: v.id_, name: v.value,id_:v.parent, amount: v.amount, type: v.type, value: el.dataset.point, session: sessionPub_emsFormBuilder }];
+          const o = [{ id_ob: v.id_, name: v.value,id_:v.parent, amount: v.amount, type: v.type, value: el.dataset.point, session: sessionPub_emsFormBuilder, form_id: form_id }];
       fun_sendBack_emsFormBuilder(o[0]);
           const l = valj_efb.filter(obj => {
               return obj.parent == v.parent
@@ -578,12 +632,12 @@ function fun_point_rating(el) {
               }, 500);
           }
       }else{
-      const o = [{ id_: v.id_, name: v.name, amount: v.amount, type: v.type, value: el.dataset.point, session: sessionPub_emsFormBuilder }];
+      const o = [{ id_: v.id_, name: v.name, amount: v.amount, type: v.type, value: el.dataset.point, session: sessionPub_emsFormBuilder, form_id: form_id }];
       fun_sendBack_emsFormBuilder(o[0]);
       }
   }
 }
-function fun_nps_rating(el) {
+async function fun_nps_rating(el){
   const id = el.dataset.id;
   el.className = btnChangerEfb(el.className, pub_bg_button_color_efb);
   for (let l of document.querySelectorAll(`[data-id="${id}"]`)) {
@@ -593,16 +647,19 @@ function fun_nps_rating(el) {
   }
   document.getElementById(id + '-nps-rating').value = el.dataset.point;
   if(state_efb=='run'){
+      const form_id = el.dataset.formid;
+      if(form_ID_emsFormBuilder!=parseInt(form_id) || valj_efb.length<1)valj_efb= await fun_valj_efb_run(form_id)
       const v = valj_efb.find(x=>x.id_ ==id);
-      const o = [{ id_: v.id_, name: v.name, amount: v.amount, type: v.type, value: el.dataset.point, session: sessionPub_emsFormBuilder }];
+      const o = [{ id_: v.id_, name: v.name, amount: v.amount, type: v.type, value: el.dataset.point, session: sessionPub_emsFormBuilder, form_id: form_id }];
       fun_sendBack_emsFormBuilder(o[0]);
   }
 }
 function fun_switch_efb(el){
   if(state_efb!='run'){ return}
   const v = valj_efb.find(x=>x.id_ ==el.dataset.vid);
+  const form_id = el.dataset.formid || 0;
   setTimeout(() => {
-          let o = [{ id_: v.id_, name: v.name, amount: v.amount, type: v.type, value: "1", session: sessionPub_emsFormBuilder }];
+          let o = [{ id_: v.id_, name: v.name, amount: v.amount, type: v.type, value: "1", session: sessionPub_emsFormBuilder, form_id: form_id }];
           if(el.classList.contains('active')==false){
             o[0].value="0";
           }
@@ -612,77 +669,93 @@ function fun_switch_efb(el){
 function create_intlTelInput_efb(rndm,iVJ,previewSate,corner){
   let disabled = valj_efb[iVJ].hasOwnProperty('disabled') &&  valj_efb[iVJ].disabled==1? 'disabled' : '';
   load_intlTelInput_efb(rndm,iVJ)
+  const formId = valj_efb[iVJ].form_id || 0;
   return `
-  <input type="phone" class="efb  input-efb intlPhone px-2 mb-0 emsFormBuilder_v form-control ${valj_efb[iVJ].el_border_color}  ${valj_efb[iVJ].el_height} ${corner} ${valj_efb[iVJ].el_text_color} ${valj_efb[iVJ].required == 1 || valj_efb[iVJ].required == true ? 'required' : ''}  efbField efb1 ${valj_efb[iVJ].classes.replace(`,`, ` `)}" data-css="${rndm}" data-id="${rndm}-el" data-vid='${rndm}' id="${rndm}_" aria-required="${valj_efb[iVJ].required==1 ? true : false}" aria-label="${valj_efb[iVJ].name}"  ${valj_efb[iVJ].message!='' ? `aria-describedby="${valj_efb[iVJ].id_}-des"` : ""}  ${valj_efb[iVJ].value.length > 0 ? value = `"${valj_efb[iVJ].value}"` : ''} ${previewSate != true ? 'readonly' : ''} ${disabled}>
-  <input type="phone" class="efb  input-efb intlPhone px-2 mb-0 emsFormBuilder_v form-control ${valj_efb[iVJ].el_border_color}  ${valj_efb[iVJ].el_height} ${corner} ${valj_efb[iVJ].el_text_color} ${valj_efb[iVJ].required == 1 || valj_efb[iVJ].required == true ? 'required' : ''}  efbField d-none efb1 ${valj_efb[iVJ].classes.replace(`,`, ` `)}" data-css="${rndm}" data-id="${rndm}-el" data-vid='${rndm}' id="${rndm}-code" placeholder="verify"  ${valj_efb[iVJ].value.length > 0 ? value = `"${valj_efb[iVJ].value}"` : ''} ${previewSate != true ? 'readonly' : ''} ${disabled}>
+  <input type="phone" class="efb  input-efb intlPhone px-2 mb-0 emsFormBuilder_v form-control ${valj_efb[iVJ].el_border_color}  ${valj_efb[iVJ].el_height} ${corner} ${valj_efb[iVJ].el_text_color} ${valj_efb[iVJ].required == 1 || valj_efb[iVJ].required == true ? 'required' : ''}  efbField efb1 ${valj_efb[iVJ].classes.replace(`,`, ` `)}" data-css="${rndm}" data-id="${rndm}-el" data-formid="${formId}" data-vid='${rndm}' id="${rndm}_" aria-required="${valj_efb[iVJ].required==1 ? true : false}" aria-label="${valj_efb[iVJ].name}"  ${valj_efb[iVJ].message!='' ? `aria-describedby="${valj_efb[iVJ].id_}-des"` : ""}  ${valj_efb[iVJ].value.length > 0 ? value = `"${valj_efb[iVJ].value}"` : ''} ${previewSate != true ? 'readonly' : ''} ${disabled}>
+  <input type="phone" class="efb  input-efb intlPhone px-2 mb-0 emsFormBuilder_v form-control ${valj_efb[iVJ].el_border_color}  ${valj_efb[iVJ].el_height} ${corner} ${valj_efb[iVJ].el_text_color} ${valj_efb[iVJ].required == 1 || valj_efb[iVJ].required == true ? 'required' : ''}  efbField d-none efb1 ${valj_efb[iVJ].classes.replace(`,`, ` `)}" data-css="${rndm}" data-id="${rndm}-el" data-formid="${formId}" data-vid='${rndm}' id="${rndm}-code" placeholder="verify"  ${valj_efb[iVJ].value.length > 0 ? value = `"${valj_efb[iVJ].value}"` : ''} ${previewSate != true ? 'readonly' : ''} ${disabled}>
   <button id="${rndm}-btn" type="submit" class="efb d-none">Submit</button>
  `;
 }
-load_intlTelInput_efb=(rndm,iVJ)=>{
- const onlyCountries= valj_efb[iVJ].hasOwnProperty("c_c") && valj_efb[iVJ].c_c.length>0 ? valj_efb[iVJ].c_c : "";
-  setTimeout(()=>{
-     const iti= window.intlTelInput(document.getElementById(rndm+"_"), {
-    onlyCountries:onlyCountries,
-    autoHideDialCode: true,
-    placeholderNumberType:"MOBILE",
-    utilsScript: efb_var.images.utilsJs,
-  });
-  document.getElementById(rndm+"_").addEventListener('blur', function() {
-  const  errorMap = [efb_var.text.cpnnc, efb_var.text.icc,efb_var.text.cpnts,efb_var.text.cpntl, efb_var.text.cpnnc];
-  document.getElementById(rndm+"_").classList.remove("border-danger");
-  document.getElementById(rndm+"_").classList.remove("border-success");
-  document.getElementById(rndm+"_-message").innerHTML="";
-  document.getElementById(rndm+"_-message").classList.remove("d-block");
-  document.getElementById(rndm+"_-message").classList.add("d-none");
-    if (document.getElementById(rndm+"_").value.trim()) {
-      if (iti.isValidNumber()) {
-        document.getElementById(rndm+"_").classList.add("border-success");
-        const mobile_no = document.getElementById(rndm+"_").value.replace(/^0+/, '')
-          let value = `+${iti.s.dialCode}${mobile_no}`;
-          fun_sendBack_emsFormBuilder({ id_: valj_efb[iVJ].id_, name: valj_efb[iVJ].name, id_ob: valj_efb[iVJ].id_, amount: valj_efb[iVJ].amount, type: valj_efb[iVJ].type, value: value, session: sessionPub_emsFormBuilder });
-      } else {
-        document.getElementById(rndm+"_").classList.add("border-danger");
-        let errorCode = iti.getValidationError()
-        errorCode= errorMap[errorCode] ? errorMap[errorCode] :errorMap[0];
-        document.getElementById(rndm+"_-message").classList.remove("d-none");
-        document.getElementById(rndm+"_-message").classList.add("d-block");
-        document.getElementById(rndm+"_-message").innerHTML=errorCode;
-        let inx = get_row_sendback_by_id_efb(valj_efb[iVJ].id_);
-        if (inx != -1) {
-          sendBack_emsFormBuilder_pub.splice(inx, 1)
-        }
-      }
-    }
-  });
-  },800)
-}
-fun_imgRadio_efb=(id ,link,row)=>{
-  const u = (url)=>{
-    url = url.replace(/(http:@efb@)+/g, 'http://');
-    url = url.replace(/(https:@efb@)+/g, 'https://');
-    url = url.replace(/(@efb@)+/g, '/');
-    return url;
-   }
-  let value = row.hasOwnProperty('value')  ? row.value : efb_var.text.newOption ?? '';
-  let sub_value = row.hasOwnProperty('sub_value') ? row.sub_value : efb_var.text.sampleDescription ?? '';
 
-  link = link.includes('http')==false || link.length <5 ?  u(efb_var.images.head) : u(row.src);
+load_intlTelInput_efb = (rndm, iVJ) => {
+  setTimeout(() => {
+    const onlyCountries = valj_efb[iVJ].hasOwnProperty("c_c") && valj_efb[iVJ].c_c.length > 0 ? valj_efb[iVJ].c_c : "";
+    let iti;
+    const el_mobile = document.getElementById(rndm + "_");
+    if(efb_var.length<1) efb_var = ajax_object_efm
+    const ulitisJs = efb_var.images.hasOwnProperty('utilsJs') ? efb_var.images.utilsJs  : el_mobile.dataset.utilsjs;
 
-  return `
-    <label class="efb  " id="${id}_lab" for="${id}">
-    <div class="efb card col-md-3 mx-0 my-1 w-100" style="">
-    <img src="${link}" alt="${value}" style="width: 100%"  id="${id}_img">
-    <div class="efb card-body">
-        <h5 class="efb card-title text-dark" id="${id}_value">${value}</h5>
-        <p class="efb card-text" id="${id}_value_sub">${sub_value}</p>
-    </div>
-    </div>
-    </label>`;
-}
+      iti = window.intlTelInput(el_mobile, {
+          onlyCountries: onlyCountries,
+          nationalMode: true,
+          autoPlaceholder: "polite",
+          placeholderNumberType: "MOBILE",
+          loadUtils: () => import(ulitisJs),
+      });
+
+      el_mobile.addEventListener('blur', function () {
+          const errorMap = [
+              efb_var.text.cpnnc,
+              efb_var.text.icc,
+              efb_var.text.cpnts,
+              efb_var.text.cpntl,
+              efb_var.text.cpnnc
+          ];
+
+          el_mobile.classList.remove("border-danger", "border-success");
+          const messageEl = document.getElementById(rndm + "_-message");
+          messageEl.innerHTML = "";
+          messageEl.classList.remove("d-block");
+          messageEl.classList.add("d-none");
+
+          if (el_mobile.value.trim()) {
+              const form_id = el_mobile.dataset.formid ?? 0;
+              if (iti.isValidNumber()) {
+                  el_mobile.classList.add("border-success");
+
+                  const countryData = iti.getSelectedCountryData();
+                  const countryCode = countryData.dialCode;
+                  const iso2 = countryData.iso2;
+                  const countryName = countryData.name;
+
+                  const value = iti.getNumber();
+                  const nationalNumber = iti.getNumber(window.intlTelInput?.utils?.numberFormat?.NATIONAL || 1);
+
+                  iVJ = valj_efb.findIndex(x => x.id_ == rndm);
+                  fun_sendBack_emsFormBuilder({
+                      id_: valj_efb[iVJ].id_,
+                      name: valj_efb[iVJ].name,
+                      id_ob: valj_efb[iVJ].id_,
+                      amount: valj_efb[iVJ].amount,
+                      type: valj_efb[iVJ].type,
+                      value: value,
+                      session: sessionPub_emsFormBuilder,
+                      form_id: form_id
+                  });
+              } else {
+                  el_mobile.classList.add("border-danger");
+
+                  let errorCode = iti.getValidationError();
+                  errorCode = errorMap[errorCode] ? errorMap[errorCode] : errorMap[0];
+
+                  messageEl.innerHTML = errorCode;
+                  messageEl.classList.remove("d-none");
+                  messageEl.classList.add("d-block");
+
+                  let inx = get_row_sendback_by_id_efb(rndm);
+                  if (inx !== -1) {
+                      sendBack_emsFormBuilder_pub.splice(inx, 1);
+                  }
+              }
+          }
+      });
+  }, 800);
+};
+
 add_new_imgRadio_efb=(idin, value, id_ob, tag, parentsID)=>{
  const idx = valj_efb.findIndex(x=>x.id_==id_ob)
  const temp = fun_imgRadio_efb(id_ob,"null",valj_efb[idx]);
-  return`<div class="efb  form-check imgRadio col-md-3" data-parent="${parentsID}" data-id="${id_ob}"  id="${id_ob}-v">
+  return`<div class="efb  form-check imgRadio col-md-4 mx-0 px-2 efb2" data-parent="${parentsID}" data-id="${id_ob}"  id="${id_ob}-v">
   <input class="efb  form-check-input " type="radio" name="${parentsID}"  value="${value}" id="${idin}" data-id="${idin}-id" data-op="${idin}" disabled>
   ${temp}
   </div>`;
@@ -695,33 +768,69 @@ function terms_el_pro_efb(previewSate, rndm,iVJ){
   <label class="efb  form-check-label" for="${rndm}_">${valj_efb[iVJ].value}</label>
   </div>`;
 }
-fun_check_link_city_efb=(iso2_country ,iso2_statePove , indx)=>{
+const fun_check_link_city_efb = async (iso2_country, iso2_statePove, indx, form_id) => {
+  if (form_ID_emsFormBuilder !== parseInt(form_id)) {
+    valj_efb = await fun_valj_efb_run(form_id);
+  }
 
- let indx_state =-1;
-  for (let i = indx+1; i < valj_efb.length; i++) {
-    if(valj_efb[i].type=='option'){
-    }else if((valj_efb[i].type=='city' || valj_efb[i].type=='cityList') && valj_efb[i].amount>valj_efb[indx].amount){
-      indx_state =i;
-      break;
-    }else{
-      return;
+  if (!Array.isArray(valj_efb) || indx < 0 || indx >= valj_efb.length) return;
+
+  let indx_state = -1;
+  let id_city = '';
+
+  const base = valj_efb[indx];
+  const amount = Number(base.amount) || 0;
+
+  let i = indx;
+  const len = valj_efb.length;
+  while (i < len) {
+    const item = valj_efb[i];
+    if (Number(item.amount) > amount) {
+      const t = item.type;
+      if (t === 'city' || t === 'cityList') {
+        indx_state = i;
+        id_city = item.id_;
+        break;
+      }
+    }
+    i++;
+  }
+
+  if (indx_state === -1) return;
+  const row = valj_efb[indx_state];
+  const cc = String(iso2_country   || '').toLowerCase();
+  const ss = String(iso2_statePove || '').toLowerCase();
+  const rc = String(row.country    || '').toLowerCase();
+  const rs = String(row.statePov   || '').toLowerCase();
+  if (rc === cc && rs === ss) return;
+  if (Array.isArray(sendBack_emsFormBuilder_pub) && id_city) {
+    sendBack_emsFormBuilder_pub = sendBack_emsFormBuilder_pub.filter(obj => obj.id_ !== id_city);
+  }
+  row.country = iso2_country;
+  row.statePov = iso2_statePove;
+  for (let j = valj_efb.length - 1; j >= 0; j--) {
+    const it = valj_efb[j];
+    if (it && it.parent === row.id_) {
+      valj_efb.splice(j, 1);
     }
   }
-  if(indx_state==-1)return;
 
+  callFetchCitiesEfb(`${row.id_}_options`, iso2_country, iso2_statePove, indx_state, 'pubSelect');
+};
 
-  Object.assign(valj_efb[indx_state], {country:iso2_country,statePov:iso2_statePove});
-
-
-  for(let i =indx_state; i < valj_efb.length; i++){
-    if(valj_efb[i].hasOwnProperty('parent') && valj_efb[i].parent==valj_efb[indx_state].id_){
-      valj_efb.splice(i,1);
-      i--;
+function clean_options_select_efb(id){
+  let el = document.getElementById(id+'_options');
+  if(el){
+    el.innerHTML = `<option value="">${efb_var.text.nothingSelected}</option>`;
+    for(let i =0; i < valj_efb.length; i++){
+      if(valj_efb[i].hasOwnProperty('parent') && valj_efb[i].parent==id){
+        valj_efb.splice(i,1);
+        i--;
+      }
     }
   }
-    callFetchCitiesEfb(valj_efb[indx_state].id_+'_options', iso2_country,iso2_statePove, indx_state,'pubSelect');
 }
-async function callFetchCitiesEfb(idField,iso2_country,iso2_statePove, indx_state,fieldType ) {
+async function callFetchCitiesEfb(idField,iso2_country,iso2_statePove, indx_state,fieldType,autofilled=false) {
   let state_el= document.getElementById(idField)
   if(state_el!=null){
   state_el.innerHTML = "";
@@ -729,7 +838,29 @@ async function callFetchCitiesEfb(idField,iso2_country,iso2_statePove, indx_stat
   state_el.classList.add('is-loading');
   state_el.disabled=true;
   }
-  let result = await  fetch_json_from_url_efb(`https://cdn.jsdelivr.net/gh/hassantafreshi/Json-List-of-countries-states-and-cities-in-the-world@main/json/cites/${iso2_country.toLowerCase()}/${iso2_statePove.toLowerCase()}.json`)
+
+  if(autofilled){
+    const id_valj = valj_efb[indx_state].id_;
+    const s_index =  sendBack_emsFormBuilder_pub.findIndex(x=>x.id_==id_valj);
+    if(s_index!=-1){
+      const row_sb = sendBack_emsFormBuilder_pub[s_index-1];
+        if(s_index-1>1 && row_sb.type==='stateProvince'){
+        iso2_country = row_sb.cont_;
+        iso2_statePove = row_sb.statePrev_
+        }
+    }
+
+  }
+  let url = efb_var.zone_area ?? ajax_object_efm.zone_area
+  url = url+`json/cites/${iso2_country.toLowerCase()}/${iso2_statePove.toLowerCase()}.json`;
+
+  const state_check = fun_state_check_addon_AdnOF_setting_efb();
+  if(state_check){
+     url =efb_var.images.plugin_url+ `/vendor/offline/json/cites/${iso2_country.toLowerCase()}/${iso2_statePove.toLowerCase()}.json`;
+     url =url.replaceAll('//vendor','/vendor');
+    }
+   clean_options_select_efb(valj_efb[indx_state].id_);
+  let result = await  fetch_json_from_url_efb(url)
   if(result.s==false){
     alert_message_efb('',efb_var.text.offlineSend,5,'danger')
     return;
@@ -740,6 +871,19 @@ async function callFetchCitiesEfb(idField,iso2_country,iso2_statePove, indx_stat
       valj_efb.splice(i,1);
       i--;
     }
+  }
+
+  if(autofilled){
+    const id_valj = valj_efb[indx_state].id_;
+    const s_index =  sendBack_emsFormBuilder_pub.findIndex(x=>x.id_==id_valj);
+    if(s_index!=-1){
+      const row_sb = sendBack_emsFormBuilder_pub[s_index-1];
+        if(s_index-1>1 && row_sb.type==='stateProvince'){
+        iso2_country = row_sb.cont_;
+        iso2_statePove = row_sb.statePrev_
+        }
+    }
+
   }
   for (const key in result.r) {
     const n = efb_remove_forbidden_chrs(result.r[key].n);
@@ -768,12 +912,14 @@ async function callFetchCitiesEfb(idField,iso2_country,iso2_statePove, indx_stat
           "l": l,
       });
     }else if(fieldType=="getCitiesEfb"){
-      opt +=`<option value="${id.toLowerCase()}" ${ id.toLowerCase()==valj_efb[indx_state].statePov.toLowerCase() ? `selected` : ''}>${value}</option>`
+      const selected = id.toLowerCase()==valj_efb[indx_state].statePov.toLowerCase()  ? 'selected' : '';
+      opt +=`<option value="${id.toLowerCase()}" ${selected}>${value}</option>`
     }
   }
   if(fieldType=="pubSelect"){
+
     Object.assign(valj_efb[indx_state],{'linked':true});
-     opt += statePrevion_el_pro_efb(valj_efb[indx_state].id_, '', '', '', true);
+     opt += statePrevion_el_pro_efb(valj_efb[indx_state].id_, '', '', '', true,autofilled);
   }
   if(state_el!=null){
     state_el.innerHTML='';
@@ -789,8 +935,10 @@ async function callFetchCitiesEfb(idField,iso2_country,iso2_statePove, indx_stat
   }
   return state_el!=null ? result : opt;
 }
-fun_check_link_state_efb=(iso2_country , indx)=>{
+fun_check_link_state_efb=async(iso2_country , indx,form_id)=>{
+ if(!iso2_country) return;
  let indx_state =-1;
+ if(form_ID_emsFormBuilder!=parseInt(form_id) || valj_efb.length<1 )valj_efb= await fun_valj_efb_run(form_id);
   for (let i = indx+1; i < valj_efb.length; i++) {
     if(valj_efb[i].type=='option'){
     }else if((valj_efb[i].type=='statePro' || valj_efb[i].type=='stateProvince') && valj_efb[i].amount>valj_efb[indx].amount){
@@ -800,8 +948,10 @@ fun_check_link_state_efb=(iso2_country , indx)=>{
       return;
     }
   }
-  let state_el = document.getElementById(valj_efb[indx_state].id_+'_options');
 
+  if(indx_state === -1 || !valj_efb[indx_state]) return;
+  let state_el = document.getElementById(valj_efb[indx_state].id_+'_options');
+   if(valj_efb[indx_state].country==iso2_country) return;
   valj_efb[indx_state].country=iso2_country;
   for(let i =0; i < valj_efb.length; i++){
     if(valj_efb[i].hasOwnProperty('parent') && valj_efb[i].parent==valj_efb[indx_state].id_){
@@ -809,99 +959,167 @@ fun_check_link_state_efb=(iso2_country , indx)=>{
       i--;
     }
   }
-
-    callFetchStatesPovEfb(valj_efb[indx_state].id_+'_options', iso2_country, indx_state,'pubSelect');
+   await callFetchStatesPovEfb(valj_efb[indx_state].id_+'_options', iso2_country, indx_state,'pubSelect');
 }
-async function callFetchStatesPovEfb(idField,iso2_country, indx_state,fieldType ) {
+async function callFetchStatesPovEfb(idField,iso2_country, indx_state,fieldType,autofilled=false) {
+  if(!iso2_country) return;
   let state_el= document.getElementById(idField)
   if(state_el!=null){
-  state_el.innerHTML = `<option value="">${efb_var.text.loading}</option>`;
-  state_el.classList.add('is-loading');
-  state_el.disabled=true;
+    state_el.innerHTML = `<option value="">${efb_var.text.loading}</option>`;
+    state_el.classList.add('is-loading');
+    state_el.disabled=true;
   }
-  let result = await  fetch_json_from_url_efb(`https://cdn.jsdelivr.net/gh/hassantafreshi/Json-List-of-countries-states-and-cities-in-the-world@main/json/states/${iso2_country.toLowerCase()}.json`)
-  if(result.s==false){
-    alert_message_efb('',efb_var.text.offlineSend,5,'danger')
-    return;
+  iso2_country = iso2_country.toLowerCase()
+  if(sessionStorage.getItem('fetech_result_iso2_country')==iso2_country && sessionStorage.getItem('fetech_result_states')!=null){
+    const result = JSON.parse(sessionStorage.getItem('fetech_result_states'));
+    return parsing_result_json_smart_address_efb(fieldType,indx_state,idField,result, autofilled);
   }
-  let opt = `<option selected disabled>${efb_var.text.nothingSelected}</option>`;
-  for (const key in result.r) {
-    const n = efb_remove_forbidden_chrs(result.r[key].n);
-    const l = efb_remove_forbidden_chrs(result.r[key].l);
-    let value = result.r[key].n==result.r[key].l || result.r[key].l.length<1 ? n : `${l} (${n})`;
-    let id_op= result.r[key].n.replaceAll(' ','_').toLowerCase();
-    id_op = efb_remove_forbidden_chrs(id_op).replaceAll(' ','_');
-    const rnd = Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 2);
-    const id = efb_remove_forbidden_chrs(result.r[key].s.toLowerCase()).replaceAll(' ','_');
-    if(valj_efb[indx_state].hasOwnProperty('stylish') && Number(valj_efb[indx_state].stylish)>1){
-     value =  Number(valj_efb[indx_state].stylish)==2 && l.length>1 ? l : n;
+  let url = efb_var.zone_area ?? ajax_object_efm.zone_area
+  url =url +`json/states/${iso2_country}.json`
+  const state_check = fun_state_check_addon_AdnOF_setting_efb();
+  if(state_check){
+    url =efb_var.images.plugin_url+ `/vendor/offline/json/states/${iso2_country}.json`;
+    url =url.replaceAll('//vendor','/vendor');
+   }
+   valj_efb[indx_state].hasOwnProperty('country') ? valj_efb[indx_state].country=iso2_country : Object.assign(valj_efb[indx_state], {country:iso2_country});
+   clean_options_select_efb(valj_efb[indx_state].id_);
+
+   try {
+    let result = await  fetch_json_from_url_efb(url)
+    if(result.s==false){
+      alert_message_efb('',efb_var.text.offlineSend,5,'danger')
+      return;
     }
-    if(fieldType=="pubSelect"){
-      valj_efb.push(
-        {
-          "id_": id+'-efb'+rnd,
-          "dataId":  id+'-efb'+rnd+"-id",
-          "parent":valj_efb[indx_state].id_,
-          "type": "option",
-          "value": value,
-          's2': id,
-          "id_op": id_op,
-          "step": valj_efb[indx_state].step,
-          "amount": valj_efb[indx_state].amount,
-          "n":n,
-          "l": l,
-      });
-    }else if(fieldType=="getStatesPovEfb"){
-      opt +=`<option value="${id.toLowerCase()}" ${ id.toLowerCase()==valj_efb[indx_state].statePov.toLowerCase() ? `selected` : ''}>${value}</option>`
-    }
-  }
-  if(fieldType=="pubSelect"){
-     Object.assign(valj_efb[indx_state],{'linked':true});
-     opt += statePrevion_el_pro_efb(valj_efb[indx_state].id_, '', '', '', true);
-  }
-  if(state_el!=null){
-    state_el.innerHTML=opt;
-    state_el.classList.remove('is-loading');
-  state_el.disabled = false;
-  }else{
-    setTimeout(() => {
-      state_el = document.getElementById(idField);
-      state_el.innerHTML=opt;
-      state_el.classList.remove('is-loading');
-    }, 2000);
-  }
+  const json_result =JSON.stringify(result)
+  sessionStorage.setItem('fetech_result_states', json_result);
+  sessionStorage.setItem('fetech_result_iso2_country', iso2_country);
 
-
- const f= document.getElementById(idField)
- if(f!=null && f.dataset.hasOwnProperty("vid")){
-  const id = f.dataset.vid;
-
-
-  fun_remove_row_sendback_efb(id)
-
- }
-
-  return state_el!=null ? result : opt;
+  return parsing_result_json_smart_address_efb(fieldType,indx_state,idField,result, autofilled);
+} catch (error) {
+  alert_message_efb('', efb_var.text.offlineSend, 5, 'warning');
 }
 
+return false;
+}
 
+async function parsing_result_json_smart_address_efb(fieldType,indx_state,idField,result, autofilled=false) {
+let state_el= document.getElementById(idField)
 
+  let opt = `<option selected disabled>${efb_var.text.nothingSelected}</option>`;
+  for (const key in result.r) {
+      const n = efb_remove_forbidden_chrs(result.r[key].n);
+      const l = efb_remove_forbidden_chrs(result.r[key].l);
+      let value = result.r[key].n==result.r[key].l || result.r[key].l.length<1 ? n : `${l} (${n})`;
+      let id_op= result.r[key].n.replaceAll(' ','_').toLowerCase();
+      id_op = efb_remove_forbidden_chrs(id_op).replaceAll(' ','_');
+      const rnd = Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 2);
+      const id = efb_remove_forbidden_chrs(result.r[key].s.toLowerCase()).replaceAll(' ','_');
+      if(valj_efb[indx_state].hasOwnProperty('stylish') && Number(valj_efb[indx_state].stylish)>1){
+      value =  Number(valj_efb[indx_state].stylish)==2 && l.length>1 ? l : n;
+      }
+      if(fieldType=="pubSelect"){
+        valj_efb.push(
+          {
+            "id_": id+'-efb'+rnd,
+            "dataId":  id+'-efb'+rnd+"-id",
+            "parent":valj_efb[indx_state].id_,
+            "type": "option",
+            "value": value,
+            's2': id,
+            "id_op": id_op,
+            "step": valj_efb[indx_state].step,
+            "amount": valj_efb[indx_state].amount,
+            "n":n,
+            "l": l,
+        });
+      }else if(fieldType=="getStatesPovEfb"){
+        opt +=`<option value="${id.toLowerCase()}" ${ id.toLowerCase()==valj_efb[indx_state].statePov.toLowerCase() ? `selected` : ''}>${value}</option>`
+      }
+    }
+    if(fieldType=="pubSelect"){
+      Object.assign(valj_efb[indx_state],{'linked':true});
+      opt += statePrevion_el_pro_efb(valj_efb[indx_state].id_, '', '', '', true,autofilled);
+    }
+    if(state_el!=null){
+      state_el.innerHTML=opt;
+      state_el.classList.remove('is-loading');
+    state_el.disabled = false;
+    }else{
+      setTimeout(() => {
+        state_el = document.getElementById(idField);
+        state_el.innerHTML=opt;
+        state_el.classList.remove('is-loading');
+      }, 2000);
+    }
 
+ const f= document.getElementById(idField)
+ if(f!=null && f.dataset.hasOwnProperty("vid") && autofilled==false){
+  const id = f.dataset.vid;
+  fun_remove_row_sendback_efb(id)
+  return state_el!=null ? result : opt;
+ }
+}
+
+function efbLoadLeafletFallback(callback) {
+  if (window.efbLeafletLoading) {
+    return;
+  }
+  window.efbLeafletLoading = true;
+
+  var link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://unpkg.com/leaflet@1.7.1/dist/leaflet.css';
+  document.head.appendChild(link);
+
+  var script = document.createElement('script');
+  script.src = 'https://unpkg.com/leaflet@1.7.1/dist/leaflet.js';
+  script.onload = function() {
+    window.efbLeafletLoading = false;
+    if (callback && typeof callback === 'function') {
+      setTimeout(callback, 100);
+    }
+  };
+  script.onerror = function() {
+    window.efbLeafletLoading = false;
+    let containers = document.querySelectorAll('[id$="-f"]');
+    containers.forEach(el => {
+      if (el) {
+        el.innerHTML = '<div style="padding: 20px; background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; border-radius: 4px; margin: 10px 0;"><strong>Map Error:</strong> Cannot load map library. Please check your internet connection and refresh the page.</div>';
+      }
+    });
+  };
+  document.head.appendChild(script);
+}
 
 function efbCreateMap(id ,r ,viewState) {
-  var efbInitialLat = viewState==true ? r.value[0].lat : r.lat;
-  var efbInitialLng = viewState==true ? r.value[0].lng :r.lng;
-  var efbInitialZoom = viewState==true ? 18 :r.zoom;
+
+  if (typeof L === 'undefined') {
+    efbLoadLeafletFallback(() => {
+      efbCreateMap(id, r, viewState);
+    });
+    return;
+  }
+
+  var efbInitialLat = viewState==true ? r.value=='' ? r.lat : r.value[0].lat : r.lat;
+  var efbInitialLng = viewState==true ? r.value=='' ? r.lng : r.value[0].lng :r.lng;
+  var efbInitialZoom = viewState==true ? 12 :r.zoom;
   var efbAllowAddingMarkers = Number(r.mark)>0 ? true :false;
   if(viewState==true && efbAllowAddingMarkers==true)efbAllowAddingMarkers=false;
   const efbLanguage = efb_var.language.length==2 ? efb_var.language : efb_var.language.slice(0,2) ;
   var efbMapContainer = document.createElement('div');
   efbMapContainer.className = 'map-container';
+  efbMapContainer.style.cssText = 'width:100%;height:350px;position:relative;';
   var efbMapDiv = document.createElement('div');
   efbMapDiv.dataset.id =id+"-mapsdiv"
   efbMapDiv.className = 'map';
+  efbMapDiv.style.cssText = 'width:100%;height:100%;';
   efbMapContainer.appendChild(efbMapDiv);
-  document.getElementById(id+'-f').appendChild(efbMapContainer);
+  let el_maps = document.getElementById(id+'-f');
+  const form_id = el_maps.dataset.formid;
+  el_maps.appendChild(efbMapContainer);
+
+  efbMapDiv.offsetHeight;
+  efbMapContainer.offsetWidth;
 
   var efbMap = L.map(efbMapDiv).setView([efbInitialLat, efbInitialLng], efbInitialZoom);
   var efbOsmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -924,7 +1142,6 @@ function efbCreateMap(id ,r ,viewState) {
 
   L.control.layers(efbBaseLayers, efbOverlays).addTo(efbMap);
 
-
   var efbMap_dv = document.querySelector(`[data-id="${id}-mapsdiv"]`);
   efbMap_dv.dataset.leaflet =efbMap._leaflet_id;
 
@@ -932,19 +1149,56 @@ function efbCreateMap(id ,r ,viewState) {
   efbSearchDiv.onAdd = function (efbMap) {
       var efbDiv = L.DomUtil.create('div', 'custom-control');
       efbDiv.dataset.id = id+'-contorller';
+      efbDiv.classList.add('efb-searchbox');
       if (efbAllowAddingMarkers) {
           efbDiv.innerHTML = `
-              <a ${ state_efb == 'view' ?'':`onclick="efbLocateMe(${efbMap._leaflet_id} , '${id}')"`}  class="efb btn btn-sm btn-dark text-light fs-6"><i class=" fs-6   efb bi-crosshair"></i></a>
-              <input type="text" id="efb-search-${efbMap._leaflet_id}" placeholder="${efb_var.text.eln}" class="efb p-1  border-d efb-square fs-6" ${ state_efb == 'view' ?'disabled':''}>
-              <a ${ state_efb == 'view' ?'':`onclick="efbSearchLocation(${efbMap._leaflet_id})"`}  class="efb btn btn-sm btn-secondary text-light fs-6">${efb_var.text.search}</a>
-              <a ${ state_efb == 'view' ?'':`onclick="efbClearMarkers(${efbMap._leaflet_id} , '${id}')"`}  class="efb btn btn-sm btn-danger text-light fs-6">${efb_var.text.deletemarkers}</a>
-              <div id="efb-error-message-${efbMap._leaflet_id}" class="error-message d-none"></div>
+             <div class="efb d-flex justify-content-start align-items-center flex-nowrap flex-row" style="gap: 4px; position: relative;">
+              <!-- Locate Me Button -->
+              <a ${state_efb == 'view' ? '' : `onclick="efbLocateMe(${efbMap._leaflet_id}, '${id}')"`}
+                class="efb btn btn-sm btn-dark text-light d-flex align-items-center justify-content-center flex-shrink-0"
+                title="Locate Me"
+                style="min-width: 32px; height: 32px; padding: 0;">
+                <i class="efb bi-crosshair" style="font-size: 14px;"></i>
+              </a>
+
+              <!-- Search Input Field -->
+              <input type="text" id="efb-search-${efbMap._leaflet_id}"
+                placeholder="${efb_var.text.eln}"
+                class="efb form-control flex-grow-1"
+                style="min-width: 100px; height: 32px; font-size: 13px; padding: 4px 8px;"
+                ${state_efb == 'view' ? 'disabled' : ''}>
+
+              <!-- Search Button -->
+              <a ${state_efb == 'view' ? '' : `onclick="efbSearchLocation(${efbMap._leaflet_id})"`}
+                class="efb btn btn-sm btn-secondary text-light d-flex align-items-center justify-content-center flex-shrink-0"
+                title="${efb_var.text.search}"
+                style="min-width: 32px; height: 32px; padding: 0;">
+                <i class="efb bi-search d-block d-md-none" style="font-size: 14px;"></i>
+                <span class="efb d-none d-md-block" style="font-size: 11px; white-space: nowrap; padding: 0 4px;">${efb_var.text.search}</span>
+              </a>
+
+              <!-- Clear Markers Button -->
+              <a ${state_efb == 'view' ? '' : `onclick="efbClearMarkers(${efbMap._leaflet_id}, '${id}')"`}
+                class="efb btn btn-sm btn-danger text-light d-flex align-items-center justify-content-center flex-shrink-0"
+                title="${efb_var.text.deletemarkers}"
+                style="min-width: 32px; height: 32px; padding: 0;">
+                <i class="efb bi-trash d-block d-md-none" style="font-size: 14px;"></i>
+                <span class="efb d-none d-md-block" style="font-size: 11px; white-space: nowrap; padding: 0 4px;">${efb_var.text.deletemarkers}</span>
+              </a>
+
+              <!-- Error Message (hidden by default) -->
+              <div id="efb-error-message-${efbMap._leaflet_id}"
+                class="efb position-absolute error-message text-danger d-none"
+                style="font-size: 12px; top: 100%; left: 0; right: 0; background: rgba(248, 249, 250, 0.95); padding: 4px 8px; border-radius: 4px; margin-top: 2px; z-index: 1001;"></div>
+          </div>
           `;
           efbDiv.classList.remove('d-none');
 
       } else {
           efbDiv.innerHTML = `
-              <div id="efb-error-message-${efbMap._leaflet_id}" class="error-message  d-none"></div>
+              <div id="efb-error-message-${efbMap._leaflet_id}"
+                class="efb w-100 error-message text-danger d-none"
+                style="font-size: 12px; padding: 8px;"></div>
           `;
           efbDiv.classList.add('d-none');
           efbDiv.classList.add('efb');
@@ -969,35 +1223,46 @@ function efbCreateMap(id ,r ,viewState) {
 
         efbMap.on('click', function(e) {
             var efbLatlng = e.latlng;
-            efbAddMarker(efbLatlng.lat, efbLatlng.lng, efbMap._leaflet_id , efbAllowAddingMarkers ,r);
+            efbAddMarker(efbLatlng.lat, efbLatlng.lng, efbMap._leaflet_id , efbAllowAddingMarkers ,r,form_id);
         });
     } else {
 
         efbAddInitialMarker(efbInitialLat, efbInitialLng, efbMap._leaflet_id);
     }
   }else{
-    Object.assign(r ,{mark:r.value.length});
-    for (let i = 0; i < r.value.length; i++) {
-      efbAddMarker(r.value[i].lat, r.value[i].lng, efbMap._leaflet_id, i+1 ,r);
+    const len = r.value.length;
+    if(len>0){
+      Object.assign(r ,{mark:len});
+      for (let i = 0; i <len; i++) {
+        efbAddMarker(r.value[i].lat, r.value[i].lng, efbMap._leaflet_id, i+1 ,r,form_id);
+      }
     }
   }
 
+  if (typeof L.control.fullscreen === 'function') {
+    var efbFullscreenControl = L.control.fullscreen({
+        title: {
+            'false': 'Go Fullscreen',
+            'true': 'Exit Fullscreen'
+        }
+    });
+    efbMap.addControl(efbFullscreenControl);
 
-  var efbFullscreenControl = L.control.fullscreen({
-      title: {
-          'false': 'Go Fullscreen',
-          'true': 'Exit Fullscreen'
-      }
-  });
-  efbMap.addControl(efbFullscreenControl);
+    efbMap.on('enterFullscreen', function(){
+    });
 
-  efbMap.on('enterFullscreen', function(){
-  });
+    efbMap.on('exitFullscreen', function(){
+    });
+  } else {
+  }
 
-  efbMap.on('exitFullscreen', function(){
+  efbMap.whenReady(function() {
+    efbMap.invalidateSize();
   });
+  setTimeout(function() { efbMap.invalidateSize(); }, 100);
+  setTimeout(function() { efbMap.invalidateSize(); }, 500);
+  setTimeout(function() { efbMap.invalidateSize(); }, 1500);
 }
-
 
 function efbSearchLocation(efbMapId) {
   var efbQuery = document.getElementById(`efb-search-${efbMapId}`).value;
@@ -1017,7 +1282,9 @@ function efbSearchLocation(efbMapId) {
               maps_efb[efbMapId].map.setView(efbLatlng, 13);
           } else {
               efbErrorMessageDiv.classList.remove('d-none');
-              efbErrorMessageDiv.textContent = 'Location not found';
+              let val = efb_var.text.slocation.replace('%s', '');
+              val = efb_var.text.snotfound.replace('%s', val);
+              efbErrorMessageDiv.textContent =  val;
           }
       })
       .catch(error => {
@@ -1026,19 +1293,16 @@ function efbSearchLocation(efbMapId) {
       });
 }
 
-function efbAddMarker(efbLat, efbLng, efbMapId, efbAllowAddingMarkers,r, efbName = '' ) {
+function efbAddMarker(efbLat, efbLng, efbMapId, efbAllowAddingMarkers,r,form_id, efbName = '' ) {
   var efbMarkerNumber ='';
   if(state_efb!='view'){
      efbMarkerNumber = efbAllowAddingMarkers ? maps_efb[efbMapId].markers.length + 1 : '';
      if(Number(r.mark)<efbMarkerNumber) return
-
   }else{
     efbMarkerNumber = efbAllowAddingMarkers;
-
   }
   const efbLanguage = efb_var.language.length==2 ? efb_var.language : efb_var.language.slice(0,2);
   var efbErrorMessageDiv = document.getElementById(`efb-error-message-${efbMapId}`);
-
   var efbMarkerIcon = L.divIcon({
       className: 'custom-div-icon',
       html: map_marker_ui_efb(efbMarkerNumber),
@@ -1066,7 +1330,7 @@ function efbAddMarker(efbLat, efbLng, efbMapId, efbAllowAddingMarkers,r, efbName
               });
 
               if(state_efb!='view'){
-                const o = [{ id_: r.id_, name: r.name, amount: r.amount, type: "maps", value: maps_efb[efbMapId].locationList, session: sessionPub_emsFormBuilder }];
+                const o = [{ id_: r.id_, name: r.name, amount: r.amount, type: "maps", value: maps_efb[efbMapId].locationList, session: sessionPub_emsFormBuilder,form_id:form_id }];
                 fun_sendBack_emsFormBuilder(o[0])
               }
           })
@@ -1081,16 +1345,14 @@ function efbAddMarker(efbLat, efbLng, efbMapId, efbAllowAddingMarkers,r, efbName
           lng: efbLng,
           address: efbName
       });
-
   }
 
     if(state_efb=='view'){
       efbErrorMessageDiv.classList.remove('d-none');
       let v ='<!--efb-->'
       for (let i = 0; i < r.value.length; i++) {
-        v+= `<p>${i+1}- ${r.value[i].address}</p>`
+        v+= `<p>${i+1}- ${r.value[i].address} - <b> <a href="https://www.openstreetmap.org/?mlat=${r.value[i].lat}&mlon=${r.value[i].lng}#map=17/${r.value[i].lat}/${r.value[i].lng}" target="_blank">${r.value[i].lat}, ${r.value[i].lng}</a></b></p>`
       }
-
       setTimeout(() => {
           if(document.getElementById('os-address-efb')==null){
           document.getElementById(r.id_+`-f`).innerHTML +='<div class="efb fs-6  mx-2" id="os-address-efb">'+ v+'</div>';
@@ -1103,7 +1365,6 @@ function efbClearMarkers(efbMapId,indx) {
   maps_efb[efbMapId].markersLayer.clearLayers();
   maps_efb[efbMapId].markers = [];
   maps_efb[efbMapId].locationList = [];
-
 
   if (typeof (sendBack_emsFormBuilder_pub) != "undefined") {
     const indx = sendBack_emsFormBuilder_pub.findIndex(x => x.type == "maps");
@@ -1137,7 +1398,6 @@ function efbAddInitialMarker(efbLat, efbLng, efbMapId) {
               lng: efbLng,
               address: efbAddress
           });
-
       })
       .catch(error => {
           efbErrorMessageDiv.classList.remove('d-none');
@@ -1153,7 +1413,6 @@ map_marker_ui_efb=(efbMarkerNumber)=>{
     <text id="pointer-number" x="25" y="20" font-size="10" font-weight="bold" fill="#000000" text-anchor="middle" dominant-baseline="middle">${efbMarkerNumber}</text>
   </svg>`
 }
-
 
 function efbLocateMe(efbMapId) {
   if (navigator.geolocation) {
@@ -1177,7 +1436,6 @@ function efbLocateMe(efbMapId) {
 
         var efbMarker = L.marker([efbLat, efbLng], { icon: efbMarkerIcon }).addTo(maps_efb[efbMapId].markersLayer);
 
-
         var efbLatlng = [efbLat, efbLng];
         maps_efb[efbMapId].map.setView(efbLatlng, 13);
 
@@ -1196,7 +1454,6 @@ function efbLocateMe(efbMapId) {
                     lng: efbLng,
                     address: efbAddress
                 });
-
             })
             .catch(error => {
                 efbErrorMessageDiv.classList.remove('d-none');
@@ -1209,10 +1466,6 @@ function efbLocateMe(efbMapId) {
     alert('Geolocation is not supported by this browser.');
 }
 }
-
-
-
-
 
 fun_remove_row_sendback_efb=(id)=>{
   if (typeof (sendBack_emsFormBuilder_pub) != "undefined") {
@@ -1229,5 +1482,131 @@ fun_remove_row_sendback_efb=(id)=>{
         fun_remove_row_sendback_efb(row.id_);
       }
     }
+  }
+}
+
+fun_event_esign_efb=(id,form_id,disabled,v)=>{
+  const canvas = document.getElementById(id+'_');
+  c2d_contex_efb = canvas.getContext("2d");
+  c2d_contex_efb.lineWidth = 5;
+  c2d_contex_efb.strokeStyle = "#000000";
+  c2d_contex_efb.lineCap = "round";
+  c2d_contex_efb.lineJoin = "round";
+
+  if(disabled) return;
+
+  function getCanvasCoordinates(canvas, event) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    let clientX, clientY;
+    if (event.touches && event.touches[0]) {
+      clientX = event.touches[0].clientX;
+      clientY = event.touches[0].clientY;
+    } else {
+      clientX = event.clientX;
+      clientY = event.clientY;
+    }
+
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    };
+  }
+
+  canvas.addEventListener("mousedown", (e) => {
+    draw_mouse_efb = true;
+    canvas_id_efb = id;
+    lastMousePostion_efb = getCanvasCoordinates(canvas, e);
+
+    c2d_contex_efb.beginPath();
+    c2d_contex_efb.moveTo(lastMousePostion_efb.x, lastMousePostion_efb.y);
+
+    c2d_contex_efb.fillStyle = "#000000";
+    c2d_contex_efb.beginPath();
+    c2d_contex_efb.arc(lastMousePostion_efb.x, lastMousePostion_efb.y, 2, 0, 2 * Math.PI);
+    c2d_contex_efb.fill();
+  }, false);
+
+  canvas.addEventListener("mouseup", (e) => {
+    if (!draw_mouse_efb) return;
+    draw_mouse_efb = false;
+
+    const data = canvas.toDataURL();
+    document.getElementById(`${canvas_id_efb}-sig-data`).value = data;
+
+    const el = document.getElementById(`${id}-sig-data`);
+    const value = el.value;
+    document.getElementById(`${id}_-message`).classList.remove('show');
+    const o = [{ id_: id, name: v.name, amount: v.amount, type: v.type, value: value, session: sessionPub_emsFormBuilder, form_id: form_id }];
+    fun_sendBack_emsFormBuilder(o[0]);
+  }, false);
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (!draw_mouse_efb) return;
+
+    const currentPos = getCanvasCoordinates(canvas, e);
+
+    c2d_contex_efb.beginPath();
+    c2d_contex_efb.moveTo(lastMousePostion_efb.x, lastMousePostion_efb.y);
+    c2d_contex_efb.lineTo(currentPos.x, currentPos.y);
+    c2d_contex_efb.stroke();
+
+    lastMousePostion_efb = currentPos;
+  }, false);
+
+  canvas.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    document.body.style.overflow = 'hidden';
+    draw_mouse_efb = true;
+    canvas_id_efb = id;
+    lastMousePostion_efb = getCanvasCoordinates(canvas, e);
+
+    c2d_contex_efb.beginPath();
+    c2d_contex_efb.moveTo(lastMousePostion_efb.x, lastMousePostion_efb.y);
+
+    c2d_contex_efb.fillStyle = "#000000";
+    c2d_contex_efb.beginPath();
+    c2d_contex_efb.arc(lastMousePostion_efb.x, lastMousePostion_efb.y, 2, 0, 2 * Math.PI);
+    c2d_contex_efb.fill();
+  }, false);
+
+  canvas.addEventListener("touchmove", (e) => {
+    e.preventDefault();
+    document.body.style.overflow = 'hidden';
+    if (!draw_mouse_efb) return;
+
+    const currentPos = getCanvasCoordinates(canvas, e);
+
+    c2d_contex_efb.beginPath();
+    c2d_contex_efb.moveTo(lastMousePostion_efb.x, lastMousePostion_efb.y);
+    c2d_contex_efb.lineTo(currentPos.x, currentPos.y);
+    c2d_contex_efb.stroke();
+
+    lastMousePostion_efb = currentPos;
+  }, false);
+
+  canvas.addEventListener("touchend", (e) => {
+    e.preventDefault();
+    document.body.style.overflow = 'auto';
+    if (!draw_mouse_efb) return;
+    draw_mouse_efb = false;
+
+    const data = canvas.toDataURL();
+    document.getElementById(`${canvas_id_efb}-sig-data`).value = data;
+
+    const value = document.getElementById(`${id}-sig-data`).value;
+  }, false);
+}
+
+fun_state_check_addon_AdnOF_setting_efb =()=>{
+  if(typeof setting_emsFormBuilder == 'undefined') {
+    setting_emsFormBuilder = typeof ajax_object_efm.form_setting == 'string' ?JSON.parse(ajax_object_efm.form_setting) : ajax_object_efm.form_setting;
+  }
+  if(typeof efb_version!='undefined'){
+   return  setting_emsFormBuilder.AdnOF==true ? true : false;
+  }else{
+   return setting_emsFormBuilder.addons.hasOwnProperty('AdnOF')==true && setting_emsFormBuilder.addons.AdnOF==true ? true : false;
   }
 }

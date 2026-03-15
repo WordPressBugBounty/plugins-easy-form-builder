@@ -6,15 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-/**
- * Class Install
- * @package Emsfb
- */
 class Install {
-	/**
-	 * Creating plugin tables
-	 *
-	 */
 
 	static function install() {
 		global $wpdb;
@@ -31,7 +23,7 @@ class Install {
 
 						$sql = "CREATE TABLE IF NOT EXISTS {$table_name_stng} (
 							`id` int(1) NOT NULL AUTO_INCREMENT,
-							`setting` text COLLATE utf8mb4_unicode_ci NOT NULL,
+							`setting` LONGTEXT COLLATE utf8mb4_unicode_ci NOT NULL,
 							`date` datetime  DEFAULT CURRENT_TIMESTAMP NOT NULL,
 							`edit_by` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
 							`email` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -50,6 +42,7 @@ class Install {
 							`form_created_by` varchar(8) COLLATE utf8mb4_unicode_ci NOT NULL,
 							`form_access_by` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
 							`form_create_date` datetime  DEFAULT CURRENT_TIMESTAMP NOT NULL,
+							`status` TINYINT COLLATE utf8mb4_unicode_ci NULL DEFAULT  1,
 							PRIMARY KEY  (form_id)
 						) {$charset_collate};";
 
@@ -106,9 +99,6 @@ class Install {
 
 						dbDelta( $sql );
 
-
-
-
 				$user_id = get_current_user_id();
 				$usr =get_user_by('id',$user_id);
 				$eml=$usr->user_email;
@@ -118,12 +108,12 @@ class Install {
 				}
 
 			$s = false;
-			//phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+
 			$v = $wpdb->get_var( $wpdb->prepare( "SELECT setting FROM %i ORDER BY id DESC LIMIT 1", $table_name_stng ) );
 			$rand = substr(str_shuffle('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'), 0, 10);
 			if($v===NULL && $s){
 				$setting ='{\"activeCode\":\"\",\"siteKey\":\"\",\"secretKey\":\"\",\"emailSupporter\":\"'.$eml.'\",\"apiKeyMap\":\"\",\"smtp\":\"\",\"bootstrap\":true,\"emailTemp\":\"\",\"email_key\":\"'.$rand.'\"}';
-			//phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+
 				$s = $wpdb->insert( $table_name_stng, array( 'setting' => $setting, 'edit_by' => get_current_user_id()
 				, 'date'=>current_time('mysql') , 'email'=>'' ));
 
@@ -131,15 +121,19 @@ class Install {
 
 			}else if ($v === NULL && !$s) {
 				$setting ='{\"activeCode\":\"\",\"siteKey\":\"\",\"secretKey\":\"\",\"emailSupporter\":\"'.$eml.'\",\"apiKeyMap\":\"\",\"smtp\":\"\",\"bootstrap\":false,\"emailTemp\":\"\",\"email_key\":\"'.$rand.'\"}';
-				//phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+
 				$s = $wpdb->insert( $table_name_stng, array( 'setting' => $setting, 'edit_by' => get_current_user_id()
 				, 'date'=>current_time('mysql') , 'email'=>'' ));
 
 				dbDelta( $s );
 
-			}		add_option( 'Emsfb_db_version', 1.0 );
+			}
+
+		add_option( 'Emsfb_db_version', EMSFB_DB_VERSION );
+
+		do_action('emsfb_update_cache_plugins_list');
+
 		return $state;
 	}
-
 
 }

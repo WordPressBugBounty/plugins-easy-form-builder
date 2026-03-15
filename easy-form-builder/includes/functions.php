@@ -1,21 +1,53 @@
 <?php
-namespace Emsfb;
-
-/**
- * Class _Public
- * @package Emsfb
- */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-
 class efbFunction {
+
+    protected static $req_cache = [];
+
+    protected static $cached_settings = null;
+    protected static $cached_lang = null;
+
+    public function invalidate_settings_cache($old, $new, $option) {
+        wp_cache_delete('settings:decoded', 'efb');
+        delete_transient('emsfb_settings_transient');
+        update_option('emsfb_text_version', time());
+    }
+
+    private function detect_current_lang_slug() {
+        if (function_exists('icl_object_id') && defined('ICL_LANGUAGE_CODE')) {
+            return ICL_LANGUAGE_CODE;
+        }
+        if (function_exists('pll_current_language')) {
+            $pll = pll_current_language('slug');
+            if (!empty($pll)) return $pll;
+        }
+        return function_exists('get_locale') ? get_locale() : 'en_US';
+    }
+
+    private function get_text_version($settingsObj) {
+        $v = get_option('emsfb_text_version', 0);
+        if (!empty($v)) return (string)$v;
+        $raw = '';
+        if (is_object($settingsObj) && isset($settingsObj->text) && is_object($settingsObj->text)) {
+            $raw = json_encode($settingsObj->text);
+        }
+        return substr(md5((string)$raw), 0, 12);
+    }
+
+	protected static $lang_cache = [];
+	private const EFB_LANG_CACHE_TTL = 21600;
+
 	protected $db;
 
-
 	public function __construct() {
+
+		if (function_exists('add_action')) {
+			add_action('update_option_emsfb_settings', [ $this, 'invalidate_lang_cache_on_settings_update' ], 10, 2);
+		}
 
 		global $wpdb;
 		$this->db = $wpdb;
@@ -23,14 +55,46 @@ class efbFunction {
 		register_activation_hook( __FILE__, [$this ,'download_all_addons_efb'] );
 		add_action( 'load-index.php', [$this ,'addon_adds_cron_efb'] );
 
+		add_action( 'emsfb_download_addons_cron', [$this, 'download_all_addons_efb'] );
+
     }
 
+	public function text_efb($inp,$page_request = 'default') {
 
-	public function text_efb($inp){
-		$ac= $this->get_setting_Emsfb();
+         if (static::$cached_settings === null) {
+            static::$cached_settings = get_setting_Emsfb();
+            static::$cached_lang = $this->detect_current_lang_slug();
+        }
+        $ac = static::$cached_settings;
+        $efb_lang = static::$cached_lang;
+        $efb_needX    = ($inp === 1);
+        $efb_ver      = $this->get_text_version($ac);
+
+        $efb_subset   = 'all';
+        if (is_array($inp)) {
+            $tmp = array_values(array_unique($inp));
+            sort($tmp);
+            $efb_subset = 'subset:' . substr(md5(json_encode($tmp)), 0, 12);
+        } elseif ($efb_needX) {
+            $efb_subset = 'with-extra';
+        }
+
+        $efb_ck_final = "langfinal:$efb_lang:$efb_ver:$efb_subset:$page_request";
+
+        if (isset(self::$req_cache[$efb_ck_final])) {
+            return self::$req_cache[$efb_ck_final];
+        }
+        $efb_cached_final = wp_cache_get($efb_ck_final, 'efb');
+        if ($efb_cached_final !== false) {
+            self::$req_cache[$efb_ck_final] = $efb_cached_final;
+            return $efb_cached_final;
+        }
+
+		$ac= get_setting_Emsfb();
 		$state= $ac!=='null' && isset($ac->text) && gettype($ac->text)!='string' ? true : false ;
 		$s= 'easy-form-builder';
 		$lang = [
+
 			/* translators: Create = to make or build form */
 			"create" => $state ? $ac->text->create : esc_html__('Create','easy-form-builder'),
 			"define" => $state ? $ac->text->define : esc_html__('Define','easy-form-builder'),
@@ -67,12 +131,10 @@ class efbFunction {
 			"no" => $state ? $ac->text->no : esc_html__('NO','easy-form-builder'),
 			"yes" => $state ? $ac->text->yes : esc_html__('Yes','easy-form-builder'),
 
-
 			"proVersion" => $state ? $ac->text->proVersion : esc_html__('Pro Version','easy-form-builder'),
 			"getProVersion" => $state ? $ac->text->getProVersion : esc_html__('Activate Pro version','easy-form-builder'),
 			"reCAPTCHA" => $state ? $ac->text->reCAPTCHA : esc_html__('reCAPTCHA','easy-form-builder'),
 
-			"enterSITEKEY" => $state ? $ac->text->enterSITEKEY : esc_html__('SECRET KEY','easy-form-builder'),
 			"alertEmail" => $state ? $ac->text->alertEmail : esc_html__('Alert Email','easy-form-builder'),
 			/* translators: Enter Admin Email = input field for administrator's email address */
 			"enterAdminEmail" => $state ? $ac->text->enterAdminEmail : esc_html__('Enter the admin email address to receive email notifications.','easy-form-builder'),
@@ -80,7 +142,7 @@ class efbFunction {
 			"showTrackingCode" => $state ? $ac->text->showTrackingCode : esc_html__('Show Confirmation Code','easy-form-builder'),
 			/* translators: Confirmation Code Finder = tool to locate confirmation codes [shortcode] */
 			"trackingCodeFinder" => $state ? $ac->text->trackingCodeFinder : esc_html__('Confirmation Code Finder','easy-form-builder'),
-			"copyAndPasteBelowShortCodeTrackingCodeFinder" => $state ? $ac->text->copyAndPasteBelowShortCodeTrackingCodeFinder : esc_html__('Copy and paste the following shortcode to add the Confirmation Code finder to any page or post.','easy-form-builder'),
+			"copyAndPasteBelowShortCodeTrackingCodeFinder" => $state ? $ac->text->copyAndPasteBelowShortCodeTrackingCodeFinder : esc_html__('Copy and paste this shortcode to add the confirmation code finder to any page or post.','easy-form-builder'),
 			"save" => $state ? $ac->text->save : esc_html__('Save','easy-form-builder'),
 			"waiting" => $state ? $ac->text->waiting : esc_html__('Waiting','easy-form-builder'),
 			"saved" => $state ? $ac->text->saved : esc_html__('Saved','easy-form-builder'),
@@ -106,11 +168,11 @@ class efbFunction {
 			/* translators: Number = input field for numeric values */
 			"number" => $state ? $ac->text->number : esc_html__('Number','easy-form-builder'),
 			/* translators: File = input field for uploading files */
-			"file" => $state ? $ac->text->file : esc_html__('File Upload','easy-form-builder'),
+			"file" => $state ? $ac->text->file : esc_html__('File upload','easy-form-builder'),
 			/* translators: Tel = Telephone/Phone number */
 			"tel" => $state ? $ac->text->tel : esc_html__('Tel','easy-form-builder'),
-			/* translators: Textarea = input field for long text[textarea] */
-			"textarea" => $state ? $ac->text->textarea : esc_html__('Long Text','easy-form-builder'),
+			/* translators: Textarea = input field for text[textarea] */
+			"textarea" => $state ? $ac->text->textarea : esc_html__('Longer Text','easy-form-builder'),
 			/* translators: Checkbox = input field for selecting options */
 			"checkbox" => $state ? $ac->text->checkbox : esc_html__('Check Box','easy-form-builder'),
 			/* translators: Radio Button = input field for selecting one option from many */
@@ -134,8 +196,6 @@ class efbFunction {
 			"id" => $state ? $ac->text->id : esc_html__('ID','easy-form-builder'),
 			/* translators: Tooltip = small popup text that appears when hovering over an element */
 			"tooltip" => $state ? $ac->text->tooltip : esc_html__('Tooltip','easy-form-builder'),
-			/* translators: Form Updated = notification that a form has been updated */
-			"formUpdated" => $state ? $ac->text->formUpdated : esc_html__('The Form Updated','easy-form-builder'),
 			/* translators: Congratulations/success message */
 			"goodJob" => $state ? $ac->text->goodJob : esc_html__('Good Job','easy-form-builder'),
 			"formUpdatedDone" => $state ? $ac->text->formUpdatedDone : esc_html__('The form has been successfully updated','easy-form-builder'),
@@ -144,23 +204,14 @@ class efbFunction {
 			"formCode" => $state ? $ac->text->formCode : esc_html__('Form Code','easy-form-builder'),
 			"close" => $state ? $ac->text->close : esc_html__('Close','easy-form-builder'),
 			"done" => $state ? $ac->text->done : esc_html__('Done','easy-form-builder'),
-			"demo" => $state ? $ac->text->demo : esc_html__('Demo','easy-form-builder'),
 			/* translators: Please fill in all required fields = message prompting the user to complete mandatory fields */
 			"pleaseFillInRequiredFields" => $state ? $ac->text->pleaseFillInRequiredFields : esc_html__('Please fill in all required fields.','easy-form-builder'),
 			/* translators: Available in Pro version = message indicating a feature is only available in the Pro version */
 			"availableInProversion" => $state ? $ac->text->availableInProversion : esc_html__('This option is only available in the Pro version.','easy-form-builder'),
-			"formNotBuilded" => $state ? $ac->text->formNotBuilded : esc_html__('The form has not been built!','easy-form-builder'),
-			"someStepsNotDefinedCheck" => $state ? $ac->text->someStepsNotDefinedCheck : esc_html__('Please check that all steps are defined before proceeding.','easy-form-builder'),
 			"ifYouNeedCreateMoreThan2Steps" => $state ? $ac->text->ifYouNeedCreateMoreThan2Steps : esc_html__('If you need to create more than 2 steps, you can activate the pro version of Easy Form Builder, which allows for unlimited steps.','easy-form-builder'),
-			"youCouldCreateMinOneAndMaxtwo" => $state ? $ac->text->youCouldCreateMinOneAndMaxtwo : esc_html__('You can create a minimum of 1 step and a maximum of 2 steps.','easy-form-builder'),
-			"youCouldCreateMinOneAndMaxtwenty" => $state ? $ac->text->youCouldCreateMinOneAndMaxtwenty : esc_html__('You can create a minimum of 1 step and a maximum of 20 steps.','easy-form-builder'),
 			"preview" => $state ? $ac->text->preview : esc_html__('Preview','easy-form-builder'),
 			"somethingWentWrongPleaseRefresh" => $state ? $ac->text->somethingWentWrongPleaseRefresh : esc_html__('Something went wrong. Please refresh the page and try again.','easy-form-builder'),
-			"formNotCreated" => $state ? $ac->text->formNotCreated : esc_html__('Sorry, it seems like the form has not been created.','easy-form-builder'),
-			"atFirstCreateForm" => $state ? $ac->text->atFirstCreateForm : esc_html__('Please create a form and add elements before trying again.','easy-form-builder'),
 			"allowMultiselect" => $state ? $ac->text->allowMultiselect : esc_html__('Allow multi-select','easy-form-builder'),
-			"DragAndDropUI" => $state ? $ac->text->DragAndDropUI : esc_html__('Drag and drop UI','easy-form-builder'),
-			"clickHereForActiveProVesrsion" => $state ? $ac->text->clickHereForActiveProVesrsion : esc_html__('Click here for Active Pro version','easy-form-builder'),
 			"selectOpetionDisabled" => $state ? $ac->text->selectOpetionDisabled : esc_html__('Choose an option (not available in test view)','easy-form-builder'),
 			"pleaseEnterTheTracking" => $state ? $ac->text->pleaseEnterTheTracking : esc_html__('Please enter the Confirmation Code','easy-form-builder'),
 			"formNotFound" => $state ? $ac->text->formNotFound : esc_html__('Form not found.','easy-form-builder'),
@@ -178,6 +229,7 @@ class efbFunction {
 			/* translators: Instruction to check the reCAPTCHA checkbox - 'I am not a robot' */
 			"checkedBoxIANotRobot" => $state ? $ac->text->checkedBoxIANotRobot : esc_html__('Please Checked Box of I am Not robot','easy-form-builder'),
 			"howConfigureEFB" => $state ? $ac->text->howConfigureEFB : esc_html__('How to configure Easy Form Builder','easy-form-builder'),
+
 			"howGetGooglereCAPTCHA" => $state ? $ac->text->howGetGooglereCAPTCHA : esc_html__('How to get Google reCAPTCHA and implement it into Easy Form Builder','easy-form-builder'),
 			"howActivateAlertEmail" => $state ? $ac->text->howActivateAlertEmail : esc_html__('How to activate the alert email for new form submission','easy-form-builder'),
 			"howCreateAddForm" => $state ? $ac->text->howCreateAddForm : esc_html__('How to create and add a form with Easy Form Builder','easy-form-builder'),
@@ -211,7 +263,6 @@ class efbFunction {
 			"createForms" =>  $state ? $ac->text->createForms :  esc_html__('Create Forms','easy-form-builder'),
 			"tutorial" => $state ? $ac->text->tutorial : esc_html__('Tutorial','easy-form-builder'),
 			"forms" => $state ? $ac->text->forms : esc_html__('Forms','easy-form-builder'),
-			"tobeginSentence" => $state ? $ac->text->tobeginSentence : esc_html__('To get started, simply create a form using the Easy Form Builder Plugin. Click the button below to create a form.','easy-form-builder'),
 			"efbIsTheUserSentence" => $state ? $ac->text->efbIsTheUserSentence : esc_html__('Easy Form Builder is an intuitive and user-friendly tool that lets you create custom, multi-step forms in just minutes, without requiring any coding skills.','easy-form-builder'),
 			"efbYouDontNeedAnySentence" => $state ? $ac->text->efbYouDontNeedAnySentence : esc_html__('You do not have to be a coding expert to use Easy Form Builder. Simply drag and drop the fields to create customized multistep forms easily. Plus, you can connect each submission to a unique request using the Confirmation Code feature.','easy-form-builder'),
 			"newResponse" => $state ? $ac->text->newResponse : esc_html__('New Response','easy-form-builder'),
@@ -228,15 +279,16 @@ class efbFunction {
 			"aPIKey" => $state ? $ac->text->aPIKey : esc_html__('API KEY','easy-form-builder'),
 			"youNeedAPIgMaps" => $state ? $ac->text->youNeedAPIgMaps : esc_html__('Your form needs an API key for Google Maps to work properly.','easy-form-builder'),
 			"copiedClipboard" => $state ? $ac->text->copiedClipboard : esc_html__('Copied to Clipboard','easy-form-builder'),
-
 			"noResponse" => $state ? $ac->text->noResponse : esc_html__('No Response','easy-form-builder'),
 			"offerGoogleCloud" => $state ? $ac->text->offerGoogleCloud : esc_html__('To use reCAPTCHA and location picker (Maps), sign up for the Google Cloud service and receive $350 worth of credits exclusively for our users ','easy-form-builder'),
 			"getOfferTextlink" => $state ? $ac->text->getOfferTextlink : esc_html__(' Get credits by clicking here.','easy-form-builder'),
 			"clickHere" => $state ? $ac->text->clickHere : esc_html__('Click here','easy-form-builder'),
 			"SpecialOffer" => $state ? $ac->text->SpecialOffer : esc_html__('Special offer','easy-form-builder'),
 			"googleKeys" => $state ? $ac->text->googleKeys : esc_html__('Google Keys','easy-form-builder'),
+			/* translators: Captchas = tab name in the settings panel for configuring CAPTCHA services */
+			"captchas" => $state && isset($ac->text->captchas) ? $ac->text->captchas  : esc_html__('Captchas','easy-form-builder'),
 			"emailServer" => $state ? $ac->text->emailServer : esc_html__('Email server','easy-form-builder'),
-			"beforeUsingYourEmailServers" => $state ? $ac->text->beforeUsingYourEmailServers : esc_html__('Before using your Email servers, you need to verify the status of e-mail servers and make sure that they are all running.','easy-form-builder'),
+			"beforeUsingYourEmailServers" => $state ? $ac->text->beforeUsingYourEmailServers : esc_html__('Use this test to check if your server can send emails properly.','easy-form-builder'),
 			"emailSetting" => $state ? $ac->text->emailSetting : esc_html__('Email Settings','easy-form-builder'),
 			"clickToCheckEmailServer" => $state ? $ac->text->clickToCheckEmailServer : esc_html__('Check Email Server','easy-form-builder'),
 			/* translators: D&D means Drag and Drop */
@@ -258,7 +310,7 @@ class efbFunction {
 			"shortcode" => $state ? $ac->text->shortcode : esc_html__('ShortCode','easy-form-builder'),
 			"copyTrackingcode" => $state ? $ac->text->copyTrackingcode : esc_html__('Copy Confirmation Code','easy-form-builder'),
 			"previewForm" => $state ? $ac->text->previewForm : esc_html__('Preview Form','easy-form-builder'),
-			"activateProVersion" => $state ? $ac->text->activateProVersion : esc_html__('Activate Pro Now','easy-form-builder'),
+			"activateProVersion" => $state ? $ac->text->activateProVersion : esc_html__('Upgrade to Pro','easy-form-builder'),
 			"itAppearedStepsEmpty" => $state ? $ac->text->itAppearedStepsEmpty : esc_html__('It seems that some of the steps in your form are empty. Please add field to all steps before saving.','easy-form-builder'),
 			/* translators: Message shown when user tries to use Pro features without activating Pro version */
 			"youUseProElements" => $state ? $ac->text->youUseProElements : esc_html__('You are using the pro field in the form. For save and using the form included pro fields, activate Pro version.','easy-form-builder'),
@@ -288,6 +340,20 @@ class efbFunction {
 			"center" => $state ? $ac->text->center : esc_html__('Center','easy-form-builder'),
 			"right" => $state ? $ac->text->right : esc_html__('Right','easy-form-builder'),
 			"width" => $state ? $ac->text->width : esc_html__('Width','easy-form-builder'),
+			/* translators: Mobile Width = width of element on mobile devices */
+			"swidth" => $state && isset($ac->text->swidth) ? $ac->text->swidth : esc_html__('%s width','easy-form-builder'),
+			/* translators: %s = context prefix (e.g. Mobile/Desktop). Label Position = position of field label */
+			"slabelPosition" => $state && isset($ac->text->slabelPosition) ? $ac->text->slabelPosition : esc_html__('%s Label Position','easy-form-builder'),
+			/* translators: %s = context prefix (e.g. Mobile/Desktop). Label size = font size of field label */
+			"slabelSize" => $state && isset($ac->text->slabelSize) ? $ac->text->slabelSize : esc_html__('%s Label size','easy-form-builder'),
+			/* translators: %s = context prefix (e.g. Mobile/Desktop). Label Align = text alignment of field label */
+			"slabelAlign" => $state && isset($ac->text->slabelAlign) ? $ac->text->slabelAlign : esc_html__('%s Label | Align','easy-form-builder'),
+			/* translators: %s = context prefix (e.g. Mobile/Desktop). Description Align = text alignment of field description */
+			"sdescAlign" => $state && isset($ac->text->sdescAlign) ? $ac->text->sdescAlign : esc_html__('%s Description | Align','easy-form-builder'),
+			/* translators: Desktop = computer/PC view */
+			"desktop" => $state && isset($ac->text->desktop) ? $ac->text->desktop : esc_html__('Desktop','easy-form-builder'),
+			/* translators: Mobile = mobile phone view */
+			"mobileView" => $state && isset($ac->text->mobileView) ? $ac->text->mobileView : esc_html__('Mobile','easy-form-builder'),
 			/* translators: CSS = Cascading Style Sheets - used for styling/design */
 			"cSSClasses" => $state ? $ac->text->cSSClasses : esc_html__('CSS Classes','easy-form-builder'),
 			"defaultValue" => $state ? $ac->text->defaultValue : esc_html__('Default value','easy-form-builder'),
@@ -330,6 +396,76 @@ class efbFunction {
 			"noCodeAddedYet" => $state ? $ac->text->noCodeAddedYet : esc_html__('The code has not yet been added. Click on','easy-form-builder'),
 			"andAddingHtmlCode" => $state ? $ac->text->andAddingHtmlCode : esc_html__('and adding HTML code.','easy-form-builder'),
 
+			/* translators: Essential Features = basic/core features of the plugin */
+			"essentialFeatures" => $state && isset($ac->text->essentialFeatures) ? $ac->text->essentialFeatures : esc_html__('Essential Features','easy-form-builder'),
+			/* translators: Getting started message */
+			"perfectForGettingStarted" => $state && isset($ac->text->perfectForGettingStarted) ? $ac->text->perfectForGettingStarted : esc_html__('Perfect for getting started with simple forms.','easy-form-builder'),
+			/* translators: Core form fields = basic input fields like text, email, etc */
+			"coreFormFields" => $state && isset($ac->text->coreFormFields) ? $ac->text->coreFormFields : esc_html__('Core form fields','easy-form-builder'),
+			/* translators: Email notifications = automatic email alerts */
+			"emailNotifications" => $state && isset($ac->text->emailNotifications) ? $ac->text->emailNotifications : esc_html__('Email notifications','easy-form-builder'),
+			/* translators: Advanced form fields = complex input types like file upload, date picker */
+			"advancedFormFields" => $state && isset($ac->text->advancedFormFields) ? $ac->text->advancedFormFields : esc_html__('Advanced form fields','easy-form-builder'),
+			/* translators: Built-in advanced features = integrated advanced functionality */
+			"builtInAdvancedFeatures" => $state && isset($ac->text->builtInAdvancedFeatures) ? $ac->text->builtInAdvancedFeatures : esc_html__('Built-in advanced features','easy-form-builder'),
+			/* translators: Add-ons & extensions = additional plugins or modules */
+			"addonsExtensions" => $state && isset($ac->text->addonsExtensions) ? $ac->text->addonsExtensions : esc_html__('Add-ons & extensions','easy-form-builder'),
+			/* translators: Start with Free = button text for free plan */
+			"startWithFree" => $state && isset($ac->text->startWithFree) ? $ac->text->startWithFree : esc_html__('Start with Free','easy-form-builder'),
+			/* translators: Free Plus = plan name for enhanced free version */
+			"freePlus" => $state && isset($ac->text->freePlus) ? $ac->text->freePlus : esc_html__('Free Plus','easy-form-builder'),
+			/* translators: Pro Pending = label for pending professional plan */
+			"proPending" => $state && isset($ac->text->proPending) ? $ac->text->proPending : esc_html__('Pro Pending','easy-form-builder'),
+			/* translators: Recommended = label for suggested plan */
+			"recommended" => $state && isset($ac->text->recommended) ? $ac->text->recommended : esc_html__('Recommended','easy-form-builder'),
+			/* translators: Best Value = label indicating the best price/value ratio */
+			"bestValue" => $state && isset($ac->text->bestValue) ? $ac->text->bestValue : esc_html__('Best Value','easy-form-builder'),
+			/* translators: Unlock advanced features message */
+			"unlockAdvancedFeatures" => $state && isset($ac->text->unlockAdvancedFeatures) ? $ac->text->unlockAdvancedFeatures : esc_html__('Unlock advanced features - supported by a credit line.','easy-form-builder'),
+			/* translators: Core & advanced form fields = both basic and complex input types */
+			"coreAdvancedFormFields" => $state && isset($ac->text->coreAdvancedFormFields) ? $ac->text->coreAdvancedFormFields : esc_html__('Core & advanced form fields','easy-form-builder'),
+			/* translators: Powered by credit line message */
+			"poweredByCredit" => $state && isset($ac->text->poweredByCredit) ? $ac->text->poweredByCredit : esc_html__('Lightweight “Powered by Easy Form Builder” credit & link','easy-form-builder'),
+			/* translators: Continue with Free Plus = button text */
+			"continueWithFreePlus" => $state && isset($ac->text->continueWithFreePlus) ? $ac->text->continueWithFreePlus : esc_html__('Continue with Free Plus','easy-form-builder'),
+			/* translators: Pro = professional/premium plan name */
+			"pro" => $state && isset($ac->text->pro) ? $ac->text->pro : esc_html__('Pro','easy-form-builder'),
+			/* translators: Advanced = plan features description */
+			"advancedAdFree" => $state && isset($ac->text->advancedAdFree) ? $ac->text->advancedAdFree : esc_html__('Advanced','easy-form-builder'),
+			/* translators: free = no-cost plan */
+			"free" => $state && isset($ac->text->free) ? $ac->text->free : esc_html__('Free','easy-form-builder'),
+			/* translators: Complete clean experience message */
+			"completeCleanExperience" => $state && isset($ac->text->completeCleanExperience) ? $ac->text->completeCleanExperience : esc_html__('For professionals who want the complete, clean experience.','easy-form-builder'),
+			/* translators: Everything in Free Plus = includes all features from lower plan */
+			"everythingInFreePlus" => $state && isset($ac->text->everythingInFreePlus) ? $ac->text->everythingInFreePlus : esc_html__('Everything in Free Plus','easy-form-builder'),
+			/* translators: Advanced integrations = complex third-party connections */
+			"advancedIntegrations" => $state && isset($ac->text->advancedIntegrations) ? $ac->text->advancedIntegrations : esc_html__('Advanced integrations','easy-form-builder'),
+			/* translators: Add-ons included = extensions are part of the package */
+			"addonsIncluded" => $state && isset($ac->text->addonsIncluded) ? $ac->text->addonsIncluded : esc_html__('Add-ons included','easy-form-builder'),
+			/* translators: No promotional messages = ad-free experience */
+			"noCreditsPromo" => $state && isset($ac->text->noCreditsPromo) ? $ac->text->noCreditsPromo : esc_html__('No credits or promotional messages','easy-form-builder'),
+			/* translators: Premium experience = high-quality, professional experience */
+			"premiumExperience" => $state && isset($ac->text->premiumExperience) ? $ac->text->premiumExperience : esc_html__('premium experience','easy-form-builder'),
+			/* translators: Upgrade to Pro = button text for upgrading */
+			"upgradeToPro" => $state && isset($ac->text->upgradeToPro) ? $ac->text->upgradeToPro : esc_html__('Upgrade to Pro','easy-form-builder'),
+			/* translators: Most Popular = label indicating most chosen plan */
+			"mostPopular" => $state && isset($ac->text->mostPopular) ? $ac->text->mostPopular : esc_html__('Most Popular','easy-form-builder'),
+			/* translators: Information about plan changeability */
+			"canChangeAnytime" => $state && isset($ac->text->canChangeAnytime) ? $ac->text->canChangeAnytime : esc_html__('You can change this at any time from the panel settings menu. No data is lost when you upgrade.','easy-form-builder'),
+			/* translators: Maybe later = postpone action button */
+			"maybeLater" => $state && isset($ac->text->maybeLater) ? $ac->text->maybeLater : esc_html__('Maybe later','easy-form-builder'),
+			/* translators: Build professional forms message */
+			"buildProfessionalForms" => $state && isset($ac->text->buildProfessionalForms) ? $ac->text->buildProfessionalForms : esc_html__('Build professional WordPress forms in minutes. Choose how you\'d like to get started.','easy-form-builder'),
+
+			/* translators: Selected = indicates something has been chosen */
+			"selected" => $state && isset($ac->text->selected) ? $ac->text->selected : esc_html__('selected','easy-form-builder'),
+			/* translators: Setup reminder message */
+			"setupReminder" => $state && isset($ac->text->setupReminder) ? $ac->text->setupReminder : esc_html__('You can access setup from plugin settings anytime.','easy-form-builder'),
+			/* translators: Welcome modal title for new users */
+			"welcomeToEasyFormBuilder" => $state && isset($ac->text->welcomeToEasyFormBuilder) ? $ac->text->welcomeToEasyFormBuilder : esc_html__('Welcome to Easy Form Builder','easy-form-builder'),
+			/* translators: Pro plan redirect confirmation message */
+			"proRedirectMessage" => $state && isset($ac->text->proRedirectMessage) ? $ac->text->proRedirectMessage : esc_html__('You will be redirected to the Pro plan purchase page. Continue?','easy-form-builder'),
+
 			"aPIkeyGoogleMapsError" => $state ? $ac->text->aPIkeyGoogleMapsError : esc_html__('The API key for Google Maps has not been added. Please go to Easy Form Builder > Panel > Setting > Google Keys, add the API key for Google Maps, and try again.','easy-form-builder'),
 			"howToAddGoogleMap" => $state ? $ac->text->howToAddGoogleMap : esc_html__('How to Add Location Picker(maps) to Easy form Builder WordPress Plugin','easy-form-builder'),
 			"deletemarkers" => $state ? $ac->text->deletemarkers : esc_html__('Delete markers','easy-form-builder'),
@@ -349,7 +485,7 @@ class efbFunction {
 			"select" => $state ? $ac->text->select : esc_html__('Select','easy-form-builder'),
 			"up" => $state ? $ac->text->up : esc_html__('Up','easy-form-builder'),
 			"sending" => $state ? $ac->text->sending : esc_html__('Sending','easy-form-builder'),
-			"enterYourMessage" => $state ? $ac->text->enterYourMessage : esc_html__('Please Enter your message','easy-form-builder'),
+			"enterYourMessage" => $state ? $ac->text->enterYourMessage : esc_html__('Please enter your message','easy-form-builder'),
 			"add" => $state ? $ac->text->add : esc_html__('Add','easy-form-builder'),
 			"code" => $state ? $ac->text->code : esc_html__('Code','easy-form-builder'),
 			"star" => $state ? $ac->text->star : esc_html__('Star','easy-form-builder'),
@@ -365,7 +501,6 @@ class efbFunction {
 			"aPIkeyGoogleMapsFeild" => $state ? $ac->text->aPIkeyGoogleMapsFeild : esc_html__('There was an error loading Maps.','easy-form-builder'),
 			"fileIsNotRight" => $state ? $ac->text->fileIsNotRight : esc_html__('The uploaded file is not in the correct file format.','easy-form-builder'),
 			"thisElemantNotAvailable" => $state ? $ac->text->thisElemantNotAvailable : esc_html__('The selected field is not available in this type of form.','easy-form-builder'),
-			"numberSteps" => $state ? $ac->text->numberSteps : esc_html__('Edit','easy-form-builder'),
 			"clickHereGetActivateCode" => $state ? $ac->text->clickHereGetActivateCode : esc_html__('Get your activation code now and unlock exclusive features ! Click here.','easy-form-builder'),
 			/* translators: Confirmation Code is a unique identifier and after filling the form, users receive this code to track their submission */
 			"trackingCode" => $state ? $ac->text->trackingCode : esc_html__('Confirmation Code','easy-form-builder'),
@@ -376,15 +511,51 @@ class efbFunction {
 			"loginForm" => $state ? $ac->text->loginForm : esc_html__('Login Form','easy-form-builder'),
 			"subscriptionForm" => $state ? $ac->text->subscriptionForm : esc_html__('Subscription Form','easy-form-builder'),
 			"supportForm" => $state ? $ac->text->supportForm : esc_html__('Support Form','easy-form-builder'),
-			"createBlankMultistepsForm" => $state ? $ac->text->createBlankMultistepsForm : esc_html__('Create a blank multisteps form.','easy-form-builder'),
+			"createBlankMultistepsForm" => $state ? $ac->text->createBlankMultistepsForm : esc_html__('Start a form from scratch with one or multiple steps.','easy-form-builder'),
 			"createContactusForm" => $state ? $ac->text->createContactusForm : esc_html__('Create a Contact us form.','easy-form-builder'),
-			"createRegistrationForm" => $state ? $ac->text->createRegistrationForm : esc_html__('Create a form to register new users to your WordPress site\'s user list.','easy-form-builder'),
-			"createLoginForm" => $state ? $ac->text->createLoginForm : esc_html__('Create a login form for users to enter your WordPress site.','easy-form-builder'),
-			"createnewsletterForm" => $state ? $ac->text->createnewsletterForm : esc_html__('Create a newsletter form','easy-form-builder'),
+			"createRegistrationForm" => $state ? $ac->text->createRegistrationForm : esc_html__('Create a user registration form for your WordPress site.','easy-form-builder'),
+			"createLoginForm" => $state ? $ac->text->createLoginForm : esc_html__('Create a login form for your WordPress site','easy-form-builder'),
+			"createnewsletterForm" => $state ? $ac->text->createnewsletterForm : esc_html__('Create a newsletter subscription form','easy-form-builder'),
 			"createSupportForm" => $state ? $ac->text->createSupportForm : esc_html__('Create a support contact form.','easy-form-builder'),
+			"quoteFormT" => $state && isset($ac->text->quoteFormT) ? $ac->text->quoteFormT : esc_html__('Request a Quote','easy-form-builder'),
+			"quoteFormD" => $state && isset($ac->text->quoteFormD) ? $ac->text->quoteFormD : esc_html__('Collect project details and budget info from clients.','easy-form-builder'),
+			"customOrderFormT" => $state && isset($ac->text->customOrderFormT) ? $ac->text->customOrderFormT : esc_html__('Custom Order Form','easy-form-builder'),
+			"customOrderFormD" => $state && isset($ac->text->customOrderFormD) ? $ac->text->customOrderFormD : esc_html__('Accept custom orders with product selection and payment.','easy-form-builder'),
+			"jobApplicationFormT" => $state && isset($ac->text->jobApplicationFormT) ? $ac->text->jobApplicationFormT : esc_html__('Job Application','easy-form-builder'),
+			"jobApplicationFormD" => $state && isset($ac->text->jobApplicationFormD) ? $ac->text->jobApplicationFormD : esc_html__('Collect resumes and applicant information.','easy-form-builder'),
+			"rentCarFormT" => $state && isset($ac->text->rentCarFormT) ? $ac->text->rentCarFormT : esc_html__('Rent a Car','easy-form-builder'),
+			"rentCarFormD" => $state && isset($ac->text->rentCarFormD) ? $ac->text->rentCarFormD : esc_html__('Car rental booking form with vehicle and date selection.','easy-form-builder'),
+			"salonConsultationFormT" => $state && isset($ac->text->salonConsultationFormT) ? $ac->text->salonConsultationFormT : esc_html__('Salon Consultation','easy-form-builder'),
+			"salonConsultationFormD" => $state && isset($ac->text->salonConsultationFormD) ? $ac->text->salonConsultationFormD : esc_html__('Book salon consultations with service preferences.','easy-form-builder'),
+			"graphicDesignOrderFormT" => $state && isset($ac->text->graphicDesignOrderFormT) ? $ac->text->graphicDesignOrderFormT : esc_html__('Graphic Design Order','easy-form-builder'),
+			"graphicDesignOrderFormD" => $state && isset($ac->text->graphicDesignOrderFormD) ? $ac->text->graphicDesignOrderFormD : esc_html__('Collect graphic design project requirements.','easy-form-builder'),
+			"sampleCvFormT" => $state && isset($ac->text->sampleCvFormT) ? $ac->text->sampleCvFormT : esc_html__('CV Application','easy-form-builder'),
+			"sampleCvFormD" => $state && isset($ac->text->sampleCvFormD) ? $ac->text->sampleCvFormD : esc_html__('Collect CV and resume details from applicants.','easy-form-builder'),
+			"videographyBriefFormT" => $state && isset($ac->text->videographyBriefFormT) ? $ac->text->videographyBriefFormT : esc_html__('Videography Brief','easy-form-builder'),
+			"videographyBriefFormD" => $state && isset($ac->text->videographyBriefFormD) ? $ac->text->videographyBriefFormD : esc_html__('Gather creative brief details for video projects.','easy-form-builder'),
+			"partyInviteFormT" => $state && isset($ac->text->partyInviteFormT) ? $ac->text->partyInviteFormT : esc_html__('Party Invitation','easy-form-builder'),
+			"partyInviteFormD" => $state && isset($ac->text->partyInviteFormD) ? $ac->text->partyInviteFormD : esc_html__('Create party invitation RSVP forms.','easy-form-builder'),
+			"eventRegistrationFormT" => $state && isset($ac->text->eventRegistrationFormT) ? $ac->text->eventRegistrationFormT : esc_html__('Event Registration','easy-form-builder'),
+			"eventRegistrationFormD" => $state && isset($ac->text->eventRegistrationFormD) ? $ac->text->eventRegistrationFormD : esc_html__('Register attendees for events with custom fields.','easy-form-builder'),
+			"storeSurveyFormT" => $state && isset($ac->text->storeSurveyFormT) ? $ac->text->storeSurveyFormT : esc_html__('Store Experience Survey','easy-form-builder'),
+			"storeSurveyFormD" => $state && isset($ac->text->storeSurveyFormD) ? $ac->text->storeSurveyFormD : esc_html__('Collect customer feedback about in-store experience.','easy-form-builder'),
+			"voterSurveyFormT" => $state && isset($ac->text->voterSurveyFormT) ? $ac->text->voterSurveyFormT : esc_html__('Voter Behavior Survey','easy-form-builder'),
+			"voterSurveyFormD" => $state && isset($ac->text->voterSurveyFormD) ? $ac->text->voterSurveyFormD : esc_html__('Survey template for voter behavior research.','easy-form-builder'),
+			"signupFormT" => $state && isset($ac->text->signupFormT) ? $ac->text->signupFormT : esc_html__('Signup Form','easy-form-builder'),
+			"signupFormD" => $state && isset($ac->text->signupFormD) ? $ac->text->signupFormD : esc_html__('Multi-step signup form with payment integration.','easy-form-builder'),
+			"sportsLeagueFormT" => $state && isset($ac->text->sportsLeagueFormT) ? $ac->text->sportsLeagueFormT : esc_html__('Sports League Signup','easy-form-builder'),
+			"sportsLeagueFormD" => $state && isset($ac->text->sportsLeagueFormD) ? $ac->text->sportsLeagueFormD : esc_html__('Register players for recreational sports leagues.','easy-form-builder'),
+			"summerReadingFormT" => $state && isset($ac->text->summerReadingFormT) ? $ac->text->summerReadingFormT : esc_html__('Summer Reading Program','easy-form-builder'),
+			"summerReadingFormD" => $state && isset($ac->text->summerReadingFormD) ? $ac->text->summerReadingFormD : esc_html__('Sign up participants for summer reading programs.','easy-form-builder'),
+			"childrenLibraryCardFormT" => $state && isset($ac->text->childrenLibraryCardFormT) ? $ac->text->childrenLibraryCardFormT : esc_html__('Children Library Card','easy-form-builder'),
+			"childrenLibraryCardFormD" => $state && isset($ac->text->childrenLibraryCardFormD) ? $ac->text->childrenLibraryCardFormD : esc_html__('Application form for children library cards.','easy-form-builder'),
+			"employeeSuggestionFormT" => $state && isset($ac->text->employeeSuggestionFormT) ? $ac->text->employeeSuggestionFormT : esc_html__('Employee Suggestion','easy-form-builder'),
+			"employeeSuggestionFormD" => $state && isset($ac->text->employeeSuggestionFormD) ? $ac->text->employeeSuggestionFormD : esc_html__('Collect employee suggestions and feedback.','easy-form-builder'),
+			"bookClubFormT" => $state && isset($ac->text->bookClubFormT) ? $ac->text->bookClubFormT : esc_html__('Book Club Suggestion','easy-form-builder'),
+			"bookClubFormD" => $state && isset($ac->text->bookClubFormD) ? $ac->text->bookClubFormD : esc_html__('Collect book suggestions from club members.','easy-form-builder'),
 			"availableSoon" => $state ? $ac->text->availableSoon : esc_html__('Available Soon','easy-form-builder'),
 			"reservation" => $state ? $ac->text->reservation : esc_html__('Reservation ','easy-form-builder'),
-			"createsurveyForm" => $state ? $ac->text->createsurveyForm : esc_html__('Create survey or poll or questionnaire forms ','easy-form-builder'),
+			"createsurveyForm" => $state ? $ac->text->createsurveyForm : esc_html__('Create survey, poll, or questionnaire forms ','easy-form-builder'),
 			"createReservationyForm" => $state ? $ac->text->createReservationyForm : esc_html__('Create reservation or booking forms ','easy-form-builder'),
 			"firstName" => $state ? $ac->text->firstName : esc_html__('First name','easy-form-builder'),
 			"lastName" => $state ? $ac->text->lastName : esc_html__('Last name','easy-form-builder'),
@@ -398,17 +569,20 @@ class efbFunction {
 			/* translators: Beside = next to/alongside (label position) */
 			"beside" => $state ? $ac->text->beside : esc_html__('Beside','easy-form-builder'),
 			"invalidEmail" => $state ? $ac->text->invalidEmail : esc_html__('Invalid Email address','easy-form-builder'),
-			"clearUnnecessaryFiles" => $state ? $ac->text->clearUnnecessaryFiles : esc_html__('Delete unnecessary files.','easy-form-builder'),
-			"youCanRemoveUnnecessaryFileUploaded" => $state ? $ac->text->youCanRemoveUnnecessaryFileUploaded : esc_html__('You can delete unnecessary files uploaded by users using the button below.','easy-form-builder'),
-			"whenEasyFormBuilderRecivesNewMessage" => $state ? $ac->text->whenEasyFormBuilderRecivesNewMessage : esc_html__('When a new message is received through Easy Form Builder, an alert email will be sent to the plugin admin.','easy-form-builder'),
+			"clearUnnecessaryFiles" => $state ? $ac->text->clearUnnecessaryFiles : esc_html__('Delete unnecessary files','easy-form-builder'),
+			"youCanRemoveUnnecessaryFileUploaded" => $state ? $ac->text->youCanRemoveUnnecessaryFileUploaded : esc_html__('Remove leftover files from incomplete form submissions. These are uploads that were never finalized.','easy-form-builder'),
+			"whenEasyFormBuilderRecivesNewMessage" => $state ? $ac->text->whenEasyFormBuilderRecivesNewMessage : esc_html__('When a new message is received through an Easy Form Builder forms, an alert email is sent to the site administrator.','easy-form-builder'),
 			/* translators: reCAPTCHA v2 = Google's version 2 anti-spam verification system */
 			"reCAPTCHAv2" => $state ? $ac->text->reCAPTCHAv2 : esc_html__('reCAPTCHA v2','easy-form-builder'),
+			"shieldSilentCaptcha" => $state && isset($ac->text->shieldSilentCaptcha) ? $ac->text->shieldSilentCaptcha : esc_html__('silentCAPTCHA Spam Protection','easy-form-builder'),
+			"shieldSilentCaptchaDesc" => $state && isset($ac->text->shieldSilentCaptchaDesc) ? $ac->text->shieldSilentCaptchaDesc : esc_html__("Enable silentCAPTCHA (Shield Security) to protect against spam and bots.",'easy-form-builder'),
+			"shieldNotDetected" => $state && isset($ac->text->shieldNotDetected) ? $ac->text->shieldNotDetected : esc_html__('Shield Security is not detected, but it can be installed to enhance security.','easy-form-builder'),
 			"clickHereWatchVideoTutorial" => $state ? $ac->text->clickHereWatchVideoTutorial : esc_html__('Click here to watch a video tutorial.','easy-form-builder'),
-			"siteKey" => $state ? $ac->text->siteKey : esc_html__('SITE KEY','easy-form-builder'),
-			"SecreTKey" => $state ? $ac->text->SecreTKey : esc_html__('SECRET KEY','easy-form-builder'),
-			"EnterSECRETKEY" => $state ? $ac->text->EnterSECRETKEY : esc_html__('Enter a Secret Key','easy-form-builder'),
+			"siteKey" => $state ? $ac->text->siteKey : esc_html__('Site Key','easy-form-builder'),
+			"SecreTKey" => $state ? $ac->text->SecreTKey : esc_html__('Secret Key','easy-form-builder'),
+			"EnterSECRETKEY" => $state ? $ac->text->EnterSECRETKEY : esc_html__('Enter the Secret Key','easy-form-builder'),
 			"clearFiles" => $state ? $ac->text->clearFiles : esc_html__('Clear Files','easy-form-builder'),
-			"enterActivateCode" => $state ? $ac->text->enterActivateCode : esc_html__('Enter the activate code','easy-form-builder'),
+			"enterActivateCode" => $state ? $ac->text->enterActivateCode : esc_html__('Enter your activation code','easy-form-builder'),
 			"error" => $state ? $ac->text->error : esc_html__('Error','easy-form-builder'),
 			"somethingWentWrongTryAgain" => $state ? $ac->text->somethingWentWrongTryAgain : esc_html__('Something unexpected happened. Please try again by refreshing the page.','easy-form-builder'),
 			"enterThePhone" => $state ? $ac->text->enterThePhone : esc_html__('Please enter a valid phone number.','easy-form-builder'),
@@ -447,10 +621,15 @@ class efbFunction {
 			"ifShowTrackingCodeToUser" => $state ? $ac->text->ifShowTrackingCodeToUser : esc_html__("To hide the Confirmation Code from users, leave the option unmarked.",'easy-form-builder'),
 			"videoOrAudio" => $state ? $ac->text->videoOrAudio : esc_html__('(Video or Audio)','easy-form-builder'),
 			"localization" => $state ? $ac->text->localization : esc_html__('Localization','easy-form-builder'),
+			/* translators: %1$s and %2$s are opening and closing HTML link tags for the WordPress.org translation portal */
+			"translateContrib" => $state ? $ac->text->translateContrib : esc_html__('Help us speak your language! Translate Easy Form Builder on the %1$sWordPress.org translation portal%2$s and make it accessible to your community.','easy-form-builder'),
+			/* translators: %1$s and %2$s are opening and closing HTML link tags for the WordPress.org translation portal, %3$s is the discount percentage */
+			"translateDiscount" => $state && isset($ac->text->translateDiscount) ? $ac->text->translateDiscount : esc_html__('If your language translation is not available yet, translate it and get a %3$s lifetime discount! Contribute via the %1$sWordPress.org translation portal%2$s.','easy-form-builder'),
+			"discountOff" => $state && isset($ac->text->discountOff) ? $ac->text->discountOff : esc_html__('OFF','easy-form-builder'),
 			"translateLocal" => $state ? $ac->text->translateLocal : esc_html__('You can translate Easy Form Builder into your preferred language by translating the following sentences. WARNING: If your WordPress site is multilingual, do not change the values below.','easy-form-builder'),
 			"enterValidURL" => $state ? $ac->text->enterValidURL : esc_html__('Please enter a valid URL. Protocol is required (http://, https://)','easy-form-builder'),
 			"emailOrUsername" => $state ? $ac->text->emailOrUsername : esc_html__('Email or Username','easy-form-builder'),
-			"contactusForm" => $state ? $ac->text->contactusForm : esc_html__('Contact-us Form','easy-form-builder'),
+			"contactusForm" => $state ? $ac->text->contactusForm : esc_html__('Contact Us Form','easy-form-builder'),
 			"clear" => $state ? $ac->text->clear : esc_html__('Clear','easy-form-builder'),
 			"entrTrkngNo" => $state ? $ac->text->entrTrkngNo : esc_html__('Enter the Confirmation Code','easy-form-builder'),
 			"search" => $state ? $ac->text->search : esc_html__('Search','easy-form-builder'),
@@ -478,6 +657,22 @@ class efbFunction {
 			"incorrectUP" => $state ? $ac->text->incorrectUP : esc_html__('This username or password combination is incorrect.','easy-form-builder'),
 			"newPassM" => $state ? $ac->text->newPassM : esc_html__('If your email is valid, a new password will send to your email.','easy-form-builder'),
 			"surveyComplatedM" => $state ? $ac->text->surveyComplatedM : esc_html__('The survey has been successfully completed.','easy-form-builder'),
+			/* translators: Survey Results Display = option to configure how survey results are shown to users after submission */
+			"surveyResultsDisplay" => $state && isset($ac->text->surveyResultsDisplay) ? $ac->text->surveyResultsDisplay : esc_html__('Survey Results Display','easy-form-builder'),
+			/* translators: Do not show results = option to hide survey results from users */
+			"surveyNoChart" => $state && isset($ac->text->surveyNoChart) ? $ac->text->surveyNoChart : esc_html__('Do not show results','easy-form-builder'),
+			/* translators: Show results with bar chart = option to display survey results as a bar chart */
+			"surveyBarChart" => $state && isset($ac->text->surveyBarChart) ? $ac->text->surveyBarChart : esc_html__('Show results with bar chart','easy-form-builder'),
+			/* translators: Show results with pie chart = option to display survey results as a pie chart */
+			"surveyPieChart" => $state && isset($ac->text->surveyPieChart) ? $ac->text->surveyPieChart : esc_html__('Show results with pie chart','easy-form-builder'),
+			/* translators: Help text explaining survey chart feature */
+			"surveyChartHelp" => $state && isset($ac->text->surveyChartHelp) ? $ac->text->surveyChartHelp : esc_html__('After submission, visitors can see aggregate survey results','easy-form-builder'),
+			/* translators: Show this field in public survey results = field-level option to include field in public survey results */
+			"showInPublicResults" => $state && isset($ac->text->showInPublicResults) ? $ac->text->showInPublicResults : esc_html__('Show this field in public survey results','easy-form-builder'),
+			/* translators: Survey Results = title for survey results section */
+			"surveyResults" => $state && isset($ac->text->surveyResults) ? $ac->text->surveyResults : esc_html__('Survey Results','easy-form-builder'),
+			/* translators: Responses = number of survey responses */
+			"responses" => $state && isset($ac->text->responses) ? $ac->text->responses : esc_html__('Responses','easy-form-builder'),
 			/* translators: E405 = Error code 405 - security error */
 			"error405" => $state ? $ac->text->error405 : esc_html__('We are sorry, but there seems to be a security error (405) with your request.','easy-form-builder'),
 			"errorSettingNFound" => $state ? $ac->text->errorSettingNFound : esc_html__('Error, Setting not Found','easy-form-builder'),
@@ -503,22 +698,20 @@ class efbFunction {
 			"NAllowedscriptTag" => $state ? $ac->text->NAllowedscriptTag : esc_html__('Scripts tags are not allowed.','easy-form-builder'),
 			/* translators: this sentence refers to the Bootstrap Template option in the plugin settings */
 			"bootStrapTemp" => $state ? $ac->text->bootStrapTemp : esc_html__('Bootstrap Template','easy-form-builder'),
-
-			"iUsebootTempW" => $state ? $ac->text->iUsebootTempW : esc_html__('Warning: If your template uses Bootstrap, please ensure that the option below is checked.','easy-form-builder'),
-			"iUsebootTemp" => $state ? $ac->text->iUsebootTemp : esc_html__('My template is based on Bootstrap','easy-form-builder'),
+			"iUsebootTempW" => $state ? $ac->text->iUsebootTempW : esc_html__('Warning: If your theme uses Bootstrap, make sure the option below is enabled.','easy-form-builder'),
+			"iUsebootTemp" => $state ? $ac->text->iUsebootTemp : esc_html__('My theme is based on Bootstrap','easy-form-builder'),
 			"invalidRequire" => $state ? $ac->text->invalidRequire : esc_html__('Uh oh, it looks like there is a problem with your request. Please review everything and try again.','easy-form-builder'),
 			"updated" => $state ? $ac->text->updated : esc_html__('updated','easy-form-builder'),
 			"PEnterMessage" => $state ? $ac->text->PEnterMessage : esc_html__('Please type in your message','easy-form-builder'),
 			"fileDeleted" => $state ? $ac->text->fileDeleted : esc_html__('The files have been deleted.','easy-form-builder'),
 			"activationNcorrect" => $state ? $ac->text->activationNcorrect : esc_html__('The activation code you entered is incorrect. Please double-check and try again.','easy-form-builder'),
-			"localizationM" => $state ? $ac->text->localizationM : esc_html__('To localize the plugin, simply go to the Panel, click on Setting, and then Localization.','easy-form-builder'),
 			"MMessageNSendEr" => $state ? $ac->text->MMessageNSendEr : esc_html__('We are sorry, but the message was not sent due to a settings error. Please contact the admin for assistance.','easy-form-builder'),
-			"warningBootStrap" => $state && isset($ac->text->warningBootStrap) ? $ac->text->warningBootStrap : esc_html__('To ensure compatibility, please go to the Panel and select the < Setting > option. From there, choose the option that states < My template has used Bootstrap framework > and click < Save >. If you encounter any additional issues, please don not hesitate to contact us through our website at whitestudio.team.','easy-form-builder'),
 			/* translators: OR = logical operator meaning one option or the other */
 			"or" => $state  && isset($ac->text->or)? $ac->text->or : esc_html__('OR','easy-form-builder'),
 			"emailTemplate" => $state  &&  isset($ac->text->emailTemplate) ? $ac->text->emailTemplate : esc_html__('Email Template','easy-form-builder'),
 			"reset" => $state  &&  isset($ac->text->reset) ? $ac->text->reset : esc_html__('reset','easy-form-builder'),
-			"freefeatureNotiEmail" => $state  &&  isset($ac->text->freefeatureNotiEmail) ? $ac->text->freefeatureNotiEmail : esc_html__('One of the free features of Easy Form Builder is the ability to send a notification email to either the admin or user.','easy-form-builder'),
+			/* translators: Message explaining email notification is a free feature - shown on form cards on the creation pages */
+			"freefeatureNotiEmail" => $state && isset($ac->text->freefeatureNotiEmail) ? $ac->text->freefeatureNotiEmail : esc_html__('Email notifications are available in all versions, including Free, Free Plus, and Pro.','easy-form-builder'),
 			"notFound" => $state  &&  isset($ac->text->notFound) ? $ac->text->notFound : esc_html__('Not Found','easy-form-builder'),
 			"editor" => $state  &&  isset($ac->text->editor) ? $ac->text->editor : esc_html__('Editor','easy-form-builder'),
 			"addSCEmailM" => $state  &&  isset($ac->text->addSCEmailM) ? $ac->text->addSCEmailM : esc_html__('Please add the shortcode_message shortcode to the email template.','easy-form-builder'),
@@ -559,6 +752,8 @@ class efbFunction {
 			"terms" => $state  &&  isset($ac->text->terms) ? $ac->text->terms : esc_html__('terms','easy-form-builder'),
 			"pricingTable" => $state  &&  isset($ac->text->pricingTable) ? $ac->text->pricingTable : esc_html__('Pricing Table','easy-form-builder'),
 			"cardNumber" => $state  &&  isset($ac->text->cardNumber) ? $ac->text->cardNumber : esc_html__('Card Number','easy-form-builder'),
+			/* translators: Reference Code = unique tracking code from payment gateway */
+			"refCode" => $state  &&  isset($ac->text->refCode) ? $ac->text->refCode : esc_html__('Reference Code','easy-form-builder'),
 			"cardExpiry" => $state  &&  isset($ac->text->cardExpiry) ? $ac->text->cardExpiry : esc_html__('Card Expiry','easy-form-builder'),
 			/* translators: CVC = Card Verification Code - 3-digit security code on credit cards */
 			"cardCVC" => $state  &&  isset($ac->text->cardCVC) ? $ac->text->cardCVC : esc_html__('Card CVC','easy-form-builder'),
@@ -574,7 +769,6 @@ class efbFunction {
 			"payMultiselect" => $state  &&  isset($ac->text->payMultiselect) ? $ac->text->payMultiselect : esc_html__('Payment dropdown list','easy-form-builder'),
 			"errorCode" => $state  &&  isset($ac->text->errorCode) ? $ac->text->errorCode : esc_html__('Error Code','easy-form-builder'),
 			"stripeKeys" => $state  &&  isset($ac->text->stripeKeys) ? $ac->text->stripeKeys : esc_html__('Stripe Keys','easy-form-builder'),
-			"stripeMP" => $state  &&  isset($ac->text->stripeKeys) ? $ac->text->stripeKeys : esc_html__('If you want to use payment functionality in your forms, you will need to obtain your Stripe keys.','easy-form-builder'),
 			"publicKey" => $state  &&  isset($ac->text->publicKey) ? $ac->text->publicKey : esc_html__('Public Key','easy-form-builder'),
 			"price" => $state  &&  isset($ac->text->price) ? $ac->text->price : esc_html__('Price','easy-form-builder'),
 			"title" => $state  &&  isset($ac->text->title) ? $ac->text->title : esc_html__('title','easy-form-builder'),
@@ -582,13 +776,14 @@ class efbFunction {
 			"small" => $state  &&  isset($ac->text->small) ? $ac->text->small : esc_html__('Small','easy-form-builder'),
 			"xsmall" => $state  &&  isset($ac->text->xsmall) ? $ac->text->xsmall : esc_html__('XSmall','easy-form-builder'),
 			"xxsmall" => $state  &&  isset($ac->text->xxsmall) ? $ac->text->xxsmall : esc_html__('XXSmall','easy-form-builder'),
-			"createPaymentForm" => $state  &&  isset($ac->text->createPaymentForm) ? $ac->text->createPaymentForm : esc_html__('Create a payment form.','easy-form-builder'),
+			"createPaymentForm" => $state  &&  isset($ac->text->createPaymentForm) ? $ac->text->createPaymentForm : esc_html__('Create a payment form to collect online payments.','easy-form-builder'),
 			"pro" => $state  &&  isset($ac->text->pro) ? $ac->text->pro : esc_html__('Pro','easy-form-builder'),
 			"submit" => $state  &&  isset($ac->text->submit) ? $ac->text->submit : esc_html__('Submit','easy-form-builder'),
 			"purchaseOrder" => $state  &&  isset($ac->text->purchaseOrder) ? $ac->text->purchaseOrder : esc_html__('Purchase Order','easy-form-builder'),
 			"paymentNcaptcha" => $state  &&  isset($ac->text->paymentNcaptcha) ? $ac->text->paymentNcaptcha : esc_html__('It is not possible to include reCAPTCHA on payment forms.','easy-form-builder'),
 			"PleaseMTPNotWork" => $state &&  isset($ac->text->PleaseMTPNotWork) ? $ac->text->PleaseMTPNotWork : esc_html__('Easy Form Builder could not confirm if your service is able to send emails. Please check your email inbox (or spam folder) to see if you have received an email with the subject line: Email server [Easy Form Builder]. If you have received the email, please select the option < This site can send emails > and save the changes.','easy-form-builder'),
 			"hostSupportSmtp" => $state  &&  isset($ac->text->hostSupportSmtp) ? $ac->text->hostSupportSmtp : esc_html__('This site can send emails','easy-form-builder'),
+			"actions" => $state  &&  isset($ac->text->actions) ? $ac->text->actions : esc_html__('Actions','easy-form-builder'),
 
 			/* translators: %s is the toggle option name for email confirmation */
 			"PleaseMTPNotWork2" => $state &&  isset($ac->text->PleaseMTPNotWork2) ? $ac->text->PleaseMTPNotWork2 : esc_html__('Easy Form Builder could not confirm that your server can send emails. Please check your inbox or spam folder for an email with the subject: "Email server [Easy Form Builder]". If you received it, please enable the "%s" toggle and save your changes.','easy-form-builder'),
@@ -603,6 +798,7 @@ class efbFunction {
 			"uploadedFile" => $state  &&  isset($ac->text->uploadedFile) ? $ac->text->uploadedFile : esc_html__('Uploaded File','easy-form-builder'),
 			"offlineMSend" => $state  &&  isset($ac->text->offlineMSend) ? $ac->text->offlineMSend : esc_html__('Your internet connection has been lost, but do not worry, we have saved the information you entered on this form. Once you are reconnected to the internet, you can easily send your information by clicking the submit button.','easy-form-builder'),
 			"offlineSend" => $state  &&  isset($ac->text->offlineSend) ? $ac->text->offlineSend : esc_html__('Please ensure that you have a stable internet connection and try again.','easy-form-builder'),
+			"fileUploadNetworkError" => $state  &&  isset($ac->text->fileUploadNetworkError) ? $ac->text->fileUploadNetworkError : esc_html__('There was a problem uploading the file and the form was not submitted. Please check that your internet connection is stable and try again.','easy-form-builder'),
 			"options" => $state  &&  isset($ac->text->options) ? $ac->text->options : esc_html__('Options','easy-form-builder'),
 			/* translators: JQ-500 = jQuery error code 500 - JavaScript library issue */
 			"eJQ500" => $state  &&  isset($ac->text->eJQ500) ? $ac->text->eJQ500 : esc_html__('You are experiencing issues with JQuery. Please contact the administrator for assistance. (Error code: JQ-500)','easy-form-builder'),
@@ -621,8 +817,9 @@ class efbFunction {
 			"redirectPage" => $state  &&  isset($ac->text->redirectPage) ? $ac->text->redirectPage : esc_html__('Redirect page','easy-form-builder'),
 			"pWRedirect" => $state  &&  isset($ac->text->pWRedirect) ? $ac->text->pWRedirect : esc_html__('Please wait, you will be redirected shortly.','easy-form-builder'),
 			"persiaPayment" => $state  &&  isset($ac->text->persiaPayment) ? $ac->text->persiaPayment : esc_html__('Persia payment','easy-form-builder'),
-			"getPro" => $state  &&  isset($ac->text->getPro) ? $ac->text->getPro : esc_html__('Activate the Pro version.','easy-form-builder'),
-			"yFreeVEnPro" => $state  &&  isset($ac->text->yFreeVEnPro) ? $ac->text->yFreeVEnPro : esc_html__('You are using the free version. Activate the pro version now to get access to more and advanced professional features for only $NN/year.','easy-form-builder'),
+			"getPro" => $state  &&  isset($ac->text->getPro) ? $ac->text->getPro : esc_html__('Unlock Pro Features Today','easy-form-builder'),
+			"yFreeVEnPro" => $state  &&  isset($ac->text->yFreeVEnPro) ? $ac->text->yFreeVEnPro : esc_html__('You are using the free version. Upgrade to Pro for just %1$s%2$s%3$s/year and unlock advanced features to improve your experience and productivity.%4$sView Pro Features%5$s','easy-form-builder'),
+			/* translators: %1$s is the name of the addon */
 			"addon" => $state  &&  isset($ac->text->addon) ? $ac->text->addon : esc_html__('Add-on','easy-form-builder'),
 			"addons" => $state  &&  isset($ac->text->addons) ? $ac->text->addons : esc_html__('Add-ons','easy-form-builder'),
 			"stripeTAddon" => $state  &&  isset($ac->text->stripeTAddon) ? $ac->text->stripeTAddon : esc_html__('Stripe Payment Addon','easy-form-builder'),
@@ -630,13 +827,11 @@ class efbFunction {
 			"offlineTAddon" => $state  &&  isset($ac->text->offlineTAddon) ? $ac->text->offlineTAddon : esc_html__('Offline Forms Addon','easy-form-builder'),
 			"offlineDAddon" => $state  &&  isset($ac->text->offlineDAddon) ? $ac->text->offlineDAddon : esc_html__('The Offline Forms add-on for Easy Form Builder allows users to save their progress when filling out forms in offline situations.','easy-form-builder'),
 
-			"trackCTAddon" => $state  &&  isset($ac->text->trackCTAddon) ? $ac->text->trackCDAddon : esc_html__('trackCTAddon','easy-form-builder'),
-			"trackCDAddon" => $state  &&  isset($ac->text->trackCDAddon) ? $ac->text->trackCDAddon : esc_html__('trackCDAddon','easy-form-builder'),
 			"install" => $state  &&  isset($ac->text->install) ? $ac->text->install : esc_html__('Install','easy-form-builder'),
 			"upDMsg" => $state  &&  isset($ac->text->upDMsg) ? $ac->text->upDMsg : esc_html__('Please update Easy Form Builder before trying again.','easy-form-builder'),
 			"AfLnFrm" => $state  &&  isset($ac->text->AfLnFrm) ? $ac->text->AfLnFrm : esc_html__('Activation of offline form mode.','easy-form-builder'),
 			"IMAddons" => $state  &&  isset($ac->text->IMAddons) ? $ac->text->IMAddons : esc_html__('Before activation this option, install','easy-form-builder'),
-			"IMAddonP" => $state  &&  isset($ac->text->IMAddonP) ? $ac->text->IMAddonP : esc_html__('To create a payment form, you must first install a payment add-on such as the Stripe Add-on.','easy-form-builder'),
+			"IMAddonP" => $state  &&  isset($ac->text->IMAddonP) ? $ac->text->IMAddonP : esc_html__('To Create a payment form to collect online payments, you must first install a payment add-on such as the Stripe Add-on.','easy-form-builder'),
 			"allformat" => $state  &&  isset($ac->text->allformat) ? $ac->text->allformat : esc_html__('All formats','easy-form-builder'),
 			"AdnSST" => $state  &&  isset($ac->text->AdnSST) ? $ac->text->AdnSST : esc_html__('EFB SMS Addon','easy-form-builder'),
 			"AdnSSD" => $state  &&  isset($ac->text->AdnSSD) ? $ac->text->AdnSSD : esc_html__('Enable SMS functionality in your forms with the EFB SMS add-on, allowing you to validate mobile numbers and send confirmation codes via SMS, as well as receive notifications through SMS service.','easy-form-builder'),
@@ -648,12 +843,12 @@ class efbFunction {
 			"qty" => $state  &&  isset($ac->text->qty) ? $ac->text->qty : esc_html__('Qty','easy-form-builder'),
 			/* translators: WPBakery = a WordPress page builder plugin */
 			"wwpb" => $state  &&  isset($ac->text->wwpb) ? $ac->text->wwpb : esc_html__('This is a warning for WPBakery users. For more information, please click here.','easy-form-builder'),
-			"clsdrspnsM" => $state  &&  isset($ac->text->clsdrspnsM) ? $ac->text->clsdrspnsM : esc_html__('Are you sure you want to close the responses to this message?','easy-form-builder'),
+			"clsdrspnsM" => $state  &&  isset($ac->text->clsdrspnsM) ? $ac->text->clsdrspnsM : esc_html__('Are you sure you want to close replies to this message?','easy-form-builder'),
 			"clsdrspnsMo" => $state  &&  isset($ac->text->clsdrspnsMo) ? $ac->text->clsdrspnsMo : esc_html__('Are you sure you want to open the responses to this message?','easy-form-builder'),
 			"clsdrspn" => $state  &&  isset($ac->text->clsdrspn) ? $ac->text->clsdrspn : esc_html__('The response has been closed by Admin.','easy-form-builder'),
 			"clsdrspo" => $state  &&  isset($ac->text->clsdrspo) ? $ac->text->clsdrspo : esc_html__('The response has been opened by Admin.','easy-form-builder'),
 			"open" => $state  &&  isset($ac->text->open) ? $ac->text->open : esc_html__('Open','easy-form-builder'),
-			/* translators: Price display format - e.g., $19/year */
+			/* translators: Price display format - e.g., $27/year */
 			"priceyr" => $state  &&  isset($ac->text->priceyr) ? $ac->text->priceyr : esc_html__('$NN/year','easy-form-builder'),
 			"cols" => $state  &&  isset($ac->text->cols) ? $ac->text->cols : esc_html__('columns','easy-form-builder'),
 			"col" => $state  &&  isset($ac->text->col) ? $ac->text->col : esc_html__('column','easy-form-builder'),
@@ -697,9 +892,9 @@ class efbFunction {
 			"IMAddonAD" => $state  &&  isset($ac->text->IMAddonAD) ? $ac->text->IMAddonAD : esc_html__('Please go to Add-ons Page of Easy Form Builder plugin and install the Hijri date addons','easy-form-builder'),
 			"warning" => $state  &&  isset($ac->text->warning) ? $ac->text->warning : esc_html__('warning','easy-form-builder'),
 			"datetimelocal" => $state  &&  isset($ac->text->datetimelocal) ? $ac->text->datetimelocal : esc_html__('date & time','easy-form-builder'),
-			"dsupfile" => $state  &&  isset($ac->text->dsupfile) ? $ac->text->dsupfile : esc_html__('Activate the file upload button in the response box','easy-form-builder'),
-			"scaptcha" => $state  &&  isset($ac->text->scaptcha) ? $ac->text->scaptcha : esc_html__('Activate Google reCAPTCHA in the response box','easy-form-builder'),
-			"sdlbtn" => $state  &&  isset($ac->text->sdlbtn) ? $ac->text->sdlbtn : esc_html__('Activate the download button in the response box.','easy-form-builder'),
+			"dsupfile" => $state  &&  isset($ac->text->dsupfile) ? $ac->text->dsupfile : esc_html__('Enable file upload in the response box','easy-form-builder'),
+			"scaptcha" => $state  &&  isset($ac->text->scaptcha) ? $ac->text->scaptcha : esc_html__('Enable Google reCAPTCHA in the response box','easy-form-builder'),
+			"sdlbtn" => $state  &&  isset($ac->text->sdlbtn) ? $ac->text->sdlbtn : esc_html__('Enable download button in the response box','easy-form-builder'),
 			"sips" => $state  &&  isset($ac->text->sips) ? $ac->text->sips : esc_html__('Display the IP addresses of users in the response box.','easy-form-builder'),
 			/* translators: Persia Payment = Iranian online payment gateway service */
 			"persiaPayTAddon" => $state  &&  isset($ac->text->persiaPayTAddon) ? $ac->text->persiaPayTAddon : esc_html__('Persia Payment Addon','easy-form-builder'),
@@ -774,6 +969,7 @@ class efbFunction {
 			"isne" => $state  &&  isset($ac->text->isne) ? $ac->text->isne : esc_html__('Is not','easy-form-builder'),
 			"empty" => $state  &&  isset($ac->text->empty) ? $ac->text->empty : esc_html__('Empty','easy-form-builder'),
 			"nEmpty" => $state  &&  isset($ac->text->nEmpty) ? $ac->text->nEmpty : esc_html__('Not empty','easy-form-builder'),
+			/* translators: OR = logical operator meaning one option or the other */
 			"or" => $state  &&  isset($ac->text->or) ? $ac->text->or : esc_html__('or','easy-form-builder'),
 			"and" => $state  &&  isset($ac->text->and) ? $ac->text->and : esc_html__('and','easy-form-builder'),
 			"addngrp" => $state  &&  isset($ac->text->addngrp) ? $ac->text->addngrp : esc_html__('Add New Group','easy-form-builder'),
@@ -797,18 +993,20 @@ class efbFunction {
 			"lb_mi_fSiz" => $state &&  isset($ac->text->lb_mi_fSiz) ? $ac->text->lb_mi_fSiz : esc_html__('Minmum File Size','easy-form-builder'),
 			"pss" => $state &&  isset($ac->text->pss) ? $ac->text->pss : esc_html__('Passwords','easy-form-builder'),
 			"sms_config" => $state &&  isset($ac->text->sms_config) ? $ac->text->sms_config : esc_html__('SMS Configuration','easy-form-builder'),
-			"sms_mp" => $state  &&  isset($ac->text->sms_mp) ? $ac->text->sms_mp : esc_html__('To enable SMS notifications in your forms, select the SMS notification delivery method.','easy-form-builder'),
-			"sms_ct" => $state  &&  isset($ac->text->sms_ct) ? $ac->text->sms_ct : esc_html__('Select the method to send SMS notifications','easy-form-builder'),
-			"sms_admn_no" => $state  &&  isset($ac->text->sms_admn_no) ? $ac->text->sms_admn_no : esc_html__('Enter the admins\' mobile numbers','easy-form-builder'),
+			"sms_mp" => $state  &&  isset($ac->text->sms_mp) ? $ac->text->sms_mp : esc_html__('To enable SMS notifications in your forms, choose a delivery method.','easy-form-builder'),
+			"sms_ct" => $state  &&  isset($ac->text->sms_ct) ? $ac->text->sms_ct : esc_html__('Select an SMS delivery method','easy-form-builder'),
+			"sms_admn_no" => $state  &&  isset($ac->text->sms_admn_no) ? $ac->text->sms_admn_no : esc_html__('Enter administrators’ mobile numbers','easy-form-builder'),
 
 			"sms_efbs" => $state  &&  isset($ac->text->sms_efbs) ? $ac->text->sms_efbs : esc_html__('Easy Form Builder SMS service','easy-form-builder'),
+			/* translators: Phone number format hint shown below the phone input field */
+			"phoneFormatHint" => $state && isset($ac->text->phoneFormatHint) ? $ac->text->phoneFormatHint : esc_html__('Format: +12345678900 or +1 (234) 567-8900','easy-form-builder'),
 			/* translators: WP SMS = WordPress SMS plugin; VeronaLabs = the plugin developer */
-			"sms_wpsmss" => $state  &&  isset($ac->text->sms_wpsmss) ? $ac->text->sms_wpsmss : esc_html__('WP SMS plugin By VeronaLabs','easy-form-builder'),
-			"wpsms_nm" => $state  &&  isset($ac->text->wpsms_nm) ? $ac->text->wpsms_nm : esc_html__('WP SMS plugin By VeronaLabs is not installed or activated. Please select another option, or install and configure WP SMS.','easy-form-builder'),
+			"sms_wpsmss" => $state  &&  isset($ac->text->sms_wpsmss) ? $ac->text->sms_wpsmss : esc_html__('WSMS plugin by VeronaLabs','easy-form-builder'),
+			"wpsms_nm" => $state  &&  isset($ac->text->wpsms_nm) ? $ac->text->wpsms_nm : esc_html__('WSMS plugin by VeronaLabs is not installed or activated. Please select another option, or install and configure WP SMS.','easy-form-builder'),
 			"msg_adons" => $state  &&  isset($ac->text->msg_adons) ? $ac->text->msg_adons : esc_html__('To use this option, please install the NN add-ons from the Easy Form Builder plugin\'s Add-ons page.','easy-form-builder'),
-			"sms_noti" => $state  &&  isset($ac->text->sms_noti) ? $ac->text->sms_noti : esc_html__('SMS notifications','easy-form-builder'),
-			"sms_dnoti" => $state  &&  isset($ac->text->sms_dnoti) ? $ac->text->sms_dnoti : esc_html__('To send informational text messages, such as notifications or new messages, please enter the mobile numbers of the administrators here.','easy-form-builder'),
-			"sms_ndnoti" => $state  &&  isset($ac->text->sms_ndnoti) ? $ac->text->sms_ndnoti : esc_html__(' Note that by entering mobile numbers, all notification messages for all forms and other informational texts will be sent to the provided numbers.','easy-form-builder'),
+			"sms_noti" => $state  &&  isset($ac->text->sms_noti) ? $ac->text->sms_noti : esc_html__('SMS Notifications','easy-form-builder'),
+			"sms_dnoti" => $state  &&  isset($ac->text->sms_dnoti) ? $ac->text->sms_dnoti : esc_html__('Enter the administrators’ mobile numbers to receive SMS notifications, such as alerts or new messages.','easy-form-builder'),
+			"sms_ndnoti" => $state  &&  isset($ac->text->sms_ndnoti) ? $ac->text->sms_ndnoti : esc_html__(' All SMS notifications sent by Easy Form Builder will be delivered to the numbers entered here.','easy-form-builder'),
 			"emlc" => $state  &&  isset($ac->text->emlc) ? $ac->text->emlc : esc_html__('Choose Email notification content','easy-form-builder'),
 			"emlacl" => $state  &&  isset($ac->text->emlacl) ? $ac->text->emlacl : esc_html__('Send email with confirmation code and link','easy-form-builder'),
 			"emlml" => $state  &&  isset($ac->text->emlml) ? $ac->text->emlml : esc_html__('Send email with submitted form content and link','easy-form-builder'),
@@ -816,9 +1014,12 @@ class efbFunction {
 			"msgchckvt" => $state  &&  isset($ac->text->msgchckvt) ? $ac->text->msgchckvt : esc_html__('Review the entered values in the XXX tab.this message appeared because an error is detected.','easy-form-builder'),
 
 			"sms" => $state  &&  isset($ac->text->sms) ? $ac->text->sms : esc_html__('SMS','easy-form-builder'),
+			"documentation" => $state  &&  isset($ac->text->documentation) ? $ac->text->documentation : esc_html__('Documentation','easy-form-builder'),
 			"smscw" => $state  &&  isset($ac->text->smscw) ? $ac->text->smscw : esc_html__('Click on the Settings button on the panel page of Easy Form Builder Plugin and configure the SMS sending method. Then, try again.','easy-form-builder'),
 			"to" => $state  &&  isset($ac->text->to) ? $ac->text->to : esc_html__('To','easy-form-builder'),
 			"esmsno" => $state  &&  isset($ac->text->esmsno) ? $ac->text->esmsno : esc_html__('Enable SMS notifications','easy-form-builder'),
+			"etelegramno" => $state  &&  isset($ac->text->etelegramno) ? $ac->text->etelegramno : esc_html__('Enable Telegram notifications','easy-form-builder'),
+			"telegram" => $state  &&  isset($ac->text->telegram) ? $ac->text->telegram : esc_html__('Telegram','easy-form-builder'),
 			"payPalTAddon" => $state  &&  isset($ac->text->payPalTAddon) ? $ac->text->payPalTAddon : esc_html__('PayPal Payment Addon','easy-form-builder'),
 			"payPalDAddon" => $state  &&  isset($ac->text->payPaleDAddon) ? $ac->text->payPaleDAddon : esc_html__('The PayPal add-on for Easy Form Builder enables you to integrate your WordPress site with PayPal for payment processing, donations, and online orders.','easy-form-builder'),
 			"file_cstm" => $state  &&  isset($ac->text->file_cstm) ? $ac->text->file_cstm : esc_html__('Acceptable file types','easy-form-builder'),
@@ -828,7 +1029,7 @@ class efbFunction {
 			"elan" => $state  &&  isset($ac->text->elan) ? $ac->text->elan : esc_html__('English language','easy-form-builder'),
 			"nlan" => $state  &&  isset($ac->text->nlan) ? $ac->text->nlan : esc_html__('National language','easy-form-builder'),
 			"stsd" => $state  &&  isset($ac->text->stsd) ? $ac->text->stsd : esc_html__('Select display language','easy-form-builder'),
-			"excefb" => $state  &&  isset($ac->text->excefb) ? $ac->text->excefb : esc_html__('The XX plugin might interfere with forms of Easy Form Builder\'s functionality. If you encounter any issues with the Forms, disable caching for the Easy Form Builder plugin in the XX plugin\'s settings.','easy-form-builder'),
+
 			"trya" => $state  &&  isset($ac->text->trya) ? $ac->text->trya : esc_html__('Trying again.','easy-form-builder'),
 			"rnfn" => $state  &&  isset($ac->text->rnfn) ? $ac->text->rnfn : esc_html__('Rename the file name','easy-form-builder'),
 			"ausdup" => $state  &&  isset($ac->text->ausdup) ? $ac->text->ausdup : esc_html__('Are you sure you want to duplicate the XXX ?','easy-form-builder'),
@@ -843,66 +1044,110 @@ class efbFunction {
 			"total" => $state  &&  isset($ac->text->total) ? $ac->text->total : esc_html__('Total','easy-form-builder'),
 			"mlsbjt" => $state  &&  isset($ac->text->mlsbjt) ? $ac->text->mlsbjt : esc_html__('Email Subject','easy-form-builder'),
 			"frmtype" => $state  &&  isset($ac->text->frmtype) ? $ac->text->frmtype : esc_html__('Form type','easy-form-builder'),
+			"loadingType" => $state  &&  isset($ac->text->loadingType) ? $ac->text->loadingType : esc_html__('Loading Animation','easy-form-builder'),
+			"loadingColor" => $state  &&  isset($ac->text->loadingColor) ? $ac->text->loadingColor : esc_html__('Loading Color','easy-form-builder'),
+			"dots" => $state  &&  isset($ac->text->dots) ? $ac->text->dots : esc_html__('Dots','easy-form-builder'),
+			"spinner" => $state  &&  isset($ac->text->spinner) ? $ac->text->spinner : esc_html__('Spinner','easy-form-builder'),
+			"pulse" => $state  &&  isset($ac->text->pulse) ? $ac->text->pulse : esc_html__('Pulse','easy-form-builder'),
+			"bars" => $state  &&  isset($ac->text->bars) ? $ac->text->bars : esc_html__('Bars','easy-form-builder'),
+			"ripple" => $state  &&  isset($ac->text->ripple) ? $ac->text->ripple : esc_html__('Ripple','easy-form-builder'),
+			"bounce" => $state  &&  isset($ac->text->bounce) ? $ac->text->bounce : esc_html__('Bounce','easy-form-builder'),
+			"orbit" => $state  &&  isset($ac->text->orbit) ? $ac->text->orbit : esc_html__('Orbit','easy-form-builder'),
+			"wave" => $state  &&  isset($ac->text->wave) ? $ac->text->wave : esc_html__('Wave','easy-form-builder'),
+			"hourglass" => $state  &&  isset($ac->text->hourglass) ? $ac->text->hourglass : esc_html__('Hourglass','easy-form-builder'),
 			"fernvtf" => $state  &&  isset($ac->text->fernvtf) ? $ac->text->fernvtf : esc_html__('The entered data does not match the form type. If you are an admin, please review the form type.','easy-form-builder'),
 			"fetf" => $state  &&  isset($ac->text->fetf) ? $ac->text->fetf : esc_html__('Error: Please ensure there is only one form per page.','easy-form-builder'),
-			"actvtcmsg" => $state  &&  isset($ac->text->actvtcmsg) ? $ac->text->actvtcmsg : esc_html__('The activation code has been successfully verified. Enjoy Pro features and utilize the Easy Form Builder.','easy-form-builder'),
+			"actvtcmsg" => $state  &&  isset($ac->text->actvtcmsg) ? $ac->text->actvtcmsg : esc_html__('Your activation code has been verified. Enjoy all Pro features of Easy Form Builder.','easy-form-builder'),
+
 			/* translators: %s is the confirmation code */
 			"msgdml" => $state  &&  isset($ac->text->msgdml) ? $ac->text->msgdml : esc_html__('The confirmation code for this message is %s. By clicking the button below, you will be able to track messages and view received responses. If needed, you can also send a new reply.','easy-form-builder'),
+
 			/* translators: %1$s and %2$s are opening and closing link tags for documentation */
 			"msgnml" => $state  &&  isset($ac->text->msgnml) ? $ac->text->msgnml : esc_html__('To explore the full functionality and settings of Easy Form Builder, including email configurations, form creation options, and other features, simply delve into our %1$s documentation %2$s .','easy-form-builder'),
+
+			"rspcon" => $state  &&  isset($ac->text->rspcon) ? $ac->text->rspcon : esc_html__('Responses & Confirmation','easy-form-builder'),
+
 			/* translators: %1$s, %2$s, %3$s, %4$s are opening and closing link tags for help resources */
-			"mlntip" => $state  &&  isset($ac->text->mlntip) ? $ac->text->mlntip : esc_html__('Make sure to check your spam folder for test emails. If your emails are being marked as spam or not being sent, it\'s likely due to the hosting provider you are using. You will need to adjust your email server settings to prevent emails sent from your server from being flagged as spam. For more information, %1$s click here %2$s or %3$s contact Easy Form Builder support %4$s.','easy-form-builder'),
+			"mlntip" => $state  &&  isset($ac->text->mlntip) ? $ac->text->mlntip : esc_html__('Test emails may land in your spam folder. If emails are not delivered, this is usually related to your hosting or email server configuration.server settings %1$sLearn how to fix email delivery issues%2$s or %3$scontact Easy Form Builder support%4$s.','easy-form-builder'),
 			"from" => $state  &&  isset($ac->text->from) ? $ac->text->from : esc_html__('From Address','easy-form-builder'),
-			"msgfml" => $state  &&  isset($ac->text->msgfml) ? $ac->text->msgfml : esc_html__('To avoid emails going to spam or not being sent, make sure the email address here matches the one in the SMTP settings.','easy-form-builder'),
+			"msgfml" => $state  &&  isset($ac->text->msgfml) ? $ac->text->msgfml : esc_html__('Make sure this email address matches the one configured in your SMTP settings to prevent email delivery issues.','easy-form-builder'),
 			"prsm" => $state  &&  isset($ac->text->prsm) ? $ac->text->prsm : esc_html__('To preview the form, you need to save the built form and try again.','easy-form-builder'),
 			"nsrf" => $state  &&  isset($ac->text->nsrf) ? $ac->text->nsrf : esc_html__('No selected rows found.','easy-form-builder'),
 			"spprt" => $state  &&  isset($ac->text->spprt) ? $ac->text->spprt : esc_html__('Support','easy-form-builder'),
 			"mread" => $state  &&  isset($ac->text->mread) ? $ac->text->mread : esc_html__('Mark as Read','easy-form-builder'),
-			"admines" => $state  &&  isset($ac->text->admines) ? $ac->text->admines : esc_html__('Form admins can access the response box after logging in.','easy-form-builder'),
+			"admines" => $state  &&  isset($ac->text->admines) ? $ac->text->admines : esc_html__('Require admin login to view responses','easy-form-builder'),
+			"devMode" => $state  &&  isset($ac->text->devMode) ? $ac->text->devMode : esc_html__('Development Mode (Sandbox)','easy-form-builder'),
+			"devModeDesc" => $state  &&  isset($ac->text->devModeDesc) ? $ac->text->devModeDesc : esc_html__('When enabled, uses sandbox/demo servers for PayPal and other services. Disable for production.','easy-form-builder'),
+			"devModeWarn" => $state  &&  isset($ac->text->devModeWarn) ? $ac->text->devModeWarn : esc_html__('After changing the Development Mode (Sandbox) option, save the settings, then deactivate and reactivate Easy Form Builder plugin from the Plugins page for the changes to take effect.','easy-form-builder'),
+
 			/* translators: %1$s and %2$s are opening and closing link tags for terms and conditions */
 			"trmcn" => $state  &&  isset($ac->text->trmcn) ? $ac->text->trmcn : esc_html__('I have read and agree to %1$sthe terms and conditions%2$s','easy-form-builder'),
 			"trmCheckbox" => $state  &&  isset($ac->text->trmCheckbox) ? $ac->text->trmCheckbox : esc_html__('Terms','easy-form-builder'),
 			"prvnt" => $state  &&  isset($ac->text->prvnt) ? $ac->text->prvnt : esc_html__('Preview in new tab','easy-form-builder'),
 			"mxdt" => $state  &&  isset($ac->text->mxdt) ? $ac->text->mxdt : esc_html__('Maximum date','easy-form-builder'),
 			"mindt" => $state  &&  isset($ac->text->mindt) ? $ac->text->mindt : esc_html__('Minimum date','easy-form-builder'),
+
 			/* translators: %s is the list of valid file formats */
 			"ivf" => $state  &&  isset($ac->text->ivf) ? $ac->text->ivf : esc_html__('Valid formats: %s','easy-form-builder'),
 			"zoom" => $state  &&  isset($ac->text->zoom) ? $ac->text->zoom : esc_html__('Zoom','easy-form-builder'),
 			/* translators: CDN = Content Delivery Network - a service that loads files faster; leafletjs.com is a mapping library; unpkg.com is a JavaScript file hosting service */
-			"lpds" => $state  &&  isset($ac->text->lpds) ? $ac->text->lpds : esc_html__('To enable the Location Picker field, Easy Form Builder loads JavaScript files from the unpkg.com CDN for the leafletjs.com service, but only on pages using this feature.','easy-form-builder'),
+			"lpds" => $state  &&  isset($ac->text->lpds) ? $ac->text->lpds : esc_html__('This is the best version. The em dash creates a natural pause that makes "only on pages where this feature is used" land as a reassuring afterthought — exactly the tone you want for a privacy/transparency notice. It reads more conversationally than the other two options.','easy-form-builder'),
 			"elpo" => $state  &&  isset($ac->text->elpo) ? $ac->text->elpo : esc_html__('Enable Location Picker in Easy Form Builder','easy-form-builder'),
 			"jqinl" => $state  &&  isset($ac->text->jqinl) ? $ac->text->jqinl : esc_html__('Easy Form Builder cannot display the form because jQuery is not properly loaded. This issue might be due to incorrect jQuery invocation by another plugin or the current website theme.','easy-form-builder'),
-			/* translators: %1$s is the name of the addon */
-			"addon" => $state  &&  isset($ac->text->addon) ? $ac->text->addon : esc_html__('%1$s Addon','easy-form-builder'),
+
 			'tlgm' => $state  &&  isset($ac->text->tlgm) ? $ac->text->tlgm : esc_html__('Telegram','easy-form-builder'),
 			"tlgmAddon" => $state  &&  isset($ac->text->tlgmAddon) ? $ac->text->tlgmAddon : esc_html__('Telegram notification Addon','easy-form-builder'),
 			"tlgmDAddon" => $state  &&  isset($ac->text->tlgmDAddon) ? $ac->text->tlgmDAddon : esc_html__('The Telegram notification addon lets you get notifications on your Telegram app whenever you receive new messages or responses','easy-form-builder'),
 			"eln" => $state  &&  isset($ac->text->eln) ? $ac->text->eln : esc_html__('Enter a location name','easy-form-builder'),
+
 			/* translators: %1$s is the plugin name, %2$s and %3$s are opening and closing link tags for support */
-			"alns" => $state  &&  isset($ac->text->alns) ? $ac->text->alns : esc_html__('The %1$s pages are currently unavailable. It looks like another plugin is causing a conflict with %1$s. To fix this issue, %2$s contact %1$s support %3$s for assistance or try disabling your plugins one at a time to identify the one causing the conflict.','easy-form-builder'),
+			"alns" => $state  &&  isset($ac->text->alns) ? $ac->text->alns : esc_html__('The %1$s pages are currently unavailable. It looks like another plugin is causing a conflict with %1$s . To fix this issue, %2$s contact %1$s support %3$s for assistance  or try disabling your plugins one at a time to identify the one causing the conflict.','easy-form-builder'),
 
 			/* translators: %s is the notification type (e.g., Email, SMS, Telegram) */
 			"notis" => $state  &&  isset($ac->text->noti) ? $ac->text->noti : esc_html__('%s notification','easy-form-builder'),
 			"settings" => $state  &&  isset($ac->text->settings) ? $ac->text->settings : esc_html__('Settings','easy-form-builder'),
 			"emlcc" => $state  &&  isset($ac->text->emlcc) ? $ac->text->emlcc : esc_html__('Send email with submitted form content only','easy-form-builder'),
-			"copied" => $state  &&  isset($ac->text->copied) ? $ac->text->copied : esc_html__('copied!','easy-form-builder'),
+			"copied" => $state  &&  isset($ac->text->copied) ? $ac->text->copied : esc_html__('%s copied!','easy-form-builder'),
 			"srvnrsp" => $state  &&  isset($ac->text->srvnrsp) ? $ac->text->srvnrsp : esc_html__('The website is not responding; please refresh and try again—saving or submitting is not available until it is restored.','easy-form-builder'),
 
-			"ecnr" => $state  &&  isset($ac->text->ecnr) ? $ac->text->ecnr : esc_html__('"Hi %s, %s Your account has been successfully created! To get started, Please verify your email address by clicking the link below. This activation link will be valid for 24 hours. %s %s %s %s"','easy-form-builder'),
+			"ecnr" => $state  &&  isset($ac->text->ecnr) ? $ac->text->ecnr : esc_html__('Hi %s, %s Your account has been successfully created! To get started, Please verify your email address by clicking the link below. This activation link will be valid for 24 hours. %s %s %s %s','easy-form-builder'),
 			"ecrp" => $state  &&  isset($ac->text->ecrp) ? $ac->text->ecrp : esc_html__('Hi %s, %s You have requested to reset your password. To reset your password, please click the link below. This link will be valid for 24 hours. If the link expires, you can request a new one through our website. %s %s %s %s','easy-form-builder'),
 			"udnrtun" => $state  &&  isset($ac->text->udnrtun) ? $ac->text->udnrtun : esc_html__('If you did not request this, you don\'t need to do anything further.','easy-form-builder'),
 			"sxnlex" => $state  &&  isset($ac->text->sxnlex) ? $ac->text->sxnlex : esc_html__('Your session has expired or is no longer valid. Please refresh the page to continue.','easy-form-builder'),
 			"uraatn" => $state  &&  isset($ac->text->uraatn) ? $ac->text->uraatn : esc_html__('Your account has been successfully activated. You can now log in and get started!','easy-form-builder'),
 			/* translators: Success message indicating completion */
 			"yad" => $state  &&  isset($ac->text->yad) ? $ac->text->yad : esc_html__('You\'re all done','easy-form-builder'),
-			"servpss" => $state  &&  isset($ac->text->servpss) ? $ac->text->servpss : esc_html__('Enter your email address below, and we\'ll send you a link to reset your password.','easy-form-builder'),
+			"servpss" => $state  &&  isset($ac->text->servpss) ? $ac->text->servpss : esc_html__('Enter your email to reset your password','easy-form-builder'),
 			"imvpwsy" => $state  &&  isset($ac->text->imvpwsy) ? $ac->text->imvpwsy : esc_html__('If your email is valid, a password reset link has been sent to your email address.','easy-form-builder'),
-			/* translators: %s is the feature name being enabled (e.g., SMS, Email, Auto-fill) */
+			/* translators: %s is the feature name being enabled (e.g., SMS, Email, Auto-Populate) */
 			"enbl" => $state  &&  isset($ac->text->enbl) ? $ac->text->enbl : esc_html__('Enable %s','easy-form-builder'),
-			"atfll" => $state  &&  isset($ac->text->atfll) ? $ac->text->atfll : esc_html__('Auto-Fill','easy-form-builder'),
-			"atflls" => $state  &&  isset($ac->text->atflls) ? $ac->text->atflls : esc_html__('Auto-Fills','easy-form-builder'),
-			"atflldm" => $state  &&  isset($ac->text->atflldm) ? $ac->text->atflldm : esc_html__('Auto-fill by previously filled form','easy-form-builder'),
-			"atflltm" => $state  &&  isset($ac->text->atflltm) ? $ac->text->atflltm : esc_html__('Enable AutoFill to automatically fill this field','easy-form-builder'),
+			"atfll" => $state  &&  isset($ac->text->atfll) ? $ac->text->atfll : esc_html__('Auto-Populate','easy-form-builder'),
+			"atflls" => $state  &&  isset($ac->text->atflls) ? $ac->text->atflls : esc_html__('Auto-Populates','easy-form-builder'),
+			"atflldm" => $state  &&  isset($ac->text->atflldm) ? $ac->text->atflldm : esc_html__('Auto-populate from previously submitted forms','easy-form-builder'),
+			"atflltm" => $state  &&  isset($ac->text->atflltm) ? $ac->text->atflltm : esc_html__('Enable Auto-Populate to automatically populate this field','easy-form-builder'),
+			"atfllApiActive" => $state && isset($ac->text->atfllApiActive) ? $ac->text->atfllApiActive : esc_html__('API Auto-Populate Integration is Active','easy-form-builder'),
+			"atfllApiActiveDesc" => $state && isset($ac->text->atfllApiActiveDesc) ? $ac->text->atfllApiActiveDesc : esc_html__('This form uses External API Auto-Populate. To configure settings, go to','easy-form-builder'),
+			"atfllApiLink" => $state && isset($ac->text->atfllApiLink) ? $ac->text->atfllApiLink : esc_html__('Auto-Populate Integrations','easy-form-builder'),
+
+			"selectFormTitle" => $state && isset($ac->text->selectFormTitle) ? $ac->text->selectFormTitle : esc_html__('Select Form', 'easy-form-builder'),
+			"targetForm" => $state && isset($ac->text->targetForm) ? $ac->text->targetForm : esc_html__('Target Form', 'easy-form-builder'),
+			"selectForm" => $state && isset($ac->text->selectForm) ? $ac->text->selectForm : esc_html__('Select a Form', 'easy-form-builder'),
+			"targetFormHelp" => $state && isset($ac->text->targetFormHelp) ? $ac->text->targetFormHelp : esc_html__('Select the form that will receive data from the API', 'easy-form-builder'),
+			"searchFieldsTitle" => $state && isset($ac->text->searchFieldsTitle) ? $ac->text->searchFieldsTitle : esc_html__('Search Fields (Trigger Fields)', 'easy-form-builder'),
+			"searchFieldsInfo" => $state && isset($ac->text->searchFieldsInfo) ? $ac->text->searchFieldsInfo : esc_html__('Select the form fields that will trigger the API search. When user types in these fields, the API will be called.', 'easy-form-builder'),
+			"selectFormFirst" => $state && isset($ac->text->selectFormFirst) ? $ac->text->selectFormFirst : esc_html__('Please select a form first', 'easy-form-builder'),
+			"targetFieldsTitle" => $state && isset($ac->text->targetFieldsTitle) ? $ac->text->targetFieldsTitle : esc_html__('Target Fields (Fields to Fill)', 'easy-form-builder'),
+			"targetFieldsInfo" => $state && isset($ac->text->targetFieldsInfo) ? $ac->text->targetFieldsInfo : esc_html__('Map API response fields to form fields. The API data will automatically fill these fields.', 'easy-form-builder'),
+			"noFieldsFound" => $state && isset($ac->text->noFieldsFound) ? $ac->text->noFieldsFound : esc_html__('No fillable fields found in this form', 'easy-form-builder'),
+			"apiFieldName" => $state && isset($ac->text->apiFieldName) ? $ac->text->apiFieldName : esc_html__('API Field Name', 'easy-form-builder'),
+			"formFieldSelect" => $state && isset($ac->text->formFieldSelect) ? $ac->text->formFieldSelect : esc_html__('Form Field', 'easy-form-builder'),
+			"selectField" => $state && isset($ac->text->selectField) ? $ac->text->selectField : esc_html__('Select Field', 'easy-form-builder'),
+			"cacheSettings" => $state && isset($ac->text->cacheSettings) ? $ac->text->cacheSettings : esc_html__('Cache Settings', 'easy-form-builder'),
+			"cacheHelp" => $state && isset($ac->text->cacheHelp) ? $ac->text->cacheHelp : esc_html__('Cache API responses to improve performance', 'easy-form-builder'),
+			"externalApi" => $state && isset($ac->text->externalApi) ? $ac->text->externalApi : esc_html__('External API Connections', 'easy-form-builder'),
+			"apiIntroTitle" => $state && isset($ac->text->apiIntroTitle) ? $ac->text->apiIntroTitle : esc_html__('Connect Your Forms to External APIs', 'easy-form-builder'),
+			"apiIntroDesc" => $state && isset($ac->text->apiIntroDesc) ? $ac->text->apiIntroDesc : esc_html__('Easily auto-populate your form fields with data from any API. Just add your API endpoint and map the fields!', 'easy-form-builder'),
+			"addNewApi" => $state && isset($ac->text->addNewApi) ? $ac->text->addNewApi : esc_html__('Add API Connection', 'easy-form-builder'),
 			/* translators: %s is the file type (e.g., Image, Document, ZIP, JPEG PNG ...) */
 			"uplsf" => $state  &&  isset($ac->text->uplsf) ? $ac->text->uplsf : esc_html__('Upload the %s file','easy-form-builder'),
 			"csv" => $state  &&  isset($ac->text->csv) ? $ac->text->csv : esc_html__('CSV','easy-form-builder'),
@@ -924,9 +1169,16 @@ class efbFunction {
 			"fform" => $state  &&  isset($ac->text->fform) ? $ac->text->fform : esc_html__('Submitted Form','easy-form-builder'),
 			"paymentNcaptcha" => $state  &&  isset($ac->text->paymentNcaptcha) ? $ac->text->paymentNcaptcha : esc_html__('You can\'t add reCAPTCHA to payment forms.','easy-form-builder'),
 
+			/* translators: %s is the feature name */
+			"lmavt" => $state  &&  isset($ac->text->lmavt) ? $ac->text->lmavt : esc_html__('Learn more about %s or watch the video tutorial.','easy-form-builder'),
+
+			"lrnmrs" => $state  &&  isset($ac->text->lrnmrs) ? $ac->text->lrnmrs : esc_html__('Learn more %s','easy-form-builder'),
+
+			"grecaptcha" => $state  &&  isset($ac->text->grecaptcha) ? $ac->text->grecaptcha : esc_html__('Google reCAPTCHA','easy-form-builder'),
+
 			"srvnsave" => $state  &&  isset($ac->text->srvnsave) ? $ac->text->srvnsave : esc_html__('The connection was interrupted, but don\'t worry—your edits are safely stored in your browser. Refresh the page to continue working.','easy-form-builder'),
 
-			"rasfmb" => $state  &&  isset($ac->text->rasfmb) ? $ac->text->rasfmb : esc_html__('There is an auto-saved version of the form available. Do you want to restore it?','easy-form-builder'),
+			"rasfmb" => $state  &&  isset($ac->text->rasfmb) ? $ac->text->rasfmb : esc_html__('There is an auto-saved version of the form avilable. Do you want to restore it?','easy-form-builder'),
 			"smsWPN" => $state  &&  isset($ac->text->smsWPN) ? $ac->text->smsWPN : esc_html__('SMS notification could not be sent. Please check SMS plugin installed and configured properly.','easy-form-builder'),
 			/* translators: %1$s and %2$s are HTML tags for formatting the success message */
 			"msgSndBut" => $state && isset($ac->text->msgSndBut) ? $ac->text->msgSndBut : esc_html__('Your request was completed successfully. %1$s %2$s', 'easy-form-builder'),
@@ -937,10 +1189,12 @@ class efbFunction {
 			/* translators: %s: Add-on name */
 			"INAddonMsg" => $state  &&  isset($ac->text->INAddonMsg) ? $ac->text->INAddonMsg : esc_html__('Go to the Add-ons page in the Easy Form Builder plugin, install the %s add-on, and try again.','easy-form-builder'),
 			/* translators: %s: Payment add-on name */
-			"IMAddonPMsg" => $state && isset($ac->text->IMAddonPMsg) ? $ac->text->IMAddonPMsg  : esc_html__('To create a payment form, install a payment add-on such as the  %s Add-on first.', 'easy-form-builder'),
+			"IMAddonPMsg" => $state && isset($ac->text->IMAddonPMsg) ? $ac->text->IMAddonPMsg  : esc_html__('To Create a payment form to collect online payments, install a payment add-on such as the %s Add-on first.', 'easy-form-builder'),
+			"activated" => $state  &&  isset($ac->text->activated) ? $ac->text->activated : esc_html__('Activated','easy-form-builder'),
 			"thank" => $state  &&  isset($ac->text->thank) ? $ac->text->thank : esc_html__('Thank','easy-form-builder'),
+
 			/* translators: %s is the caching plugin name */
-			"excefb_" => $state  &&  isset($ac->text->excefb_) ? $ac->text->excefb_ : esc_html__('The %s plugin might interfere with forms of Easy Form Builder\'s functionality. If you encounter any issues with the Forms, disable caching for the Easy Form Builder plugin in the %s plugin\'s settings.','easy-form-builder'),
+			"excefb" => $state  &&  isset($ac->text->excefb) ? $ac->text->excefb : esc_html__('The %s plugins might interfere with forms of Easy Form Builder\'s functionality. If you encounter any issues with the Forms, disable caching for the Easy Form Builder plugin in the %s plugin\'s settings.','easy-form-builder'),
 			/* translators: %1$s is the field name, %2$s is the minimum character count */
 			"ptrnMmm_" => $state  &&  isset($ac->text->ptrnMmm_) ? $ac->text->ptrnMmm_ : esc_html__('The value of the %1$s field does not match the pattern and must be at least %2$s characters.','easy-form-builder'),
 			/* translators: %1$s is the field name, %2$s is the maximum character count */
@@ -956,7 +1210,7 @@ class efbFunction {
 			/* translators: %s is the tab name of the settings in the panel Easy Form Builder */
 			"msgchckvt_" => $state  &&  isset($ac->text->msgchckvt_) ? $ac->text->msgchckvt_ : esc_html__('Review the entered values in the %s tab.this message appeared because an error is detected.','easy-form-builder'),
 			/* translators: %s is the item being duplicated (e.g., form, field) */
-			"ausdup_" => $state  &&  isset($ac->text->ausdup_) ? $ac->text->ausdup_ : esc_html__('Are you sure you want to duplicate the %s ?','easy-form-builder'),
+			"ausdup_" => $state  &&  isset($ac->text->ausdup_) ? $ac->text->ausdup_ : esc_html__('Are you sure you want to duplicate the "%s" ?','easy-form-builder'),
 			/* translators: %s is the option name */
 			"bkXpM_" => $state  &&  isset($ac->text->bkXpM_) ? $ac->text->bkXpM_ : esc_html__('We are sorry, the booking time for the %s option has expired. Please choose from the other available options.','easy-form-builder'),
 			/* translators: %s is the option name */
@@ -965,12 +1219,280 @@ class efbFunction {
 			"sSTAddon" => $state  &&  isset($ac->text->sSTAddon) ? $ac->text->sSTAddon : esc_html__('%s Payment Addon','easy-form-builder'),
 			/* translators: %1$s is the payment add-on name, %2$s is the payment processor name */
 			"sSTDAddon" => $state  &&  isset($ac->text->sSTDAddon) ? $ac->text->sSTDAddon : esc_html__('The %s add-on for Easy Form Builder enables you to integrate your WordPress site with %s for payment processing, donations, and online orders.','easy-form-builder'),
+			/* translators: Activation code = license key. */
+			'activationCode' => $state  &&  isset($ac->text->activationCode) ? $ac->text->activationCode : esc_html__('Activation Code','easy-form-builder'),
 
+			/* translators: Message indicating a feature is available in Free Plus or Pro versions */
+			'thisFeatureAvailableFreePlusPro' => $state && isset($ac->text->thisFeatureAvailableFreePlusPro) ? $ac->text->thisFeatureAvailableFreePlusPro : esc_html__('Want to use this feature? It is included in Free Plus and Pro plans.','easy-form-builder'),
+
+			/* translators: Button text for Free Plus Guide  (link to https://easyformbuilder.com/document/easy-form-builder-free-plus-activation-guide/) */
+			'freePlusActivation' => $state && isset($ac->text->freePlusActivation) ? $ac->text->freePlusActivation : esc_html__('Free Plus Guide','easy-form-builder'),
+
+			/* translators: Search Details - header for detailed search information */
+			'searchDetails' => $state && isset($ac->text->searchDetails) ? $ac->text->searchDetails : esc_html__('Search Details','easy-form-builder'),
+
+			/* translators: Search Results - header for search results */
+			'searchResults' => $state && isset($ac->text->searchResults) ? $ac->text->searchResults : esc_html__('Search Results','easy-form-builder'),
+
+			/* translators: Text for search result count message */
+			'foundResultsFor' => $state && isset($ac->text->foundResultsFor) ? $ac->text->foundResultsFor : esc_html__('Found %s %s for: "%s"','easy-form-builder'),
+
+			/* translators: Single result text */
+			'result' => $state && isset($ac->text->result) ? $ac->text->result : esc_html__('result','easy-form-builder'),
+
+			/* translators: Multiple results text */
+			'results' => $state && isset($ac->text->results) ? $ac->text->results : esc_html__('results','easy-form-builder'),
+
+			/* translators: No results found message */
+			'noResultsFound' => $state && isset($ac->text->noResultsFound) ? $ac->text->noResultsFound : esc_html__('No results found for:','easy-form-builder'),
+
+			/* translators: Forbidden characters error message */
+			'forbiddenCharacters' => $state && isset($ac->text->forbiddenCharacters) ? $ac->text->forbiddenCharacters : esc_html__('Forbidden characters:','easy-form-builder'),
+
+			/* translators: Search details modal title */
+			'searchDetailsTitle' => $state && isset($ac->text->searchDetailsTitle) ? $ac->text->searchDetailsTitle : esc_html__('Search Details','easy-form-builder'),
+
+			/* translators: Template for found results text with placeholders - %1$s is result count, %2$s is result/results text */
+			'foundResultsText' => $state && isset($ac->text->foundResultsText) ? $ac->text->foundResultsText : esc_html__('Found %1$s %2$s for','easy-form-builder'),
+
+			/* translators: Session Duration = title for nonce/session expiration settings */
+			"sessionDuration" => $state && isset($ac->text->sessionDuration) ? $ac->text->sessionDuration : esc_html__('Session Duration','easy-form-builder'),
+
+			/* translators: Nonce Expiration = subtitle for form security token expiration */
+			"nonceExpiration" => $state && isset($ac->text->nonceExpiration) ? $ac->text->nonceExpiration : esc_html__('Form Security Token Expiration','easy-form-builder'),
+
+			/* translators: Session Duration Description = explanation of session duration setting */
+			"sessionDurationDesc" => $state && isset($ac->text->sessionDurationDesc) ? $ac->text->sessionDurationDesc : esc_html__('Set how long form security tokens remain valid. Longer durations provide better user experience but may reduce security.','easy-form-builder'),
+
+			/* translators: %s Day = singular form for day count in session duration (e.g., "1 Day") */
+			"sessionDurationDay" => $state && isset($ac->text->sessionDurationDay) ? $ac->text->sessionDurationDay : esc_html__('%s Day','easy-form-builder'),
+
+			/* translators: %s Days = plural form for day count in session duration (e.g., "2 Days") */
+			"sessionDurationDays" => $state && isset($ac->text->sessionDurationDays) ? $ac->text->sessionDurationDays : esc_html__('%s Days','easy-form-builder'),
+
+			/* translators: Select Duration = placeholder text for session duration dropdown */
+			"selectDuration" => $state && isset($ac->text->selectDuration) ? $ac->text->selectDuration : esc_html__('Select Duration','easy-form-builder'),
+
+			/* translators: Colors & Fonts = heading for the color and font section */
+			"respColors" => $state && isset($ac->text->respColors) ? $ac->text->respColors : esc_html__('Colors & Fonts','easy-form-builder'),
+
+			/* translators: Description under color settings heading */
+			"respColorsDesc" => $state && isset($ac->text->respColorsDesc) ? $ac->text->respColorsDesc : esc_html__('Customize colors and fonts of the response viewer to match your brand.','easy-form-builder'),
+
+			/* translators: Primary Color = label for main brand color picker */
+			"respClrPrimary" => $state && isset($ac->text->respClrPrimary) ? $ac->text->respClrPrimary : esc_html__('Primary','easy-form-builder'),
+
+			/* translators: Primary Dark Color = label for dark variant of primary color */
+			"respClrPrimaryDk" => $state && isset($ac->text->respClrPrimaryDk) ? $ac->text->respClrPrimaryDk : esc_html__('Primary Dark','easy-form-builder'),
+
+			/* translators: Accent Color = label for highlight/accent color */
+			"respClrAccent" => $state && isset($ac->text->respClrAccent) ? $ac->text->respClrAccent : esc_html__('Accent','easy-form-builder'),
+
+			/* translators: Text Color = label for main text color */
+			"respClrText" => $state && isset($ac->text->respClrText) ? $ac->text->respClrText : esc_html__('Text','easy-form-builder'),
+
+			/* translators: Muted Text = label for secondary/muted text color */
+			"respClrMuted" => $state && isset($ac->text->respClrMuted) ? $ac->text->respClrMuted : esc_html__('Muted Text','easy-form-builder'),
+
+			/* translators: Card Background = label for card background color */
+			"respClrBgCard" => $state && isset($ac->text->respClrBgCard) ? $ac->text->respClrBgCard : esc_html__('Card Background','easy-form-builder'),
+
+			/* translators: Meta Background = label for meta bar background color */
+			"respClrBgMeta" => $state && isset($ac->text->respClrBgMeta) ? $ac->text->respClrBgMeta : esc_html__('Meta Background','easy-form-builder'),
+
+			/* translators: Reset Colors = button label to restore default colors */
+			"respClrReset" => $state && isset($ac->text->respClrReset) ? $ac->text->respClrReset : esc_html__('Reset to Defaults','easy-form-builder'),
+
+			/* translators: Customize Colors = button label to open the color customization modal */
+			"respClrCustomize" => $state && isset($ac->text->respClrCustomize) ? $ac->text->respClrCustomize : esc_html__('Customize Colors','easy-form-builder'),
+
+			/* translators: Live Preview = label shown on the live preview section in color modal */
+			"respClrPreview" => $state && isset($ac->text->respClrPreview) ? $ac->text->respClrPreview : esc_html__('Live Preview','easy-form-builder'),
+
+			/* translators: Tracker Background = label for tracker section background color */
+			"respClrBgTrack" => $state && isset($ac->text->respClrBgTrack) ? $ac->text->respClrBgTrack : esc_html__('Tracker Background','easy-form-builder'),
+
+			/* translators: Response Area Background = label for chat/response area background */
+			"respClrBgResp" => $state && isset($ac->text->respClrBgResp) ? $ac->text->respClrBgResp : esc_html__('Response Area Background','easy-form-builder'),
+
+			/* translators: Editor Background = label for rich editor background color */
+			"respClrBgEditor" => $state && isset($ac->text->respClrBgEditor) ? $ac->text->respClrBgEditor : esc_html__('Editor Background','easy-form-builder'),
+
+			/* translators: Editor Text = label for rich editor text/value color */
+			"respClrEditorText" => $state && isset($ac->text->respClrEditorText) ? $ac->text->respClrEditorText : esc_html__('Editor Text','easy-form-builder'),
+
+			/* translators: Placeholder = label for editor placeholder color */
+			"respClrEditorPh" => $state && isset($ac->text->respClrEditorPh) ? $ac->text->respClrEditorPh : esc_html__('Placeholder','easy-form-builder'),
+
+			/* translators: Button Text = label for button text color */
+			"respClrBtnText" => $state && isset($ac->text->respClrBtnText) ? $ac->text->respClrBtnText : esc_html__('Button Text','easy-form-builder'),
+
+			/* translators: Font Family = label for font family selector */
+			"respFontFamily" => $state && isset($ac->text->respFontFamily) ? $ac->text->respFontFamily : esc_html__('Font Family','easy-form-builder'),
+
+			/* translators: Font Size = label for font size selector */
+			"respFontSize" => $state && isset($ac->text->respFontSize) ? $ac->text->respFontSize : esc_html__('Font Size','easy-form-builder'),
+
+			/* translators: Custom Font = label for custom font input */
+			"respCustomFont" => $state && isset($ac->text->respCustomFont) ? $ac->text->respCustomFont : esc_html__('Custom Font','easy-form-builder'),
+
+			/* translators: Font Name = placeholder for custom font name input */
+			"respCustomFontName" => $state && isset($ac->text->respCustomFontName) ? $ac->text->respCustomFontName : esc_html__('Font Name','easy-form-builder'),
+
+			/* translators: Font URL = placeholder for custom font URL input */
+			"respCustomFontUrl" => $state && isset($ac->text->respCustomFontUrl) ? $ac->text->respCustomFontUrl : esc_html__('Font URL (CSS/Google Fonts)','easy-form-builder'),
+
+			/* translators: Add Custom Font description */
+			"respCustomFontDesc" => $state && isset($ac->text->respCustomFontDesc) ? $ac->text->respCustomFontDesc : esc_html__('Add your own font by entering the font name and its CSS URL (e.g. Google Fonts link).','easy-form-builder'),
+
+			/* translators: Plan Management = heading for the plan/subscription management section in settings */
+			"plnMng" => $state && isset($ac->text->plnMng) ? $ac->text->plnMng : esc_html__('Plan Management','easy-form-builder'),
+
+			/* translators: Description text under Plan Management heading */
+			"plnMngD" => $state && isset($ac->text->plnMngD) ? $ac->text->plnMngD : esc_html__('Choose a plan or upgrade to unlock advanced features.','easy-form-builder'),
+
+			/* translators: Change Plan = button label to switch subscription plan */
+			"chngPln" => $state && isset($ac->text->chngPln) ? $ac->text->chngPln : esc_html__('Change Plan','easy-form-builder'),
+
+			/* translators: Description under Change Plan button - explains clicking opens plan selection */
+			"plnMngSw" => $state && isset($ac->text->plnMngSw) ? $ac->text->plnMngSw : esc_html__('Click to view and choose from Free, Free Plus, or Pro plans.','easy-form-builder'),
+
+			/* translators: Current Plan = label showing the user's active plan */
+			"crntPln" => $state && isset($ac->text->crntPln) ? $ac->text->crntPln : esc_html__('Current Plan','easy-form-builder'),
+
+			/* translators: Block type labels for drag-and-drop email builder */
+			"ebHeader" => $state && isset($ac->text->ebHeader) ? $ac->text->ebHeader : esc_html__('Header','easy-form-builder'),
+			"ebLogoImage" => $state && isset($ac->text->ebLogoImage) ? $ac->text->ebLogoImage : esc_html__('Logo / Image','easy-form-builder'),
+			"ebTitle" => $state && isset($ac->text->ebTitle) ? $ac->text->ebTitle : esc_html__('Title','easy-form-builder'),
+			"ebTextBlock" => $state && isset($ac->text->ebTextBlock) ? $ac->text->ebTextBlock : esc_html__('Text Block','easy-form-builder'),
+			"ebMessageContent" => $state && isset($ac->text->ebMessageContent) ? $ac->text->ebMessageContent : esc_html__('Message Content','easy-form-builder'),
+			"ebButton" => $state && isset($ac->text->ebButton) ? $ac->text->ebButton : esc_html__('Button','easy-form-builder'),
+			"ebDivider" => $state && isset($ac->text->ebDivider) ? $ac->text->ebDivider : esc_html__('Divider','easy-form-builder'),
+			"ebSpacer" => $state && isset($ac->text->ebSpacer) ? $ac->text->ebSpacer : esc_html__('Spacer','easy-form-builder'),
+			"ebImage" => $state && isset($ac->text->ebImage) ? $ac->text->ebImage : esc_html__('Image','easy-form-builder'),
+			"ebTwoColumns" => $state && isset($ac->text->ebTwoColumns) ? $ac->text->ebTwoColumns : esc_html__('Two Columns','easy-form-builder'),
+			"ebSocialLinks" => $state && isset($ac->text->ebSocialLinks) ? $ac->text->ebSocialLinks : esc_html__('Social Links','easy-form-builder'),
+			"ebFooter" => $state && isset($ac->text->ebFooter) ? $ac->text->ebFooter : esc_html__('Footer','easy-form-builder'),
+			"ebCustomHTML" => $state && isset($ac->text->ebCustomHTML) ? $ac->text->ebCustomHTML : esc_html__('Custom HTML','easy-form-builder'),
+
+			/* translators: Template labels for email builder */
+			"ebProfessional" => $state && isset($ac->text->ebProfessional) ? $ac->text->ebProfessional : esc_html__('Professional','easy-form-builder'),
+			"ebModernDark" => $state && isset($ac->text->ebModernDark) ? $ac->text->ebModernDark : esc_html__('Modern Dark','easy-form-builder'),
+			"ebMinimalClean" => $state && isset($ac->text->ebMinimalClean) ? $ac->text->ebMinimalClean : esc_html__('Minimal Clean','easy-form-builder'),
+			"ebElegant" => $state && isset($ac->text->ebElegant) ? $ac->text->ebElegant : esc_html__('Elegant','easy-form-builder'),
+			"ebColorful" => $state && isset($ac->text->ebColorful) ? $ac->text->ebColorful : esc_html__('Colorful','easy-form-builder'),
+
+			/* translators: Category labels for email builder blocks panel */
+			"ebCatLayout" => $state && isset($ac->text->ebCatLayout) ? $ac->text->ebCatLayout : esc_html__('Layout','easy-form-builder'),
+			"ebCatContent" => $state && isset($ac->text->ebCatContent) ? $ac->text->ebCatContent : esc_html__('Content','easy-form-builder'),
+			"ebCatShortcodes" => $state && isset($ac->text->ebCatShortcodes) ? $ac->text->ebCatShortcodes : esc_html__('Shortcodes','easy-form-builder'),
+			"ebCatAdvanced" => $state && isset($ac->text->ebCatAdvanced) ? $ac->text->ebCatAdvanced : esc_html__('Advanced','easy-form-builder'),
+
+			/* translators: Canvas & UI labels for email builder */
+			"ebDragBlocksHere" => $state && isset($ac->text->ebDragBlocksHere) ? $ac->text->ebDragBlocksHere : esc_html__('Drag blocks here to build your email template','easy-form-builder'),
+			"ebOrChooseTemplate" => $state && isset($ac->text->ebOrChooseTemplate) ? $ac->text->ebOrChooseTemplate : esc_html__('or choose a template from the Templates panel','easy-form-builder'),
+			"ebSelectBlock" => $state && isset($ac->text->ebSelectBlock) ? $ac->text->ebSelectBlock : esc_html__('Select a block to edit its properties','easy-form-builder'),
+			"ebMoveUp" => $state && isset($ac->text->ebMoveUp) ? $ac->text->ebMoveUp : esc_html__('Move Up','easy-form-builder'),
+			"ebMoveDown" => $state && isset($ac->text->ebMoveDown) ? $ac->text->ebMoveDown : esc_html__('Move Down','easy-form-builder'),
+
+			/* translators: Property labels for email builder properties panel */
+			"ebBgColor" => $state && isset($ac->text->ebBgColor) ? $ac->text->ebBgColor : esc_html__('Background Color','easy-form-builder'),
+			"ebBgCSS" => $state && isset($ac->text->ebBgCSS) ? $ac->text->ebBgCSS : esc_html__('Background (CSS)','easy-form-builder'),
+			"ebPadding" => $state && isset($ac->text->ebPadding) ? $ac->text->ebPadding : esc_html__('Padding','easy-form-builder'),
+			"ebImageURL" => $state && isset($ac->text->ebImageURL) ? $ac->text->ebImageURL : esc_html__('Image URL','easy-form-builder'),
+			"ebWidthPx" => $state && isset($ac->text->ebWidthPx) ? $ac->text->ebWidthPx : esc_html__('Width (px)','easy-form-builder'),
+			"ebAltText" => $state && isset($ac->text->ebAltText) ? $ac->text->ebAltText : esc_html__('Alt Text','easy-form-builder'),
+			"ebFontSize" => $state && isset($ac->text->ebFontSize) ? $ac->text->ebFontSize : esc_html__('Font Size (px)','easy-form-builder'),
+			"ebTitleText" => $state && isset($ac->text->ebTitleText) ? $ac->text->ebTitleText : esc_html__('Title Text','easy-form-builder'),
+			"ebWeight" => $state && isset($ac->text->ebWeight) ? $ac->text->ebWeight : esc_html__('Weight','easy-form-builder'),
+			"ebLineHeight" => $state && isset($ac->text->ebLineHeight) ? $ac->text->ebLineHeight : esc_html__('Line Height','easy-form-builder'),
+			"ebButtonText" => $state && isset($ac->text->ebButtonText) ? $ac->text->ebButtonText : esc_html__('Button Text','easy-form-builder'),
+			"ebLinkURL" => $state && isset($ac->text->ebLinkURL) ? $ac->text->ebLinkURL : esc_html__('Link URL','easy-form-builder'),
+			"ebBackground" => $state && isset($ac->text->ebBackground) ? $ac->text->ebBackground : esc_html__('Background','easy-form-builder'),
+			"ebTextColor" => $state && isset($ac->text->ebTextColor) ? $ac->text->ebTextColor : esc_html__('Text Color','easy-form-builder'),
+			"ebBorderRadius" => $state && isset($ac->text->ebBorderRadius) ? $ac->text->ebBorderRadius : esc_html__('Border Radius (px)','easy-form-builder'),
+			"ebInnerPadding" => $state && isset($ac->text->ebInnerPadding) ? $ac->text->ebInnerPadding : esc_html__('Inner Padding','easy-form-builder'),
+			"ebOuterPadding" => $state && isset($ac->text->ebOuterPadding) ? $ac->text->ebOuterPadding : esc_html__('Outer Padding','easy-form-builder'),
+			"ebThickness" => $state && isset($ac->text->ebThickness) ? $ac->text->ebThickness : esc_html__('Thickness (px)','easy-form-builder'),
+			"ebWidthPercent" => $state && isset($ac->text->ebWidthPercent) ? $ac->text->ebWidthPercent : esc_html__('Width (%)','easy-form-builder'),
+			"ebHeightPx" => $state && isset($ac->text->ebHeightPx) ? $ac->text->ebHeightPx : esc_html__('Height (px)','easy-form-builder'),
+			"ebWidthUnit" => $state && isset($ac->text->ebWidthUnit) ? $ac->text->ebWidthUnit : esc_html__('Width Unit','easy-form-builder'),
+			"ebLeftColumn" => $state && isset($ac->text->ebLeftColumn) ? $ac->text->ebLeftColumn : esc_html__('Left Column','easy-form-builder'),
+			"ebRightColumn" => $state && isset($ac->text->ebRightColumn) ? $ac->text->ebRightColumn : esc_html__('Right Column','easy-form-builder'),
+			"ebLeftTextColor" => $state && isset($ac->text->ebLeftTextColor) ? $ac->text->ebLeftTextColor : esc_html__('Left Text Color','easy-form-builder'),
+			"ebRightTextColor" => $state && isset($ac->text->ebRightTextColor) ? $ac->text->ebRightTextColor : esc_html__('Right Text Color','easy-form-builder'),
+			"ebGap" => $state && isset($ac->text->ebGap) ? $ac->text->ebGap : esc_html__('Gap (px)','easy-form-builder'),
+			"ebLinkColor" => $state && isset($ac->text->ebLinkColor) ? $ac->text->ebLinkColor : esc_html__('Link Color','easy-form-builder'),
+			"ebAddLink" => $state && isset($ac->text->ebAddLink) ? $ac->text->ebAddLink : esc_html__('Add Link','easy-form-builder'),
+			"ebFooterText" => $state && isset($ac->text->ebFooterText) ? $ac->text->ebFooterText : esc_html__('Footer Text','easy-form-builder'),
+			"ebHeaderChildren" => $state && isset($ac->text->ebHeaderChildren) ? $ac->text->ebHeaderChildren : esc_html__('Header Children','easy-form-builder'),
+			"ebLinks" => $state && isset($ac->text->ebLinks) ? $ac->text->ebLinks : esc_html__('Links','easy-form-builder'),
+
+			/* translators: Shortcode button labels for email builder */
+			"ebInsertShortcode" => $state && isset($ac->text->ebInsertShortcode) ? $ac->text->ebInsertShortcode : esc_html__('Insert shortcode:','easy-form-builder'),
+			"ebSCMessage" => $state && isset($ac->text->ebSCMessage) ? $ac->text->ebSCMessage : esc_html__('Message *','easy-form-builder'),
+			"ebSCTitle" => $state && isset($ac->text->ebSCTitle) ? $ac->text->ebSCTitle : esc_html__('Title','easy-form-builder'),
+			"ebSCSiteName" => $state && isset($ac->text->ebSCSiteName) ? $ac->text->ebSCSiteName : esc_html__('Site Name','easy-form-builder'),
+			"ebSCSiteURL" => $state && isset($ac->text->ebSCSiteURL) ? $ac->text->ebSCSiteURL : esc_html__('Site URL','easy-form-builder'),
+			"ebSCAdminEmail" => $state && isset($ac->text->ebSCAdminEmail) ? $ac->text->ebSCAdminEmail : esc_html__('Admin Email','easy-form-builder'),
+			"ebSCFormData" => $state && isset($ac->text->ebSCFormData) ? $ac->text->ebSCFormData : esc_html__('Form data','easy-form-builder'),
+			"ebSCFormName" => $state && isset($ac->text->ebSCFormName) ? $ac->text->ebSCFormName : esc_html__('Form name','easy-form-builder'),
+			"ebSCBlogName" => $state && isset($ac->text->ebSCBlogName) ? $ac->text->ebSCBlogName : esc_html__('Blog name','easy-form-builder'),
+			"ebSCHomeURL" => $state && isset($ac->text->ebSCHomeURL) ? $ac->text->ebSCHomeURL : esc_html__('Home URL','easy-form-builder'),
+			"ebSCAdminEmailDesc" => $state && isset($ac->text->ebSCAdminEmailDesc) ? $ac->text->ebSCAdminEmailDesc : esc_html__('Admin email','easy-form-builder'),
+
+			/* translators: Notification messages for email builder */
+			"ebSCRequired" => $state && isset($ac->text->ebSCRequired) ? $ac->text->ebSCRequired : esc_html__('shortcode_message is required!','easy-form-builder'),
+			"ebMustContainSC" => $state && isset($ac->text->ebMustContainSC) ? $ac->text->ebMustContainSC : esc_html__('Template must contain shortcode_message!','easy-form-builder'),
+			"ebTemplateExported" => $state && isset($ac->text->ebTemplateExported) ? $ac->text->ebTemplateExported : esc_html__('Template exported!','easy-form-builder'),
+			"ebHTMLApplied" => $state && isset($ac->text->ebHTMLApplied) ? $ac->text->ebHTMLApplied : esc_html__('HTML code applied!','easy-form-builder'),
+			"ebResetConfirm" => $state && isset($ac->text->ebResetConfirm) ? $ac->text->ebResetConfirm : esc_html__('Are you sure you want to reset the email template? This cannot be undone.','easy-form-builder'),
+			"ebTemplateReset" => $state && isset($ac->text->ebTemplateReset) ? $ac->text->ebTemplateReset : esc_html__('Template reset to default!','easy-form-builder'),
+			"ebFormContentHere" => $state && isset($ac->text->ebFormContentHere) ? $ac->text->ebFormContentHere : esc_html__('Form content appears here','easy-form-builder'),
+			"ebAddImageURL" => $state && isset($ac->text->ebAddImageURL) ? $ac->text->ebAddImageURL : esc_html__('Add image URL','easy-form-builder'),
+			"ebUnknownBlock" => $state && isset($ac->text->ebUnknownBlock) ? $ac->text->ebUnknownBlock : esc_html__('Unknown block','easy-form-builder'),
+
+			/* translators: Toolbar & sidebar labels for email builder */
+			"ebUndo" => $state && isset($ac->text->ebUndo) ? $ac->text->ebUndo : esc_html__('Undo','easy-form-builder'),
+			"ebRedo" => $state && isset($ac->text->ebRedo) ? $ac->text->ebRedo : esc_html__('Redo','easy-form-builder'),
+			"ebExport" => $state && isset($ac->text->ebExport) ? $ac->text->ebExport : esc_html__('Export','easy-form-builder'),
+			"ebBlocks" => $state && isset($ac->text->ebBlocks) ? $ac->text->ebBlocks : esc_html__('Blocks','easy-form-builder'),
+			"ebProperties" => $state && isset($ac->text->ebProperties) ? $ac->text->ebProperties : esc_html__('Properties','easy-form-builder'),
+			"ebHTMLSourceCode" => $state && isset($ac->text->ebHTMLSourceCode) ? $ac->text->ebHTMLSourceCode : esc_html__('HTML Source Code','easy-form-builder'),
+			"ebApply" => $state && isset($ac->text->ebApply) ? $ac->text->ebApply : esc_html__('Apply','easy-form-builder'),
+
+			/* translators: Global settings labels for email builder */
+			"ebEmailBg" => $state && isset($ac->text->ebEmailBg) ? $ac->text->ebEmailBg : esc_html__('Email Background','easy-form-builder'),
+			"ebContentBg" => $state && isset($ac->text->ebContentBg) ? $ac->text->ebContentBg : esc_html__('Content Background','easy-form-builder'),
+			"ebContentWidth" => $state && isset($ac->text->ebContentWidth) ? $ac->text->ebContentWidth : esc_html__('Content Width (px)','easy-form-builder'),
+			"ebDirection" => $state && isset($ac->text->ebDirection) ? $ac->text->ebDirection : esc_html__('Direction','easy-form-builder'),
+
+			/* translators: Message block notice in email builder properties */
+			"ebMessageNotice" => $state && isset($ac->text->ebMessageNotice) ? $ac->text->ebMessageNotice : esc_html__('This block outputs shortcode_message — the submitted form data.','easy-form-builder'),
+			/* translators: Email-safe HTML notice */
+			"ebNoScript" => $state && isset($ac->text->ebNoScript) ? $ac->text->ebNoScript : esc_html__('Use email-safe HTML only. No script tags.','easy-form-builder'),
+			"ebBlkCount" => $state && isset($ac->text->ebBlkCount) ? $ac->text->ebBlkCount : esc_html__('blocks','easy-form-builder'),
+			/* translators: Copy shortcode label with tooltip */
+			"ebCopyShortcode" => $state && isset($ac->text->ebCopyShortcode) ? $ac->text->ebCopyShortcode : esc_html__('Copy shortcode','easy-form-builder'),
+			"ebCopied" => $state && isset($ac->text->ebCopied) ? $ac->text->ebCopied : esc_html__('Copied!','easy-form-builder'),
+			"ebSCReference" => $state && isset($ac->text->ebSCReference) ? $ac->text->ebSCReference : esc_html__('Shortcode Reference','easy-form-builder'),
+			"ebSCInserted" => $state && isset($ac->text->ebSCInserted) ? $ac->text->ebSCInserted : esc_html__('Shortcode inserted!','easy-form-builder'),
+			"ebSCSelectBlock" => $state && isset($ac->text->ebSCSelectBlock) ? $ac->text->ebSCSelectBlock : esc_html__('Select a text block first, or shortcode copied to clipboard.','easy-form-builder'),
+			"ebSCRequired" => $state && isset($ac->text->ebSCRequired) ? $ac->text->ebSCRequired : esc_html__('Required','easy-form-builder'),
+			"ebViewWebsite" => $state && isset($ac->text->ebViewWebsite) ? $ac->text->ebViewWebsite : esc_html__('View Website','easy-form-builder'),
+			"ebDisclaimerText" => $state && isset($ac->text->ebDisclaimerText) ? $ac->text->ebDisclaimerText : esc_html__('This email was sent automatically. Please do not reply directly.','easy-form-builder'),
+			'payments' => $state && isset($ac->text->payments) ? $ac->text->payments : esc_html__('Payments','easy-form-builder'),
+			/* translators: Cache warning messages shown to admin when cache plugins detected */
+			"cacheWarnTitle" => $state && isset($ac->text->cacheWarnTitle) ? $ac->text->cacheWarnTitle : esc_html__('Cache Plugin Detected','easy-form-builder'),
+			"cacheWarnMsg" => $state && isset($ac->text->cacheWarnMsg) ? $ac->text->cacheWarnMsg : esc_html__('The following cache plugins may interfere with form functionality. If you experience issues, please review the documentation.','easy-form-builder'),
+			"cacheWarnPlugin" => $state && isset($ac->text->cacheWarnPlugin) ? $ac->text->cacheWarnPlugin : esc_html__('Plugin','easy-form-builder'),
+			"cacheWarnVersion" => $state && isset($ac->text->cacheWarnVersion) ? $ac->text->cacheWarnVersion : esc_html__('Version','easy-form-builder'),
+			"cacheWarnDoc" => $state && isset($ac->text->cacheWarnDoc) ? $ac->text->cacheWarnDoc : esc_html__('Read more about cache compatibility','easy-form-builder'),
+
+			"TAdnAtF" => $state  &&  isset($ac->text->TAdnAtF) ? $ac->text->TAdnAtF : esc_html__('Auto-Populate Addon','easy-form-builder'),
+			"DAdnAtF" => $state  &&  isset($ac->text->DAdnAtF) ? $ac->text->DAdnAtF : esc_html__('The Auto-Populate addon enables you to automatically populate form fields from datasets, previously submitted forms, or external APIs.','easy-form-builder'),
 
 		];
-
-
-
 
 		$rtrn =[];
 		$st="null";
@@ -987,378 +1509,100 @@ class efbFunction {
 			}
 		}
 
+		if ($page_request !== 'default') {
+
+			if (!class_exists('EfbAddonPhrases')) {
+				require_once EMSFB_PLUGIN_DIRECTORY . 'includes/phrases.php';
+			}
+
+			$addon_phrases = efb_get_addon_phrases($page_request, $ac, $state);
+			if (!empty($addon_phrases)) {
+				$rtrn = array_merge($rtrn, $addon_phrases);
+			}
+		}
+
+		wp_cache_set($efb_ck_final, $rtrn, 'efb', 7200);
+		self::$req_cache[$efb_ck_final] = $rtrn;
 		return $rtrn;
 	}
 
-	public function send_email_state_new($to ,$sub ,$cont,$pro,$state,$link,$st="null"){
+	public function send_email_state_new($to, $sub, $cont, $pro, $state, $link, $st = "null") {
 
-				add_filter( 'wp_mail_content_type',[$this, 'wpdocs_set_html_mail_content_type' ]);
-				$email_content_type = isset($state[2]) ? $state[2]  : 'traking_link' ;
-			   	$mailResult = "n";
-				if(gettype($to) == 'array')ksort($to);
-				$server_name = isset($_SERVER['SERVER_NAME']) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_NAME'] ) ) : 'yourdomain.com';
-				$from =get_bloginfo('name')." <no-reply@".$server_name.">";
-				if(gettype($to) == 'array' && isset($to[2]) && is_email($to[2]) ){
-					$f = array_pop($to);
-					if(gettype($f)=="array"){
-						$f = array_pop($f);
-					}
-					$from =get_bloginfo('name')." <".$f.">";
-				}else if (gettype($to) == 'object' && isset($to[2]) && is_email($to[2]) ){
-					$f = $to[2];
-					unset($to[2]);
-					$from =get_bloginfo('name')." <".$f.">";
-				}
-				$headers = array(
-				   'MIME-Version: 1.0\r\n',
-				   'From:'.$from,
-
-				);
-				if(gettype($sub)=='string'){
-					$message = $this->email_template_efb($pro,$state,$cont,$link,$email_content_type,$st);
-
-					if( $state!="reportProblem"){
-						$to_;$mailResult;
-						if (gettype($to) == 'string') {
-							$mailResult =  wp_mail( $to,$sub, $message, $headers ) ;
-						} else {
-							$to= array_unique($to);
-							foreach ($to as $r) {
-							  if(isset($r) && is_email($r)){$mailResult = wp_mail($r, $sub, $message, $headers);}
-							}
-
-						}
-
-
-					}
-
-
-
-					if($state=="reportProblem" || $state =="testMailServer" || $state=='addonsDlProblem' ){
-						$support="";
-
-						$a=[101,97,115,121,102,111,114,109,98,117,105,108,108,100,101,114,64,103,109,97,105,108,46,99,111,109];
-						foreach($a as $i){$support .=chr($i);}
-
-						$id = function_exists('get_current_user_id') ? get_current_user_id(): null;
-						$name ="";
-						$mail="";
-						$role ="";
-					if($id){
-						$usr = get_user_by('id',$id);
-						$mail= $usr->user_email;
-						$name = $usr->display_name;
-						$role = $usr->roles[0];
-					}
-
-					$server_name = isset($_SERVER['SERVER_NAME']) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_NAME'] ) ) : 'yourdomain.com';
-					$cont .="<hr><br> website:[" . $server_name . "]<br> Pro state:[".$pro . "]<br> email:[".$mail .
-					"]<br> role:[".$role."]<br> name:[".$name."]<br> state:[".$state."]";
-					$mailResult = wp_mail( $support,$state, $cont, $headers ) ;					}
-
-					return $mailResult;
-				}else{
-					for($i=0 ; $i<2 ; $i++){
-						if(empty($to[$i])==false && $to[$i]!="null" && $to[$i]!=null && $to[$i]!=[null] && $to[$i]!=[]){
-
-							$message = $this->email_template_efb($pro,$state[$i],$cont[$i],$link[$i],$email_content_type,$st);
-
-
-							if( $state!="reportProblem"){
-								$to_;$mailResult;
-								$to_ = $to[$i];
-								if (gettype($to_) == 'string' && is_email($to_)) {
-									$sub_ = $sub[$i];
-									$mailResult =  wp_mail( $to_,$sub_, $message, $headers ) ;
-
-								} else {
-
-									$to[$i]= array_unique($to[$i]);
-									foreach ($to[$i] as $r) {
-										$sub_ = $sub[$i];
-										$to_ = $r;
-										if(is_email($to_)) $mailResult = wp_mail($to_, $sub_, $message, $headers);
-									}
-
-								}
-
-
-
-
-
-							}
-						}
-					}
-
-
-				}
-				    remove_filter( 'wp_mail_content_type', 'wpdocs_set_html_mail_content_type' );
-			   return $mailResult;
-	}
-
-	public function email_template_efb($pro, $state, $m,$link ,$email_content_type,$st="null"){
-		$l ='https://whitestudio.team';
-		$wp_lan = get_locale();
-			 if($wp_lan=="fa_IR"){ $l='https://easyformbuilder.ir'  ;}
-			 else if($wp_lan=="ar" || get_locale()=="arq") {$l ="https://ar.whitestudio.team";}
-			 else if ($wp_lan=="de_DE") {$l ="https://de.whitestudio.team";}
-
-		$text = ['msgdml','mlntip','msgnml','serverEmailAble','vmgs','getProVersion','sentBy','hiUser','trackingCode','newMessage','createdBy','newMessageReceived','goodJob','createdBy' , 'yFreeVEnPro','WeRecivedUrM'];
-        $lang= $this->text_efb($text);
-			$footer= "<a class='efb subtle-link' target='_blank' href='".home_url()."'>".$lang["sentBy"]." ".  get_bloginfo('name')."</a>";
-		$align ='left';
-		$d =  'ltr';
-		if(is_rtl()){
-			$d =  'rtl' ;
-			$align ='right';
-		}
-
-
-
-		if($st=='null') $st = $this->get_setting_Emsfb();
-		if($st=="null") return;
-
-
-		$temp = isset($st->emailTemp) && strlen($st->emailTemp)>10 ? $st->emailTemp : "0";
-
-
-		$title=$lang["newMessage"];
-		$message = gettype($m)=='string' ?  "<h3>".$m."</h3>" : "<h3>".$m[0]."</h3>";
-		$blogName =get_bloginfo('name');
-		$user=function_exists("get_user_by")?  get_user_by('id', 1) :false;
-
-		$adminEmail = $user!=false ? $user->user_email :'';
-		$blogURL= home_url();
-
-
-		$dts =  $lang['msgdml'];
-		$track_id = '';
-		if(gettype($m)=='string'){
-			$track_id =$m;
-		}else{
-			$track_id=$m[0];
-		}
-		$dts = str_replace('%s', $track_id, $dts);
-		$tracking_section = $email_content_type=='just_message' ? "" : "<div id='sectionTracking'><p style='text-align:center'>".$dts." </p><div style='text-align:center'><a href='".$link."' target='_blank'  style='padding:5px;color:white;background:black;' >".$lang['vmgs']."</a></div></div>";
-		if($state=="testMailServer"){
-			$dt = $lang['msgnml'];
-			$de = $lang['mlntip'];
-			$de =preg_replace('/^[^.]*\. /', '', $lang['mlntip']);
-
-			$link = "$l/document/send-email-using-smtp-plugin/";
-						if($wp_lan=="fa_IR") $link = "$l/داکیومنت/ارسال-ایمیل-بوسیله-افزونه-smtp/";
-
-			$de = str_replace('%1$s',"<a href='$link' target='_blank'>",$de);
-			$de = str_replace('%2$s',"</a>",$de);
-			$de = str_replace('%3$s',"<a href='$l/support/' target='_blank'>",$de);
-			$de = str_replace('%4$s',"</a>",$de);
-
-
-			$dt = str_replace('%1$s',"<a href='$l/documents/' target='_blank'>",$dt);
-			$dt = str_replace('%2$s',"</a>",$dt);
-			$title= $lang["serverEmailAble"];
-			$message ="<div style='text-align:center'> <p>".  $footer ."</p></div>
-			<h3 style='padding:5px 5px 5px 5px;color: #021623;'>". $de ."</h3> <h4 style='padding:5px 5px 5px 5px;color: #021623;'>". $dt ."</h4>
-			";
-			 if(strlen($st->activeCode)<5){
-				$p = str_replace('NN'  ,'19' ,$lang["yFreeVEnPro"]);
-				if($wp_lan=="de_DE") $p = str_replace('$'  ,'€' ,$lang["yFreeVEnPro"]);
-				$message ="<h2 style='text-align:center'>"
-				. $p ."</h2>
-				<div style='text-align:center'>
-					<a href='".$l."' target='_blank' style='padding:5px 5px 5px 5px;color:white;background:#202a8d;'>".$lang["getProVersion"]."</a>
-				</div>
-					<h3 style='padding:5px 5px 5px 5px;color: #021623;'>". $de ."</h3>
-					<h4 style='padding:5px 5px 5px 5px;color: #021623;'>". $dt ."</h4>
-					<div style='text-align:center'><p style='text-align:center'>". $lang["createdBy"] ." WhiteStudio.team</p></div>
-				 ";
-			 }
-
-		}elseif($state=="newMessage"){
-
-
-			if(gettype($m)=='string'){
-				$dts = str_replace('%s', $m, $dts);
-				$link = strpos($link,"?")==true ? $link.'&track='.$m : $link.'?track='.$m;
-				$message ="<h2 style='text-align:center'>".$lang["newMessageReceived"]."</h2>
-				<p style='text-align:center'>". $lang["trackingCode"].": ".$m." </p>".$tracking_section ;
-			}else{
-				$dts = str_replace('%s', $m[0], $dts);
-				$link = strpos($link,"?")==true ? $link.'&track='.$m[0] : $link.'?track='.$m[0];
-				$message ="
-				<div style='text-align:".$align.";color:#252526;font-size:14px;background: #f9f9f9;padding: 10px;margin: 20px 5px;'>".$m[1]." </div>".$tracking_section;
-			}
-		}else{
-			if(gettype($m)=='string'){
-
-			$title =$lang["hiUser"];
-			$message='<div style="text-align:center">'.$m.'</div>';
-			}else{
-				$title =$lang["hiUser"];
-				$dts = str_replace('%s', $m[0], $dts);
-				$message="
-				<div style='text-align:center'><h2>".$lang["WeRecivedUrM"]."</h2> </div>
-				<div style='text-align:".$align.";color:#252526;font-size:14px;background: #f9f9f9;padding: 10px;margin: 20px 5px;'>".$m[1]." </div>". $tracking_section;
+		if (!class_exists('EmsfbEmailHandler')) {
+			$email_handler_file = EMSFB_PLUGIN_DIRECTORY . 'includes/class-email-handler.php';
+			if (file_exists($email_handler_file)) {
+				require_once $email_handler_file;
+			} else {
+				return false;
 			}
 		}
 
-		$val ="
-		<html xmlns='http://www.w3.org/1999/xhtml'>
-		<head>
-		<style type='text/css'>
-			@media only screen and (max-width:600px){
-			.containerEmailEfb{width:100% !important; max-width:100% !important;}
-			.containerEmailEfb .columnEmailEfb{display:block !important; width:100% !important; max-width:100% !important;}
-			.containerEmailEfb .columnEmailEfb p{text-align:right !important;}
-			.containerEmailEfb img{max-width:100% !important; height:auto !important; display:block !important;}
-			}
-			</style>
-		</head>
-		<body style='margin:auto 10px;direction:".$d.";color:#000000;'><center>
-			<table class='efb body-wrap' style='text-align:center;width:100%;font-family:arial,sans-serif;border:12px solid rgba(126, 122, 122, 0.08);border-spacing:4px 20px;direction:".$d.";'> <tr>
-				<img src='".EMSFB_PLUGIN_URL ."public/assets/images/email_template1.png' alt='$title' style='width:36%;'>
-				</tr> <tr> <td><center> <table bgcolor='#FFFFFF' width='100%' border='0'>  <tbody> <tr>
-				<td style='font-family:sans-serif;font-size:13px;color:#202020;line-height:1.5'>
-					<h1 style='color:#ff4b93;text-align:center;'>".$title."</h1>
-					</td></tr><tr style='text-align:".$align.";color:#000000;font-size:14px;'><td>
-							<span>".$message." </span>
-				</td> </tr>
-				<tr style='text-align:center;color:#000000;font-size:14px;height:45px;'><td>
-
-				</td></tr></tbody></center></td>
-			</tr></table>
-			</center>
-			<table role='presentation' bgcolor='#F5F8FA' width='100%'><tr> <td align='".$align."' style='padding: 30px 30px; font-size:12px; text-align:center'>".$footer."</td></tr></table>
-		</body></html>
-			";
-			if($temp!="0"){
-				$temp=str_replace('shortcode_message' ,$message,$temp);
-				$temp=str_replace('shortcode_title' ,$title,$temp);
-				$temp=str_replace('shortcode_website_name' ,$blogName,$temp);
-				$temp=str_replace('shortcode_website_url' ,$blogURL,$temp);
-				$temp=str_replace('shortcode_admin_email' ,$adminEmail,$temp);
-				$temp= preg_replace('/(http:@efb@)+/','http://',$temp);
-				$temp= preg_replace('/(https:@efb@)+/','https://',$temp);
-				$temp= preg_replace('/(@efb@)+/','/',$temp);
-				$p = strripos($temp, '</body>');
-
-
-				$footer ="<table role='presentation' bgcolor='#F5F8FA' width='100%'><tr> <td align='".$align."' style='padding: 30px 30px; font-size:12px; text-align:center'>".$footer."</td></tr></table>";
-				if($pro==1){	$temp = substr_replace($temp,$footer,($p),0);}
-
-				$val =  $temp;
-			}
-
-			return $val;
-	}
-
-	public function wpdocs_set_html_mail_content_type() {
-		return 'text/html';
-	}
-
-
-	public function get_setting_Emsfb()
-	{
-
-		$transient = get_transient('emsfb_settings_transient');
-		if ($transient !== false && !empty($transient)) {
-			if (is_string($transient)) {
-				$transient = str_replace('\\', '', $transient);
-				$decoded = json_decode($transient);
-				if ($decoded !== null) return $decoded;
-			} elseif (is_object($transient) || is_array($transient)) {
-				return $transient;
-			}
-		}
-
-
-		$cache_key = 'emsfb_settings_latest';
-		$cached_value = wp_cache_get($cache_key, 'emsfb');
-
-		if (false !== $cached_value) {
-			return $cached_value;
-		}
-
-		$table_name = $this->db->prefix . "emsfb_setting";
-		$value = $this->db->get_var("SELECT setting FROM $table_name ORDER BY id DESC LIMIT 1");
-		if (!isset($value) || empty($value)) {
-			return 'null';
-		}
-		$v = str_replace('\\', '', $value);
-		$rtrn = json_decode($v);
-		$rtrn = $rtrn != null ? $rtrn : 'null';
-
-		update_option('emsfb_settings', $value);
-		if ($rtrn != 'null') {
-			set_transient('emsfb_settings_transient', $value, 1440);
-
-			wp_cache_set($cache_key, $rtrn, 'emsfb', 3600);
-		}
-
-		return $rtrn;
+		$emailHandler = new EmsfbEmailHandler();
+		return $emailHandler->send_email_state_new($to, $sub, $cont, $pro, $state, $link, $st);
 	}
 
 	public function response_to_user_by_msd_id($msg_id,$pro){
 
-		$text = ["youRecivedNewMessage"];
+		global $wpdb;
+		$text = ['youRecivedNewMessage'];
         $lang= $this->text_efb($text);
 
 		$msg_id = preg_replace('/[,]+/','',$msg_id);
 		$email="null";
-		$table_name = $this->db->prefix . "emsfb_msg_";
-		$data = $this->db->get_results("SELECT content ,form_id,track FROM `$table_name` WHERE msg_id = '$msg_id' ORDER BY msg_id DESC LIMIT 1");
+		$table_name =  $wpdb->prefix . "emsfb_msg_";
+		$data =  $wpdb->get_results( $wpdb->prepare( "SELECT content, form_id, track FROM `{$table_name}` WHERE msg_id = %s ORDER BY msg_id DESC LIMIT 1", $msg_id ) );
 
 		$form_id = $data[0]->form_id;
-		$user_res = $data[0]->content;
+		$response_msg = $data[0]->content;
 		$trackingCode = $data[0]->track;
-		$user_res  = str_replace('\\', '', $user_res);
+		$response_msg  = str_replace('\\', '', $response_msg);
 
-
-		$user_res = json_decode($user_res,true);
+		$user_res = json_decode($response_msg,true);
 		$lst = end($user_res);
 		$link_w = $lst['type']=="w_link" ? $lst['value'].'?track='.$trackingCode : 'null';
 
-
-		$table_name = $this->db->prefix . "emsfb_form";
-		$data = $this->db->get_results("SELECT form_structer FROM `$table_name` WHERE form_id = '$form_id' ORDER BY form_id DESC LIMIT 1");
+		$table_name =  $wpdb->prefix . "emsfb_form";
+		$data =  $wpdb->get_results( $wpdb->prepare( "SELECT form_structer FROM `{$table_name}` WHERE form_id = %s ORDER BY form_id DESC LIMIT 1", $form_id ) );
 
 		$data =str_replace('\\', '', $data[0]->form_structer);
 		$data = json_decode($data,true);
-		if(($data[0]["sendEmail"]=="true"|| $data[0]["sendEmail"]==true ) &&   strlen($data[0]["email_to"])>2 ){
+		if(($data[0]['sendEmail']=="true"|| $data[0]['sendEmail']==true ) &&   strlen($data[0]['email_to'])>2 ){
 			$emailsId=[];
 			$email_to = $data[0]["email_to"];
+
 			foreach($data as $key=>$val){
 				if($val['type']=="email" && isset($val['noti']) && in_array($val['noti'] ,[1,'1',true,'true'],true) ){
 					$emailsId[]=$val['id_'];
-				}else if ($val['type']=="email" && $val['id_']==$email_to ){
+				}else if ($val['type']=="email" &&  $val['id_']==$email_to){
 					$emailsId[]=$val['id_'];
 				}
 			}
-			$ac=$this->get_setting_Emsfb();
-			$smtp =(isset($ac->smtp) && (bool)$ac->smtp ) ? true : false;
+
+			$settings = get_setting_Emsfb();
+			$smtp = (is_object($settings) && isset($settings->smtp) && (bool)$settings->smtp ) ? true : false;
 			if($smtp) {
+
+				$rtrn = false;
+				$emails =[];
 				foreach($user_res as $key=>$val){
 					if(isset($user_res[$key]["id_"]) && in_array($user_res[$key]["id_"],$emailsId,true) && isset($val["value"]) && is_email($val["value"]) ){
 						$email=$val["value"];
 						$subject ="📮 ".$lang["youRecivedNewMessage"];
-						$this->send_email_state_new($email ,$subject ,$trackingCode,$pro,"newMessage",$link_w,'null');
+						$rtrn =$this->send_email_state_new($email ,$subject ,$trackingCode,$pro,"newMessage",$link_w,'null');
 					}
 				}
+				return $rtrn;
 			}
+			return false;
 		}
-
-
 
 		if(isset($data[0]['smsnoti']) && intval($data[0]['smsnoti'])==1){
 
 			$phone_numbers=[[],[]];
-			$setting = $this->get_setting_Emsfb('setting');
+			$setting = get_setting_Emsfb();
 
-
-			$numbers = isset($setting->sms_config) && isset($setting->phnNo) && strlen($setting->phnNo)>5  ? explode(',',$setting->phnNo) :[];
+			$numbers = is_object($setting) && isset($setting->sms_config) && isset($setting->phnNo) && strlen($setting->phnNo)>5  ? explode(',',$setting->phnNo) :[];
 			$phone_numbers[0]= $numbers;
-
-
 
 			$have_noti_id =[];
 			foreach($data as $key=>$val){
@@ -1369,8 +1613,6 @@ class efbFunction {
 			if(!empty($have_noti_id)){
 				foreach ($user_res as $value) {
 
-
-
 					if($value['type']=="mobile" && in_array($value['id_'],$have_noti_id)){
 
 						array_push($phone_numbers[1],$value['value']);
@@ -1379,8 +1621,10 @@ class efbFunction {
 				}
 			}
 
-			if(isset($setting->sms_config) && ($setting->sms_config=="wpsms" || $setting->sms_config=='ws.team') ) $this->sms_ready_for_send_efb($form_id, $phone_numbers,$link_w,'respp' ,'wpsms' ,$trackingCode);
+			$smsSendResult =true;
+			if(isset($setting->sms_config) && ($setting->sms_config=="wpsms" || $setting->sms_config=='ws.team') ) $smsSendResult = $this->sms_ready_for_send_efb($form_id, $phone_numbers,$link_w,'respp' ,'wpsms' ,$trackingCode);
 		}
+
 		return 0;
 	}
 
@@ -1456,7 +1700,6 @@ class efbFunction {
 						if($valp[$key]['type']=="option"){
 
 							foreach ($valp as $ki => $vl) {
-
 								if(array_key_exists('id_',$vl)==false) continue;
 
 								if($vl['id_']!=$valp[$key]['parent']){
@@ -1499,337 +1742,253 @@ class efbFunction {
 		return $valp;
 	}
 
-
-	public function sanitize_full_html_efb($html) {
-
-		$global_attributes = array(
-			'class' => true,
-			'id' => true,
-			'style' => true,
-			'title' => true,
-			'data-*' => true,
-			'aria-*' => true,
-		);
-
-
-
-	$allowed_properties = $this->allowed_properties_thml_efb();
-
-
-	$current_domain = wp_parse_url(home_url(), PHP_URL_HOST);
-	$allowed_domains = array('google.com', 'gstatic.com', 'googleapis.com', 'googleusercontent.com', 'youtube.com', 'ytimg.com', 'microsoft.com', 'office.com', 'live.com', 'msn.com', 'outlook.com', 'amazonaws.com', 'cloudfront.net', 'cdnjs.cloudflare.com', 'maxcdn.bootstrapcdn.com', 'jsdelivr.net', 'unpkg.com', 'facebook.com', 'fbcdn.net', 'twitter.com', 'twimg.com', 'github.com', 'github.io', 'vimeo.com', 'vimeocdn.com', 'wikipedia.org', 'wikimedia.org', 'wikidata.org', 'stripe.com', 'paypal.com', 'braintreepayments.com', 'fonts.googleapis.com', 'fonts.gstatic.com', 'use.fontawesome.com', 'dailymotion.com', 'dmcdn.net', 'maps.googleapis.com', 'openstreetmap.org', 'mapbox.com', 'gravatar.com', 'unsplash.com', 'placekitten.com', 'placehold.co', 'akamaihd.net', 'cloudflare.com', 'fastly.net', 'linkedin.com', 'apple.com', 'adobe.com', 'cdn.shopify.com', 'example.com', 'example.org', 'trusted.com', 'cdn.trusted.com');
-
-		$allowed_tags = array(
-			'a' => array_merge($global_attributes, array(
-				'href' => true,
-				'title' => true,
-				'rel' => true,
-				'target' => true
-			)),
-			'abbr' => array_merge($global_attributes, array('title' => true)),
-			'address' => $global_attributes,
-			'area' => array_merge($global_attributes, array(
-				'alt' => true,
-				'coords' => true,
-				'href' => true,
-				'shape' => true,
-				'target' => true,
-			)),
-			'audio' => array_merge($global_attributes, array(
-				'autoplay' => true,
-				'controls' => true,
-				'loop' => true,
-				'muted' => true,
-				'preload' => true,
-				'src' => true,
-			)),
-			'b' => $global_attributes,
-			'blockquote' => array_merge($global_attributes, array('cite' => true)),
-			'br' => $global_attributes,
-			'button' => array_merge($global_attributes, array(
-				'disabled' => true,
-				'name' => true,
-				'type' => true,
-				'value' => true,
-			)),
-			'canvas' => array_merge($global_attributes, array('height' => true, 'width' => true)),
-			'caption' => $global_attributes,
-			'code' => $global_attributes,
-			'col' => array_merge($global_attributes, array('span' => true, 'width' => true)),
-			'data' => array_merge($global_attributes, array('value' => true)),
-			'div' => $global_attributes,
-			'img' => array_merge($global_attributes, array(
-				'src' => true,
-				'alt' => true,
-				'width' => true,
-				'height' => true,
-			)),
-			'input' => array_merge($global_attributes, array(
-				'type' => true,
-				'name' => true,
-				'value' => true,
-				'placeholder' => true,
-				'required' => true,
-			)),
-			'meta' => array_merge($global_attributes, array(
-				'name' => true,
-				'content' => true,
-				'charset' => true,
-			)),
-			'p' => $global_attributes,
-			'table' => $global_attributes,
-			'video' => array_merge($global_attributes, array(
-				'autoplay' => true,
-				'controls' => true,
-				'loop' => true,
-				'muted' => true,
-				'preload' => true,
-				'src' => true,
-				'width' => true,
-				'height' => true,
-			)),
-			'iframe' => array_merge($global_attributes, array(
-				'src' => true,
-				'width' => true,
-				'height' => true,
-				'frameborder' => true,
-				'scrolling' => true,
-				'allowscriptaccess' => true,
-				'allowfullscreen' => true,
-			)),
-		);
-
-
-		$sanitized_html = wp_kses($html, $allowed_tags);
-
-
-		$sanitized_html = preg_replace_callback(
-			'/style=["\']([^"\']+)["\']/i',
-			function ($matches) {
-				return 'style="' . $this->sanitize_style_attribute_efb($matches[1]) . '"';
-			},
-			$sanitized_html
-		);
-
-		return $sanitized_html;
-	}
-
-
 	public function get_geolocation() {
 		  $ip = $this->get_ip_address();
-
 	  }
 
 	  public function get_ip_address() {
         $ip='1.1.1.1';
-		if (isset($_SERVER['HTTP_CLIENT_IP']) && !empty($_SERVER['HTTP_CLIENT_IP'])) {$ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_CLIENT_IP'] ) );
-        } elseif (isset($_SERVER['HTTP_X_FORWARDED_FOR']) && !empty($_SERVER['HTTP_X_FORWARDED_FOR'])) { $ip = sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_FORWARDED_FOR'] ) );
-        } elseif (isset($_SERVER['REMOTE_ADDR'])) {$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );}
+		if (!empty($_SERVER['HTTP_CLIENT_IP'])) {$ip =
+			sanitize_text_field(wp_unslash($_SERVER['HTTP_CLIENT_IP']));
+        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) { $ip = sanitize_text_field(wp_unslash($_SERVER['HTTP_X_FORWARDED_FOR']));
+        } else {$ip = sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR']));}
         $ip = strval($ip);
         $check =strpos($ip,',');
         if($check!=false){$ip = substr($ip,0,$check);}
         return $ip;
     }
 
+	public function addon_adds_cron_efb(){
 
+	if ( ! wp_next_scheduled( 'emsfb_download_addons_cron' ) ) {
+		wp_schedule_single_event( time() + 5, 'emsfb_download_addons_cron' );
+		}
 
-	   public function addon_adds_cron_efb(){
+	}
 
+public function addon_add_efb($value) {
+    if ($value != "AdnOF") {
 
-		if ( ! wp_next_scheduled( 'download_all_addons_efb' ) ) {
-			wp_schedule_single_event( time() + 1, 'download_all_addons_efb' );
-		  }
-
-	   }
-
-
-	   public function addon_add_efb($value){
-				if($value!="AdnOF"){
-
-
-            $server_name = isset($_SERVER['HTTP_HOST']) ? str_replace("www.", "", sanitize_text_field( wp_unslash( $_SERVER['HTTP_HOST'] ) ) ) : '';
-            $vwp = get_bloginfo('version');
-
-			$vwp = substr($vwp,0,3);
-            $u = 'https://whitestudio.team/wp-json/wl/v1/addons-link/'. $server_name.'/'.$value .'/'.$vwp.'/' ;
-			if(get_locale()=='fa_IR'){
-                $u = 'https://easyformbuilder.ir/wp-json/wl/v1/addons-link/'. $server_name.'/'.$value .'/'.$vwp.'/' ;
+        if (!emsfb_is_addon_install_ready_efb()) {
+            $status = emsfb_get_file_access_status_efb();
+            if ($status) {
+                $message = $status['error_message'] ?? $status['current_message'];
+                return array('status' => false, 'message' => $message);
+            } else {
+                $message = esc_html__('File access status not checked yet. Please wait.', 'easy-form-builder');
+                return array('status' => false, 'message' => $message);
             }
-			$attempts = 2;
+        }
 
-            for ($i = 0; $i < $attempts; $i++) {
-				$request = wp_remote_get($u);
-				if (!is_wp_error($request)) {
-					break;
-				}
+        $_server_name = isset($_SERVER['HTTP_HOST']) ? sanitize_text_field(wp_unslash($_SERVER['HTTP_HOST'])) : 'localhost';
+        $server_name = str_replace("www.", "", $_server_name);
+        $vwp = get_bloginfo('version');
+		$vwp = substr($vwp,0,3);
+		$vefb = EMSFB_PLUGIN_VERSION;
+		$domain =  get_option('emsfb_dev_mode', '0') === '1' ? 'demo.whitestudio.team' : 'whitestudio.team';
+        $u = 'https://' . $domain . '/wp-json/wl/v1/addons-link/' . $server_name . '/' . $value . '/' . $vwp . '/' . $vefb . '/';
+        $name_space = 'emsfb_addon_' . $value;
+        if (get_locale() == 'fa_IR' && false) {
+            $u = 'https://easyformbuilder.ir/wp-json/wl/v1/addons-link/' . $server_name . '/' . $value . '/' . $vwp . '/' . $vefb . '/';
+        }
+		delete_option($name_space);
 
-				if ($i == $attempts - 1) {
+        $max_attempts = 2;
+        $attempt = 0;
+        $success = false;
+        $error_message =  esc_html__('Error: server (%s) responded with an invalid request. responded code : %s ','easy-form-builder');
+		$error_messag = sprintf($error_message, $domain, 'not_success');
 
-					add_action( 'admin_notices', 'admin_notice_msg_efb' );
-					return false;
+        while ($attempt < $max_attempts && !$success) {
+            $request = wp_remote_get($u);
+
+            if (is_wp_error($request)) {
+                $attempt++;
+                $error_message = esc_html__('Cannot install add-ons of Easy Form Builder because the plugin is not able to connect to the whitestudio.team server','easy-form-builder');
+
+                if ($attempt >= $max_attempts) {
+                    return array('status' => false, 'message' => $error_message);
+                }
+                continue;
+            }
+
+            $response_code = wp_remote_retrieve_response_code($request);
+
+            if ($response_code != 200) {
+                $attempt++;
+                $error_message =  esc_html__('Error: server (%s) responded with an invalid request. responded code : %s ','easy-form-builder');
+				$error_message = sprintf($error_message, 'whitestudio.team', $response_code);
+
+                if ($attempt >= $max_attempts) {
+                    return array('status' => false, 'message' => $error_message);
+                }
+                continue;
+            }
+
+            $body = wp_remote_retrieve_body($request);
+            $data = json_decode($body);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                $attempt++;
+				$error_message =  esc_html__('Error: server (%s) responded with an invalid request. responded code : %s ','easy-form-builder');
+				$error_message = sprintf($error_message, 'whitestudio.team', 'invalid_json');
+
+                if ($attempt >= $max_attempts) {
+                    return array('status' => false, 'message' => $error_message);
+                }
+                continue;
+            }
+			if($data==null){
+
+				$error_message =  esc_html__('Error: server (%s) responded with an invalid request. responded code : %s ','easy-form-builder');
+				$error_message = sprintf($error_message, 'whitestudio.team', 'invalid_data');
+
+				if ($attempt >= $max_attempts) {
+					return array('status' => false, 'message' => $error_message);
 				}
 			}
 
-            $body = wp_remote_retrieve_body( $request );
-            $data = json_decode( $body );
-
-			if (isset($data->status)==true && $data->status == false) {
-                $response = ['success' => false, "m" => $data->error];
-                wp_send_json_success($response, 200);
+            if ($data->status == false) {
+				$error_message =  esc_html__('Error: server (%s) responded with an invalid request. responded code : %s ','easy-form-builder');
+				$error_message = sprintf($error_message, 'whitestudio.team', 'invalid_status');
+                return array('status' => false, 'message' => $error_message);
             }
 
-
-
-            if (version_compare(EMSFB_PLUGIN_VERSION,$data->v)==-1) {
-				return false;
+            if (version_compare(EMSFB_PLUGIN_VERSION, $data->v) == -1) {
+                return array('status' => false, 'message' =>  esc_html__('The version of the add-on is not compatible with the version of the Easy Form Builder plugin.','easy-form-builder'));
             }
 
-            if($data->download==true){
-                $url =$data->link;
+            if ($data->download == true) {
+                $url = $data->link;
 
+                $directory_name = substr($url, strrpos($url, "/") + 1, -4);
+                $directory = EMSFB_PLUGIN_DIRECTORY . 'vendor/' . $directory_name;
 
-                $directory_name = substr($url,strrpos($url ,"/")+1,-4);
-				$directory = EMSFB_PLUGIN_DIRECTORY . 'vendor/'.$directory_name;
-				if (!file_exists($directory)) {
-                	$this->fun_addon_new($url);
-				}
-				return true;
+                if (!file_exists($directory)) {
+                    $result = $this->fun_addon_new($url);
+                    if (is_wp_error($result)) {
+                        return array('status' => false, 'message' => $result->get_error_message());
+                    }
+                }
+				update_option($name_space, 1);
+                $success = true;
             }
-
         }
-	   }
+
+        if ($success) {
+			update_option($name_space, 1);
+			$message = esc_html__('The %s has been successfully completed','easy-form-builder');
+			$message = sprintf($message,  esc_html__('installation','easy-form-builder'));
+            return array('status' => true, 'message' => $message );
+        } else {
+            return array('status' => false, 'message' => $error_message);
+        }
+    }
+}
 
 	   public function fun_addon_new($url){
 
 		$path = preg_replace( '/wp-content(?!.*wp-content).*/', '', __DIR__ );
 		require_once( $path . 'wp-load.php' );
 		require_once (ABSPATH .'wp-admin/includes/admin.php');
+		require_once(ABSPATH . 'wp-admin/includes/file.php');
 
 		$name =substr($url,strrpos($url ,"/")+1,-4);
 
 		$r =download_url($url);
 		if(is_wp_error($r)){
-
-
-		}else{
-			$path= ABSPATH . 'wp-admin/includes/file.php';
-			if ( ! file_exists( $path ) ) {
-				return false;
-			}else{
-				require_once( ABSPATH . 'wp-admin/includes/file.php' );
-			}
-
-
-			if (WP_Filesystem()) {
-				global $wp_filesystem;
-
-				$directory = EMSFB_PLUGIN_DIRECTORY . '/temp';
-				if (!$wp_filesystem->exists($directory)) {
-					$wp_filesystem->mkdir($directory, 0755);
-				}
-				$v = $wp_filesystem->move($r, EMSFB_PLUGIN_DIRECTORY . '/temp/temp.zip', true);
-			} else {
-
-				$directory = EMSFB_PLUGIN_DIRECTORY . '/temp';
-				if (!file_exists($directory)) {
-					//phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_mkdir -- Fallback when WP_Filesystem fails
-					mkdir($directory, 0755, true);
-				}
-				//phpcs:ignore WordPress.WP.AlternativeFunctions.rename_rename -- Fallback when WP_Filesystem fails
-				$v = rename($r, EMSFB_PLUGIN_DIRECTORY . '/temp/temp.zip');
-			}
-			if(is_wp_error($v)){
-				$s = unzip_file($r, EMSFB_PLUGIN_DIRECTORY . '\\vendor\\');
-				if(is_wp_error($s)){
-
-
-
-					return false;
-				}
-			}else{
-
-				require_once(ABSPATH . 'wp-admin/includes/file.php');
-				WP_Filesystem();
-				$r = unzip_file(EMSFB_PLUGIN_DIRECTORY . '/temp/temp.zip', EMSFB_PLUGIN_DIRECTORY . '/vendor/');
-				if(is_wp_error($r)){
-
-
-
-
-
-					return false;
-				}
-			}
-			return true;
+			return new WP_Error('download_failed',
+				esc_html__('Cannot install add-ons of Easy Form Builder because the plugin is not able to download files', 'easy-form-builder')
+				. ' (' . $r->get_error_message() . ')'
+			);
 		}
+		$filesystem_ready = WP_Filesystem();
+		if ($filesystem_ready) {
+			global $wp_filesystem;
 
-
-
-		$fl_ex = EMSFB_PLUGIN_DIRECTORY."/vendor/".$name."/".$name.".php";
-
-		if(file_exists($fl_ex)){
-			$name ='\Emsfb\\'.$name;
-			require_once  $fl_ex;
-			$t = new $name();
+			$directory = EMSFB_PLUGIN_DIRECTORY . 'temp';
+			if (!$wp_filesystem->exists($directory)) {
+				$wp_filesystem->mkdir($directory, 0755);
+			}
+			$moved = $wp_filesystem->move($r, EMSFB_PLUGIN_DIRECTORY . 'temp/temp.zip', true);
+		} else {
+			$directory = EMSFB_PLUGIN_DIRECTORY . 'temp';
+			if (!file_exists($directory)) {
+				mkdir($directory, 0755, true);
+			}
+			$moved = rename($r, EMSFB_PLUGIN_DIRECTORY . 'temp/temp.zip');
 		}
-
+		if(!$moved){
+			@unlink($r);
+			return new WP_Error('move_failed',
+				esc_html__('Cannot install add-ons of Easy Form Builder because the plugin is not able to move the downloaded file', 'easy-form-builder')
+			);
+		}
+		if (!$filesystem_ready) {
+			WP_Filesystem();
+		}
+		$r = unzip_file(EMSFB_PLUGIN_DIRECTORY . 'temp/temp.zip', EMSFB_PLUGIN_DIRECTORY . 'vendor/');
+		@unlink(EMSFB_PLUGIN_DIRECTORY . 'temp/temp.zip');
+		if(is_wp_error($r)){
+			return new WP_Error('unzip_failed',
+				esc_html__('Cannot install add-ons of Easy Form Builder because the plugin is not able to unzip files', 'easy-form-builder')
+				. ' (' . $r->get_error_message() . ')'
+			);
+		}
+		return true;
 	}
-
 
 	public function download_all_addons_efb(){
 		$state=true;
-		$ac=$this->get_setting_Emsfb();
-		$addons["AdnSPF"]=isset($ac->AdnSPF)?$ac->AdnSPF:0;
-		$addons["AdnATC"]=isset($ac->AdnATC)?$ac->AdnATC:0;
-		$addons["AdnPPF"]=isset($ac->AdnPPF)?$ac->AdnPPF:0;
-		$addons["AdnSS"]=isset($ac->AdnSS)?$ac->AdnSS:0;
-		$addons["AdnESZ"]=isset($ac->AdnESZ)?$ac->AdnESZ:0;
-		$addons["AdnSE"]=isset($ac->AdnSE)?$ac->AdnSE:0;
-		$addons["AdnPDP"]=isset($ac->AdnPDP) ? $ac->AdnPDP : 0;
-		$addons["AdnADP"]=isset($ac->AdnADP) ? $ac->AdnADP : 0;
-		foreach ($addons as $key => $value) {
+		$settings=get_setting_Emsfb();
+		$addons['AdnSPF']	=	isset($settings->AdnSPF)	? $settings->AdnSPF	:0;
+		$addons['AdnATC']	=	isset($settings->AdnATC)	? $settings->AdnATC	:0;
+		$addons['AdnPPF']	=	isset($settings->AdnPPF)	? $settings->AdnPPF	:0;
+		$addons['AdnSS']	=	isset($settings->AdnSS)		? $settings->AdnSS	:0;
+		$addons['AdnESZ']	=	isset($settings->AdnESZ)	? $settings->AdnESZ	:0;
+		$addons['AdnSE']	=	isset($settings->AdnSE)		? $settings->AdnSE	:0;
+		$addons['AdnPDP']	=	isset($settings->AdnPDP)	? $settings->AdnPDP	:0;
+		$addons['AdnADP']	=	isset($settings->AdnADP)	? $settings->AdnADP	:0;
 
+		$error_messag ='';
+		foreach ($addons as $key => $value) {
 
 			if($value ==1){
 
 				$r =$this->addon_add_efb($key);
-				if($r==false){
-					 $state = false;
-					 break;
-				}else{
-					$state = true;
+				if($r['status']==false){
+					$state=false;
+					$error_messag .= $r['message']."<br>";
 				}
 			}
 		}
 
 		if($state==false){
-			$to = isset($ac->emailSupporter) ? $ac->emailSupporter : null;
+			$to = isset($settings->emailSupporter) ? $settings->emailSupporter : null;
 			if($to==null){$to = get_option('admin_email');}
 
 			if($to==null || $to=="null" || $to=="") return false;
 			$sub = esc_html__('Report problem','easy-form-builder') .' ['. esc_html__('Easy Form Builder','easy-form-builder').']';
-			$m =  '<div><p>'.esc_html__('Cannot install add-ons of Easy Form Builder because the plugin is not able to connect to the whitestudio.team server','easy-form-builder').
+			$m =  '<div><p>'. $error_messag.
 				'</p><p><a href="https://whitestudio.team/support/" target="_blank">'.esc_html__('Please kindly report the following issue to the Easy Form Builder team.','easy-form-builder').
 				'</a></p><p>'. esc_html__('Easy Form Builder','easy-form-builder') . '</p>
 					<p><a href="'.home_url().'" target="_blank">'.esc_html__("Sent by:",'easy-form-builder'). ' '.get_bloginfo('name').'</a></p></div>';
-			if(isset($ac->smtp) && (bool)$ac->smtp ) $this->send_email_state_new($to ,$sub ,$m,0,"addonsDlProblem",'null','null');
+
+			if(isset($settings->smtp) && (bool)$settings->smtp ) $this->send_email_state_new($to ,$sub ,$m,0,"addonsDlProblem",'null','null');
 			return false;
 		}
-
-
 
             return true;
 
 	}
 
-
 	public function update_message_admin_side_efb(){
-		$text = ["wmaddon"];
+		$text = ['wmaddon'];
         $lang= $this->text_efb($text);
-		return "<div id='body_efb' class='efb card-public row pb-3 efb'  style='color: #9F6000; background-color: #FEEFB3;  padding: 5px 10px;'> <div class='efb text-center my-5'><h2 style='text-align: center;'></h2><h3 class='efb warning text-center text-darkb fs-4'>".$lang["wmaddon"]."</h3><p class='efb fs-5  text-center my-1 text-pinkEfb' style='text-align: center;'><b>".esc_html__('Easy Form Builder', 'easy-form-builder')."</b><p></div></div>";
+		return "<div id='body_efb' class='efb card-public row pb-3 efb'  style='color: #9F6000; background-color: #FEEFB3;  padding: 5px 10px;'> <div class='efb text-center my-5'><h2 style='text-align: center;'></h2><h3 class='efb warning text-center text-darkb fs-4'>".$lang['wmaddon']."</h3><p class='efb fs-5  text-center my-1 text-pinkEfb' style='text-align: center;'><b>".esc_html__('Easy Form Builder', 'easy-form-builder')."</b><p></div></div>";
 	}
 
-	function admin_notice_msg_efb($s="") {
+	function admin_notice_msg_efb($s) {
 		$v = esc_html__('Easy Form Builder','easy-form-builder');
 		$t = "notice-success";
 		if($s=="dlproblem"){
@@ -1847,7 +2006,6 @@ class efbFunction {
 		<?php
 	}
 
-
 	public function efb_sentence_forms(){
 		$r =[
 			"s_t" => esc_html__('One of the free features','easy-form-builder'),
@@ -1857,17 +2015,31 @@ class efbFunction {
 	}
 
 	public function efb_list_form(){
-		$table_name = $this->db->prefix . "emsfb_form";
-			$value = $this->db->get_results( "SELECT form_id,form_name,form_create_date,form_type FROM `$table_name`" );
-			return $value;
+		global $wpdb;
+
+		$table_name = $wpdb->prefix . "emsfb_form";
+		$value = $wpdb->get_results( "SELECT form_id,form_name,form_create_date,form_type FROM `$table_name`" );
+		$date_format = get_option( 'date_format' );
+		foreach ( $value as $row ) {
+			if ( ! empty( $row->form_create_date ) ) {
+				$timestamp = strtotime( $row->form_create_date );
+				if ( $timestamp !== false ) {
+					$row->form_create_date = wp_date( $date_format, $timestamp );
+				}
+			}
+		}
+		return $value;
 	}
 
-
 	public function efb_code_validate_create($fid, $type, $status, $tc) {
-		$table_name = $this->db->prefix . 'emsfb_stts_';
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'emsfb_stts_';
 		$ip = $this->get_ip_address();
 		$date_now = wp_date('Y-m-d H:i:s');
-		$date_limit = wp_date('Y-m-d H:i:s', strtotime('+24 hours'));
+
+		$settings = get_setting_Emsfb();
+		$sessionDuration = isset($settings->sessionDuration) && is_numeric($settings->sessionDuration) ? intval($settings->sessionDuration) : 1;
+		$date_limit = wp_date('Y-m-d H:i:s', strtotime("+{$sessionDuration} days"));
 
 		$sid = wp_date("ymdHis") . substr(bin2hex(openssl_random_pseudo_bytes(5)), 0, 9);
 		$uid = get_current_user_id() ?? 0;
@@ -1889,62 +2061,75 @@ class efbFunction {
 			'read_date' => $date_limit
 		);
 
-		$sql = $this->db->prepare(
-			"INSERT INTO {$table_name} (`sid`, `fid`, `type_`, `status`, `ip`, `os`, `browser`, `uid`, `tc`, `active`, `date`, `read_date`)
-			VALUES (%s, %d, %d, %s, %s, %s, %s, %d, %s, %d, %s, %s)
-			ON DUPLICATE KEY UPDATE `type_` = VALUES(`type_`), `ip` = VALUES(`ip`), `status` = VALUES(`status`), `uid` = VALUES(`uid`), `active` = VALUES(`active`)",
-			$sid, $fid, $type, $status, $ip, $os, $browser, $uid, $tc, 1, $date_now, $date_limit
-		);
+		$existing = $wpdb->get_var($wpdb->prepare(
+			"SELECT sid FROM {$table_name} WHERE fid = %d AND uid = %d AND ip = %s AND active = 1",
+			$fid, $uid, $ip
+		));
 
-		$this->db->query($sql);
+		if ($existing) {
+
+			$wpdb->query($wpdb->prepare(
+				"UPDATE {$table_name} SET `type_` = %d, `status` = %s, `date` = %s, `read_date` = %s WHERE fid = %d AND uid = %d AND ip = %s AND active = 1",
+				$type, $status, $date_now, $date_limit, $fid, $uid, $ip
+			));
+			return $existing;
+		} else {
+			$sql = $wpdb->prepare(
+				"INSERT INTO {$table_name} (`sid`, `fid`, `type_`, `status`, `ip`, `os`, `browser`, `uid`, `tc`, `active`, `date`, `read_date`)
+				VALUES (%s, %d, %d, %s, %s, %s, %s, %d, %s, %d, %s, %s)",
+				$sid, $fid, $type, $status, $ip, $os, $browser, $uid, $tc, 1, $date_now, $date_limit
+			);
+		}
+
+		$state = $wpdb->query($sql);
 		return $sid;
 	}
 
     public function efb_code_validate_update($sid ,$status ,$tc ) {
-
-		$table_name = $this->db->prefix . 'emsfb_stts_';
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'emsfb_stts_';
         $date_limit = wp_date('Y-m-d H:i:s', strtotime('-24 hours'));
 		$active =0;
 		$read_date = wp_date('Y-m-d H:i:s');
 		if($status=="rsp" || $status=="ppay")  $active =1;
 
-
 	   $sql = "UPDATE $table_name SET status='{$status}', active={$active}, read_date='{$read_date}', tc='{$tc}' WHERE sid='{$sid}' AND active=1";
-
-		$stmt = $this->db->query($sql);
-
-
+		$stmt = $wpdb->query($sql);
 	   return $stmt > 0;
     }
 
     public function efb_code_validate_select($sid ,$fid) {
-		return true;
+		global $wpdb;
 
+		$fid = intval($fid);
+		$table_name = $wpdb->prefix . 'emsfb_stts_';
+        $date_now = wp_date('Y-m-d H:i:s');
 
-		$cache_key = 'emsfb_validate_' . md5($sid . '_' . $fid);
-		$cached_result = wp_cache_get($cache_key, 'emsfb');
+        if(empty($fid) || $fid == 0) {
+            $query = $wpdb->prepare("SELECT * FROM {$table_name} WHERE sid = %s AND read_date > %s AND active = 1 ORDER BY date DESC LIMIT 1", $sid, $date_now);
+        } else {
+            $query = $wpdb->prepare("SELECT * FROM {$table_name} WHERE sid = %s AND read_date > %s AND active = 1 AND fid = %s ORDER BY date DESC LIMIT 1", $sid, $date_now, $fid);
+        }
 
-		if (false !== $cached_result) {
-			return $cached_result;
+        $result = $wpdb->get_row($query, ARRAY_A);
+
+		if(empty($result)){
+			$query = $wpdb->prepare("SELECT * FROM {$table_name} WHERE sid = %s  AND fid = %s ORDER BY date DESC LIMIT 1", $sid, $fid);
+			$result = $wpdb->get_row($query, ARRAY_A);
+			$valid = ['regis','login','reset','recov','logou'];
+			if(empty($result) || !in_array($result['status'], $valid)){
+				return false;
+			}
+			$wpdb->query($wpdb->prepare("UPDATE {$table_name} SET status = %s WHERE sid = %s", 'inact', $sid));
 		}
 
-		$table_name = $this->db->prefix . 'emsfb_stts_';
-        $date_limit = wp_date('Y-m-d H:i:s', strtotime('-24 hours'));
-        $date_now = wp_date('Y-m-d H:i:s');
-        $query =$this->db->prepare("SELECT COUNT(*) FROM {$table_name} WHERE sid = %s AND read_date > %s AND active = 1 AND fid = %s", $sid, $date_now,$fid);
-
-        $result =$this->db->get_var($query);
-        $is_valid = $result === '1';
-
-
-        wp_cache_set($cache_key, $is_valid, 'emsfb', 300);
-
-        return $is_valid;
+        return !empty($result);
     }
 
-
 	public function getVisitorOS() {
-		$ua = isset($_SERVER['HTTP_USER_AGENT']) ? strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) ) : null;
+
+		$_HTTP_USER_AGENT = isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT'])) : null;
+		$ua = strtolower($_HTTP_USER_AGENT);
 		$os = "Unknown";
 
 		if ($ua) {
@@ -1965,7 +2150,9 @@ class efbFunction {
 	}
 
 	public function getVisitorBrowser() {
-	    $ua = isset($_SERVER['HTTP_USER_AGENT'] )? strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) ) ) : null;
+
+	    $_HTTP_USER_AGENT = isset($_SERVER['HTTP_USER_AGENT']) ? sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT'])) : null;
+	    $ua = strtolower($_HTTP_USER_AGENT);
 	    $b = "Unknown";
 
 	    if ($ua) {
@@ -1992,12 +2179,16 @@ class efbFunction {
 	}
 
 	public function sms_ready_for_send_efb($form_id , $numbers ,$page_url ,$state ,$severType,$tracking_code = null){
-		if(!is_dir(EMSFB_PLUGIN_DIRECTORY."/vendor/smssended")) {
-
+		$sms_exists =get_option('emsfb_addon_AdnSS',false);
+		if(!$sms_exists){
 			return false;
 		}
-		require_once(EMSFB_PLUGIN_DIRECTORY."/vendor/smssended/smsefb.php");
-		$smssendefb = new smssendefb();
+		$path = EMSFB_PLUGIN_DIRECTORY."/vendor/smssended/smsefb.php";
+		if(!file_exists($path)){
+			return false;
+		}
+		require_once($path);
+		$smssendefb = new \Emsfb\smssendefb();
 		$sms_content = $smssendefb->get_sms_contact_efb($form_id);
 
 		if(empty($sms_content->id)) return false;
@@ -2019,94 +2210,83 @@ class efbFunction {
 		$recived_your_message = str_replace($rp[0],$rp[1],$recived_your_message);
 		$new_message = str_replace($rp[0],$rp[1],$new_message);
 		$news_response = str_replace($rp[0],$rp[1],$news_response);
-
+		$resukt_send_message = false;
 		if($state=="fform"){
 			if(!empty($numbers[1]) && $new_message){
 				$smssendefb->send_sms_efb($numbers[1],$recived_your_message,$form_id,$severType);
 			}
 			if(!empty($numbers[0]) && $new_message){
 				$new_message = str_replace($page_url."?track=".$tracking_code,$page_url."?track=".$tracking_code.'&user=admin',$new_message);
-				$smssendefb->send_sms_efb($numbers[0],$new_message,$form_id,$severType);
+				$resukt_send_message = $smssendefb->send_sms_efb($numbers[0],$new_message,$form_id,$severType);
 			}
-			return true;
+			return $resukt_send_message==false ? false : true;
 		}else if($state=="resppa"){
 			if(!empty($numbers[1]) && $recived_your_message){
-				$smssendefb->send_sms_efb($numbers[1],$recived_your_message,$form_id,$severType);
+				$resukt_send_message =  $smssendefb->send_sms_efb($numbers[1],$recived_your_message,$form_id,$severType);
 			}
 			if(!empty($numbers[0]) && $news_response){
 				$news_response = str_replace($page_url, $page_url."?track=".$tracking_code.'&user=admin',$news_response);
-				$smssendefb->send_sms_efb($numbers[0],$news_response,$form_id,$severType);
+				$resukt_send_message =  $smssendefb->send_sms_efb($numbers[0],$news_response,$form_id,$severType);
 			}
-			return true;
+			return $resukt_send_message==false ? false : true;
 		}else if ($state=="respp" || $state=="respadmin"){
 			if(!empty($numbers[1]) && $news_response){
-				$smssendefb->send_sms_efb($numbers[1],$news_response,$form_id,$severType);
+				$resukt_send_message = $smssendefb->send_sms_efb($numbers[1],$news_response,$form_id,$severType);
 			}
-			return true;
+			return $resukt_send_message==false ? false : true;
 		}
 	}
 
-
 	public function check_for_active_plugins_cache() {
 
-		$classes = [
-		'Aruba HiSpeed Cache'=>'aruba-hispeed-cache/aruba-hispeed-cache.php',
-			'Cache Enabler' => 'cache-enabler/cache-enabler.php',
-			'Hyper Cache'=>'hyper-cache/plugin.php',
-			'NitroPack '=>'nitropack/main.php',
-		];
-
-
-
-		foreach ( $classes as $plugin => $class ) {
-			if ( is_plugin_active( $class ) ) {
-
-				return $plugin;
-
+		$cache_plugins = get_option('emsfb_cache_plugins' ,0);
+		if(!is_bool($cache_plugins)){
+			$cache_plugins_list = json_decode($cache_plugins, true);
+			$name = '';
+			if (empty($cache_plugins_list)) return 0;
+			foreach ($cache_plugins_list as $plugin) {
+				$name .= $plugin['name'] . ', ';
 			}
+
+			$name = rtrim($name, ', ');
+			return $name;
 		}
 
 		return 0;
 	}
 
-	public function setting_version_efb_update($st ,$pro){
+	public function setting_version_efb_update($st ,$pro, $skip_redirect = false){
+		global $wpdb;
 
-		$start_time = microtime(true);
-		if($st=='null'){
-			$st=$this->get_setting_Emsfb();
+		if($st=='null' || !is_object($st)){
+			$st=get_setting_Emsfb();
+		}
+		if(!is_object($st)){
+			$st = new \stdClass();
 		}
 		$st->efb_version=EMSFB_PLUGIN_VERSION;
-		$table_name = $this->db->prefix . "emsfb_setting";
+
 		$st_ = json_encode($st,JSON_UNESCAPED_UNICODE);
+
         $setting = str_replace('"', '\"', $st_);
-		$email = $st->emailSupporter;
-		$this->db->insert(
-            $table_name,
-            [
-                'setting' => $setting,
-                'edit_by' => get_current_user_id(),
-                'date'    => wp_date('Y-m-d H:i:s'),
-                'email'   => $email
-            ]
-        );
-		set_transient('emsfb_settings_transient', $setting, 1440);
-		update_option('emsfb_settings', $setting);
-
-
-		wp_cache_delete('emsfb_settings_latest', 'emsfb');
+		$this->set_setting_Emsfb($setting,$st->emailSupporter);
 
 		if($pro == true || $pro ==1){
+
+			$is_pro = (int) get_option('emsfb_pro' ,2);
+			if($is_pro==3){ return true; }
+
 			$this->download_all_addons_efb();
-			$end_time = microtime(true);
-			$execution_time = ($end_time - $start_time);
 
-			$request_uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+			if($skip_redirect === true) {
+				return true;
+			}
+
+			$request_uri = isset($_SERVER['REQUEST_URI']) ? sanitize_text_field(wp_unslash($_SERVER['REQUEST_URI'])) : null;
 		    if(isset($request_uri)==true && strpos($request_uri, 'Emsfb') == false ){
-
 				wp_safe_redirect($request_uri);
 				exit;
 			}else{
-
 				?>
 
 				<script>
@@ -2117,12 +2297,9 @@ class efbFunction {
 
 		}
 
-
-
 	}
 
-
-	public function openstreet_map_required_efb($s=0){
+	public function openstreet_map_required_efb($s){
 
 		$url = 'https://unpkg.com/leaflet@1.7.1/dist/leaflet.js';
 		$response = wp_remote_head($url);
@@ -2137,29 +2314,23 @@ class efbFunction {
 		wp_enqueue_style('leaflet_css_efb');
 		wp_register_script('leaflet_js_efb', $url, array(), '1.7.1', true);
 		wp_enqueue_script('leaflet_js_efb');
-
-		if($s==1 || true){
-			wp_register_style('leaflet_fullscreen_css_efb', 'https://unpkg.com/leaflet.fullscreen/Control.FullScreen.css', array(), '1.0');
-			wp_enqueue_style('leaflet_fullscreen_css_efb');
-			wp_register_script('leaflet_fullscreen_js_efb', 'https://unpkg.com/leaflet.fullscreen/Control.FullScreen.js', array(), '1.0', true);
-			wp_enqueue_script('leaflet_fullscreen_js_efb');
-		}
+		wp_register_style('leaflet_fullscreen_css_efb', 'https://unpkg.com/leaflet.fullscreen/Control.FullScreen.css');
+		wp_enqueue_style('leaflet_fullscreen_css_efb');
+		wp_register_script('leaflet_fullscreen_js_efb', 'https://unpkg.com/leaflet.fullscreen/Control.FullScreen.js');
+		wp_enqueue_script('leaflet_fullscreen_js_efb');
 
 		return true;
 
 	}
 
-
 	public function check_and_enqueue_google_captcha_efb($lang) {
         $url = 'https://www.google.com/recaptcha/api.js?hl='.$lang.'&render=explicit#asyncload';
         $response = wp_remote_head($url);
         if (!is_wp_error($response) && 200 == wp_remote_retrieve_response_code($response)) {
-            wp_register_script('recaptcha', $url, array() , '3.0', true);
+            wp_register_script('recaptcha', $url, array() , '2.0', true);
             wp_enqueue_script('recaptcha');
 			return true;
         } else {
-
-
 			return false;
         }
     }
@@ -2182,23 +2353,335 @@ class efbFunction {
 			$str .= 'Plugin URI: ' . $plugin_data['PluginURI'] . '<br>';
 			$str .= 'Version: ' . $plugin_data['Version'] . '<br><br>';
 		}
-		$this->send_email_state_new('reportProblem' ,'reportProblem' ,$str,0,"reportProblem",'null','null');
-	return true;
-}
+		$settings = get_setting_Emsfb('decoded');
+		if(is_object($settings) && isset($settings->smtp) && (bool)$settings->smtp ) $this->send_email_state_new('reportProblem' ,'reportProblem' ,$str,0,"reportProblem",'null','null');
+		return true;
+	}
 
-public function validate_url_efb($url) {
-		global $allowed_domains;
-		$parsed_url = wp_parse_url($url);
-
-		if (isset($parsed_url['host']) && in_array($parsed_url['host'], $allowed_domains)) {
-			return esc_url($url);
+	public function parsing_plugins_efb(){
+		$plugins = get_plugins();
+		$active_plugins = get_option('active_plugins');
+		$plugin_list = [];
+		$cache_plugins_slug = array(
+			'wp-optimize', 'hummingbird-performance', 'big-scoots-cache', 'wp-cloudflare-page-cache',
+			'breeze', 'jetpack', 'w3-total-cache', 'wp-fastest-cache',
+			'wp-rocket', 'comet-cache', 'hyper-cache', 'cache-enabler',
+			'wp-super-cache', 'litespeed-cache', 'nitropack', 'jetpack-boost',
+			'autoptimize', 'wp-rest-cache', 'speedycache', 'clear-cache-for-widgets',
+			'wp-cache', 'wp-cache-system', 'atec-cache-info', 'atec-cache-apcu',
+			'wpspeed', 'wp-speed', 'flying-press',
+			'sg-optimizer', 'swift-performance', 'powered-cache'
+		);
+		foreach ($plugins as $plugin_file => $plugin_data) {
+			$slug = explode('/', $plugin_file)[0];
+			$exists_cache = in_array($slug, $cache_plugins_slug);
+			if($exists_cache){
+				$plugin_list[] = [
+					'name' => $plugin_data['Name'],
+					'version' => $plugin_data['Version'],
+					'slug' => $slug
+				];
+			}
 		}
-			if (strpos($url, 'javascript:') === false && strpos($url, 'data:') === false) {
-				return esc_url($url);
+
+		$val = !empty($plugin_list) ? json_encode($plugin_list) : 0;
+		$old_val = get_option('emsfb_cache_plugins' ,0);
+		if($val != $old_val){
+			update_option('emsfb_cache_plugins', $val );
+			$this->send_email_noti_about_cache_plugins($val);
+		}else{
+			update_option('emsfb_cache_plugins', $val );
+		}
+
+	}
+
+	public function send_email_noti_about_cache_plugins($val){
+		$to = [];
+		$to[] = get_option('admin_email');
+		$settings = get_setting_Emsfb('decoded');
+		if(is_object($settings) && isset($settings->emailSupporter) && $settings->emailSupporter != null && $settings->emailSupporter != 'null' && $settings->emailSupporter != ''){
+			$to[] = $settings->emailSupporter;
+		}
+		$cache_plugins = json_decode($val ,true);
+		$subject = esc_html__('Important: Caching Plugin May Affect Easy Form Builder','easy-form-builder');
+		$message = esc_html__('The following caching plugins are active on your site:','easy-form-builder') . '<br>';
+		foreach ($cache_plugins as $plugin) {
+			$message .= esc_html__('Plugin Name','easy-form-builder') . ': ' . $plugin['name'] . '<br>';
+			$message .= esc_html__('Version','easy-form-builder') . ': ' . $plugin['version'] . '<br>';
+			$message .= esc_html__('Slug','easy-form-builder') . ': ' . $plugin['slug'] . '<br><br>';
+		}
+		$message .= esc_html__('Please note that these plugins may affect the functionality of Easy Form Builder.','easy-form-builder') . '<br>';
+
+		$message .= esc_html__('If you experience any issues, please exclude the page where your form is published from caching or disable these plugins. For detailed guidance on how to set up this exclusion, please refer to the documentation of the respective caching plugin.','easy-form-builder') . '<br>';
+		$message .= esc_html__('Easy Form Builder','easy-form-builder') . '<br>';
+		$message .= esc_html__('Sent by','easy-form-builder') . ': ' . get_bloginfo('name') . '<br>';
+		$message .= esc_html__('URL','easy-form-builder') . ': ' . get_site_url() . '<br>';
+		$message .= esc_html__('Date','easy-form-builder') . ': ' . date('Y-m-d H:i:s') . '<br>';
+
+		if(is_object($settings) && isset($settings->smtp) && (bool)$settings->smtp ) $this->send_email_state_new($to ,$subject ,$message,0,"cache_plugins_noti",'null','null');
+
+		return true;
+	}
+
+	public function make_post_request_efb( $ac) {
+		$url = EMSFB_SERVER_URL . '/wp-json/wl/v1/pro/key';
+
+		$_http_host = isset($_SERVER['HTTP_HOST']) ? sanitize_text_field(wp_unslash($_SERVER['HTTP_HOST'])) : '';
+		$connected = wp_remote_post('https://www.whitestudio.team', array('timeout' => 2));
+		if (is_wp_error($connected)) {
+			$s = explode('@', $ac)[0];
+			$server_name = str_replace("www.", "", $_http_host);
+			$r= isset($s) && md5($server_name) == $s ? (object)['r' => true , 'state' => 'active','pakcage'=>1]   : (object)['r' => false , 'state' => 'notExists' ];
+			return $r;
+
+		}
+		$get_list_plugins_active = json_encode(get_option('active_plugins'));
+		$info = array(
+			'domain' => $_http_host,
+			'email' => get_option('admin_email'),
+			'version_efb' => EMSFB_PLUGIN_VERSION,
+			'php_version' => phpversion(),
+			'wp_version' => get_bloginfo('version'),
+			'lang' => get_locale(),
+			'plugins_active' => $get_list_plugins_active,
+			'key' => $ac,
+			'template_path' => get_template(),
+			'plugins_cache' => get_option('emsfb_cache_plugins'),
+		);
+		$data = array('key' => $ac ,'info'=>$info);
+		 $options = array(
+			'method' => 'POST',
+			'body' => json_encode($data),
+			'headers' => array(
+				'Content-Type' => 'application/json',
+			),
+		);
+		$response = wp_remote_post($url, $options);
+		if (is_wp_error($response)) {
+			return false;
+		}
+		$body = wp_remote_retrieve_body($response);
+		$data = json_decode($body);
+
+		return $data;
+	}
+
+	public function update_pro_status_efb($code) {
+		update_option('emsfb_pro', 1);
+		update_option('emsfb_pro_activeCode', $code);
+		$json = $this->make_post_request_efb($code);
+
+		$r = isset($json->r) ? $json->r : false;
+		if($r===false) {
+			delete_option('emsfb_pro');
+			delete_option('emsfb_pro_ac_date');
+			delete_option('emsfb_pro_activeCode');
+			return false;
+		}
+		update_option('emsfb_pro_ac_date', date('Y-m-d H:i:s'));
+		$state = isset($json->state) ? $json->state : '';
+		if($state=="new") {
+			$activeCode = $json->key;
+			update_option('emsfb_pro_activeCode', $activeCode);
+			update_option('emsfb_pro_ac_date', date('Y-m-d H:i:s'));
+			update_option('emsfb_pro', 1);
+			$st = get_setting_Emsfb();
+			if(!is_object($st)){ $st = new \stdClass(); }
+			$st->activeCode = $activeCode;
+			$this->setting_version_efb_update($st,1);
+			return true;
+		}elseif($state=="active") {
+			update_option('emsfb_pro_ac_date', date('Y-m-d H:i:s'));
+			return true;
+		}elseif ($state=="deactive") {
+			update_option('emsfb_pro' , 0);
+			delete_option('emsfb_pro_ac_date');
+			update_option('emsfb_pro_activeCode' ,$code);
+			return false;
+		}elseif ($state=="notExists") {
+			delete_option('emsfb_pro');
+			delete_option('emsfb_pro_ac_date');
+			delete_option('emsfb_pro_activeCode');
+			return false;
+		}
+	}
+
+	public function weekly_check_pro_efb($activeCode) {
+		$ac_date = get_option('emsfb_pro_ac_date');
+		$ac_date = strtotime($ac_date);
+		$now = strtotime(date('Y-m-d H:i:s'));
+		$diff = ($now - $ac_date) / (60 * 60 * 24);
+		if ($diff > 7) {
+
+			$r = $this->update_pro_status_efb($activeCode);
+			if ($r==1) {
+				update_option('emsfb_pro_ac_date', date('Y-m-d H:i:s'));
+				$this->delete_old_rows_emsfb_stts_();
+				return true;
+			} else {
+				update_option('emsfb_pro' , 0);
+				delete_option('emsfb_pro_ac_date');
+				update_option('emsfb_pro_activeCode', $activeCode);
+				return false;
+			}
+		}
+		return true;
+	}
+	private function validated_pro_efb($s) {
+		$_http_host = isset($_SERVER['HTTP_HOST']) ? sanitize_text_field(wp_unslash($_SERVER['HTTP_HOST'])) : '';
+		$server_name = str_replace("www.", "", $_http_host);
+		return isset($s) && md5($server_name) == $s ? true : false;
+	}
+	public function is_efb_pro($s=1) {
+
+		if ($s == 1) {
+			$is_pro = (int) get_option('emsfb_pro' ,2);
+			if($is_pro==3){ return true; }
+			if($is_pro != 1){ return false; }
+
+			$activeCode = get_option('emsfb_pro_activeCode');
+			if (empty($activeCode)) {
+
+				$st = get_option('emsfb_settings' , 'null');
+				if($st=='null'){
+					$st = get_setting_Emsfb();
+					$activeCode = is_object($st) && isset($st->activeCode) ? $st->activeCode : '';
+
+				}else{
+
+					$st = json_decode($st);
+					if ($st === null) {
+						$st = json_decode(stripslashes($st));
+					}
+					$activeCode = is_object($st) && isset($st->activeCode) ? $st->activeCode : '';
+				}
+
+				if(strlen($activeCode)>5){
+					update_option('emsfb_pro_activeCode', $activeCode);
+				}else{
+					delete_option('emsfb_pro');
+					return false;
+				}
 			}
 
-			return '';
+			$ac = explode('@', $activeCode)[0];
+			if($this->validated_pro_efb($ac)){
+
+				return $this->weekly_check_pro_efb($activeCode);
+			}
+			delete_option('emsfb_pro');
+			return false;
+		} else {
+			$activeCode = explode('@', $s)[0];
+			if ($this->validated_pro_efb($activeCode)) {
+				return $this->update_pro_status_efb($s);
+			}
+			delete_option('emsfb_pro');
+			delete_option('emsfb_pro_ac_date');
+			delete_option('emsfb_pro_activeCode');
 		}
+		return false;
+	}
+
+	public function render_pro_gate_efb( $addon_name = '' ) {
+		$pro_status = (int) get_option( 'emsfb_pro', -1 );
+
+		if ( $pro_status === 1 || $pro_status === 3 ) {
+			return false;
+		}
+
+		$is_expired = ( $pro_status === 0 );
+
+		$buy_url    = EMSFB_SERVER_URL . '/register-costumer';
+		$ac         = get_option( 'emsfb_pro_activeCode', '' );
+		$renew_url  = $buy_url . '?renew=' . urlencode( $ac );
+
+		if ( $is_expired ) {
+			$title   = esc_html__( 'Your activation code has expired!', 'easy-form-builder' );
+			$message = sprintf(
+				esc_html__( 'Your Easy Form Builder Pro subscription has expired. To continue using the %s addon and all Pro features, please renew your subscription.', 'easy-form-builder' ),
+				'<strong>' . esc_html( $addon_name ) . '</strong>'
+			);
+			$btn_url  = $renew_url;
+			$btn_text = esc_html__( 'Renew Subscription', 'easy-form-builder' );
+			$icon     = 'bi-exclamation-triangle-fill';
+			$bg_class = 'bg-dark text-warning';
+		} else {
+			$title   = esc_html__( 'Pro Version Required', 'easy-form-builder' );
+			$message = sprintf(
+				esc_html__( 'The %s addon is a Pro feature. Please upgrade to Easy Form Builder Pro to access this functionality.', 'easy-form-builder' ),
+				'<strong>' . esc_html( $addon_name ) . '</strong>'
+			);
+			$btn_url  = $buy_url;
+			$btn_text = esc_html__( 'Upgrade to Pro', 'easy-form-builder' );
+			$icon     = 'bi-lock-fill';
+			$bg_class = 'bg-dark text-info';
+		}
+
+		?>
+		<div class="wrap">
+			<div class="efb mx-3 mt-5 mb-3 p-4 alert alert-light <?php echo esc_attr( $bg_class ); ?>" style="border-radius:12px; max-width:700px; margin:60px auto; text-align:center;">
+				<i class="efb <?php echo esc_attr( $icon ); ?>" style="font-size:48px; display:block; margin-bottom:16px;"></i>
+				<h2 style="margin:0 0 12px; font-size:1.4em;"><?php echo $title; ?></h2>
+				<p style="font-size:1.05em; line-height:1.7; margin-bottom:20px;"><?php echo $message; ?></p>
+				<a href="<?php echo esc_url( $btn_url ); ?>" target="_blank" class="efb btn btn-primary btn-lg" style="padding:10px 32px; font-size:1.1em; border-radius:8px; text-decoration:none;">
+					<?php echo $btn_text; ?>
+				</a>
+			</div>
+		</div>
+		<?php
+
+		return true;
+	}
+
+	public function noti_expire_efb() {
+		$url = 'https://demo.whitestudio.team/register-costumer?renew=';
+		$url = EMSFB_SERVER_URL . '/register-costumer?renew=';
+
+		$msg = esc_html__('Your Easy Form Builder Pro subscription has expired. To continue enjoying all Pro features and keep your forms running, %1$sRenew your subscription now.%2$s', 'easy-form-builder');
+		$ac = get_option('emsfb_pro_activeCode');
+		$renew = '<br><a class="efb alert-link fw-bold text-info" href="'.$url.'' . $ac . '" target="_blank">';
+		$msg = sprintf($msg, $renew, '</a>');
+		$ativ = esc_html__('Your activation code has expired!', 'easy-form-builder');
+		$div_noti = '<div class="efb mx-3  mt-4 mb-3 pd-5  alert alert-light pointer-efb buy-noti  alert-dismissible bg-dark text-warning"><i class="efb bi-exclamation-triangle-fill text-warning mx-1"></i><span class="efb text-warning">'.$ativ.'</span><br>' . $msg . '<button type="button" class="efb btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>';
+
+		return $div_noti;
+	}
+
+	public function delete_old_rows_emsfb_stts_() {
+		global $wpdb;
+
+		$date_limit = date('Y-m-d', strtotime('-40 days'));
+
+		$table_name_stts =  $wpdb->prefix . 'emsfb_stts_';
+		 $wpdb->query(
+			 $wpdb->prepare(
+				"DELETE FROM $table_name_stts WHERE date < %s",
+				$date_limit
+			)
+		);
+
+		$table_name_temp_links =  $wpdb->prefix . 'emsfb_temp_links';
+		$table_exists = get_option('emsfb_temp_links_table_exists' , false);
+
+		if ($table_exists === false) {
+
+			$table_exists =  $wpdb->get_var("SHOW TABLES LIKE '{$table_name_temp_links}'") == $table_name_temp_links;
+			update_option('emsfb_temp_links_table_exists', $table_exists);
+		}
+		if ($table_exists) {
+			 $wpdb->query(
+				 $wpdb->prepare(
+					"DELETE FROM $table_name_temp_links WHERE created_at < %s",
+					$date_limit
+				)
+			);
+			return true;
+		}
+
+		return false;
+	}
+
 	public function allowed_properties_thml_efb(){
 		return array(
 
@@ -2206,45 +2689,36 @@ public function validate_url_efb($url) {
 			'background-repeat', 'background-size', 'background-attachment', 'background-clip', 'background-origin',
 			'border-image', 'border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'border-image-repeat',
 
-
 			'font', 'font-family', 'font-size', 'font-style', 'font-variant', 'font-weight',
 			'letter-spacing', 'line-height', 'text-align', 'text-decoration', 'text-indent',
 			'text-overflow', 'text-shadow', 'text-transform', 'white-space', 'word-break', 'word-spacing',
 			'direction', 'unicode-bidi', 'writing-mode', 'hyphens',
-
 
 			'width', 'height', 'min-width', 'min-height', 'max-width', 'max-height',
 			'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
 			'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
 			'box-sizing', 'overflow', 'overflow-x', 'overflow-y', 'aspect-ratio',
 
-
 			'border', 'border-width', 'border-style', 'border-color', 'border-top', 'border-right', 'border-bottom', 'border-left',
 			'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
 			'border-radius', 'outline', 'outline-width', 'outline-style', 'outline-color',
 			'border-collapse', 'border-spacing', 'border-image', 'border-image-source', 'border-image-slice', 'border-image-width', 'border-image-outset', 'border-image-repeat',
 
-
 			'box-shadow', 'box-sizing', 'box-decoration-break',
-
 
 			'position', 'top', 'right', 'bottom', 'left', 'z-index',
 			'float', 'clear', 'vertical-align', 'clip',
-
 
 			'display', 'flex', 'flex-grow', 'flex-shrink', 'flex-basis',
 			'align-items', 'align-content', 'align-self', 'justify-content', 'order',
 			'grid', 'grid-template-rows', 'grid-template-columns', 'grid-template-areas',
 			'grid-area', 'row-gap', 'column-gap', 'gap', 'place-items', 'place-content', 'place-self',
 
-
 			'animation', 'animation-name', 'animation-duration', 'animation-timing-function', 'animation-delay',
 			'animation-iteration-count', 'animation-direction', 'animation-fill-mode', 'animation-play-state',
 			'transition', 'transition-property', 'transition-duration', 'transition-timing-function', 'transition-delay',
 
-
 			'border-collapse', 'border-spacing', 'caption-side', 'empty-cells', 'table-layout','collapse',
-
 
 			'cursor', 'opacity', 'clip-path', 'filter', 'backface-visibility', 'visibility',
 			'transform', 'transform-origin', 'transform-style', 'perspective', 'perspective-origin',
@@ -2254,67 +2728,349 @@ public function validate_url_efb($url) {
 		);
 	}
 
-public function sanitize_style_attribute_efb($style) {
-			$allowed_properties = $this->allowed_properties_thml_efb();
-			$style_rules = explode(';', $style);
-			$sanitized_rules = array();
+	public function sanitize_full_html_efb($html) {
 
-			foreach ($style_rules as $rule) {
-				if (strpos($rule, ':') !== false) {
-					list($property, $value) = explode(':', $rule, 2);
-					$property = trim($property);
-					$value = trim($value);
+		$global_attributes = array(
+			'class' => true,
+			'id' => true,
+			'style' => true,
+			'title' => true,
+			'data-*' => true,
+			'aria-*' => true,
+		);
 
+		$allowed_properties = $this->allowed_properties_thml_efb();
 
-					if ( !is_null($property) && in_array($property, $allowed_properties)) {
+		$current_domain = wp_parse_url(home_url(), PHP_URL_HOST);
+		$allowed_domains = array('google.com', 'gstatic.com', 'googleapis.com', 'googleusercontent.com', 'youtube.com', 'ytimg.com', 'microsoft.com', 'office.com', 'live.com', 'msn.com', 'outlook.com', 'amazonaws.com', 'cloudfront.net', 'cdnjs.cloudflare.com', 'maxcdn.bootstrapcdn.com', 'jsdelivr.net', 'unpkg.com', 'facebook.com', 'fbcdn.net', 'twitter.com', 'twimg.com', 'github.com', 'github.io', 'vimeo.com', 'vimeocdn.com', 'wikipedia.org', 'wikimedia.org', 'wikidata.org', 'stripe.com', 'paypal.com', 'braintreepayments.com', 'fonts.googleapis.com', 'fonts.gstatic.com', 'use.fontawesome.com', 'dailymotion.com', 'dmcdn.net', 'maps.googleapis.com', 'openstreetmap.org', 'mapbox.com', 'gravatar.com', 'unsplash.com', 'placekitten.com', 'placehold.co', 'akamaihd.net', 'cloudflare.com', 'fastly.net', 'linkedin.com', 'apple.com', 'adobe.com', 'cdn.shopify.com', 'example.com', 'example.org', 'trusted.com', 'cdn.trusted.com');
 
-						if (strpos($value, 'url(') !== false) {
-							preg_match('/url\(["\']?([^"\')]+)["\']?\)/i', $value, $matches);
-							if (isset($matches[1]) && $this->validate_url_efb($matches[1])) {
+		$allowed_tags = array(
+			'a' => array_merge($global_attributes, array(
+				'href' => true,
+				'title' => true,
+				'rel' => true,
+				'target' => true
+			)),
+			'abbr' => array_merge($global_attributes, array('title' => true)),
+			'address' => $global_attributes,
+			'area' => array_merge($global_attributes, array(
+				'alt' => true,
+				'coords' => true,
+				'href' => true,
+				'shape' => true,
+				'target' => true,
+			)),
+			'article' => $global_attributes,
+			'aside' => $global_attributes,
+			'audio' => array_merge($global_attributes, array(
+				'autoplay' => true,
+				'controls' => true,
+				'loop' => true,
+				'muted' => true,
+				'preload' => true,
+				'src' => true,
+			)),
+			'b' => $global_attributes,
+			'blockquote' => array_merge($global_attributes, array('cite' => true)),
+			'br' => $global_attributes,
+			'button' => array_merge($global_attributes, array(
+				'disabled' => true,
+				'name' => true,
+				'type' => true,
+				'value' => true,
+			)),
+			'canvas' => array_merge($global_attributes, array('height' => true, 'width' => true)),
+			'caption' => $global_attributes,
+			'code' => $global_attributes,
+			'col' => array_merge($global_attributes, array('span' => true, 'width' => true)),
+			'colgroup' => array_merge($global_attributes, array('span' => true)),
+			'data' => array_merge($global_attributes, array('value' => true)),
+			'datalist' => $global_attributes,
+			'div' => $global_attributes,
+			'em' => $global_attributes,
+			'figure' => $global_attributes,
+			'figcaption' => $global_attributes,
+			'footer' => $global_attributes,
+			'h1' => $global_attributes,
+			'h2' => $global_attributes,
+			'h3' => $global_attributes,
+			'h4' => $global_attributes,
+			'h5' => $global_attributes,
+			'h6' => $global_attributes,
+			'header' => $global_attributes,
+			'hr' => $global_attributes,
+			'i' => $global_attributes,
+			'iframe' => array_merge($global_attributes, array(
+				'src' => true,
+				'width' => true,
+				'height' => true,
+				'frameborder' => true,
+				'allowfullscreen' => true,
+			)),
+			'img' => array_merge($global_attributes, array(
+				'src' => true,
+				'alt' => true,
+				'width' => true,
+				'height' => true,
+			)),
+			'label' => array_merge($global_attributes, array('for' => true)),
+			'li' => $global_attributes,
+			'meta' => array_merge($global_attributes, array(
+				'name' => true,
+				'content' => true,
+				'charset' => true,
+				'http-equiv' => true,
+			)),
+			'nav' => $global_attributes,
+			'ol' => array_merge($global_attributes, array('start' => true, 'type' => true)),
+			'p' => $global_attributes,
+			'pre' => $global_attributes,
+			'section' => $global_attributes,
+			'span' => $global_attributes,
+			'strong' => $global_attributes,
+			'sub' => $global_attributes,
+			'sup' => $global_attributes,
+			'table' => array_merge($global_attributes, array(
+				'border' => true,
+				'cellpadding' => true,
+				'cellspacing' => true,
+				'width' => true,
+				'role' => true,
+				'align' => true,
+			)),
+			'tbody' => $global_attributes,
+			'td' => array_merge($global_attributes, array(
+				'colspan' => true,
+				'rowspan' => true,
+				'align' => true,
+				'valign' => true,
+				'width' => true,
+			)),
+			'textarea' => array_merge($global_attributes, array(
+				'name' => true,
+				'rows' => true,
+				'cols' => true,
+				'placeholder' => true,
+				'required' => true,
+			)),
+			'tfoot' => $global_attributes,
+			'th' => array_merge($global_attributes, array('colspan' => true, 'rowspan' => true, 'scope' => true)),
+			'thead' => $global_attributes,
+			'tr' => $global_attributes,
+			'ul' => $global_attributes,
+			'video' => array_merge($global_attributes, array(
+				'autoplay' => true,
+				'controls' => true,
+				'loop' => true,
+				'muted' => true,
+				'preload' => true,
+				'src' => true,
+				'width' => true,
+				'height' => true,
+			)),
+			'iframe' => array_merge($global_attributes, array(
+				'src' => true,
+				'width' => true,
+				'height' => true,
+				'frameborder' => true,
+				'scrolling' => true,
+				'allowscriptaccess' => true,
+				'allowfullscreen' => true,
+			)),
+		);
+
+		$sanitized_html = wp_kses($html, $allowed_tags, array_merge(wp_allowed_protocols(), array('data')));
+
+		$sanitized_html = preg_replace_callback(
+			'/style=["\']([^"\']+)["\']/i',
+			function ($matches) {
+				return 'style="' . $this->sanitize_style_attribute_efb($matches[1]) . '"';
+			},
+			$sanitized_html
+		);
+
+		return $sanitized_html;
+	}
+
+	public function send_email_noti_sid_plugins_efb($status){
+
+		if (!class_exists('EmsfbEmailHandler')) {
+			$email_handler_file = EMSFB_PLUGIN_DIRECTORY . 'includes/class-email-handler.php';
+			if (file_exists($email_handler_file)) {
+				require_once $email_handler_file;
+			} else {
+				return false;
+			}
+		}
+
+		$emailHandler = new EmsfbEmailHandler();
+		return $emailHandler->send_email_noti_sid_plugins_efb($status);
+
+	}
+
+	public function validate_url_efb($url) {
+			global $allowed_domains;
+			$parsed_url = wp_parse_url($url);
+
+			if (isset($parsed_url['host']) && in_array($parsed_url['host'], $allowed_domains)) {
+				return esc_url($url);
+			}
+
+			$lower = strtolower(preg_replace('/\s+/', '', $url));
+			if (strpos($lower, 'javascript:') !== false ||
+			    strpos($lower, 'vbscript:') !== false ||
+			    strpos($lower, 'data:text/html') !== false ||
+			    strpos($lower, 'data:application') !== false) {
+				return '';
+			}
+
+			return esc_url($url);
+		}
+
+	public function sanitize_style_attribute_efb($style) {
+				$allowed_properties = $this->allowed_properties_thml_efb();
+				$style_rules = explode(';', $style);
+				$sanitized_rules = array();
+
+				foreach ($style_rules as $rule) {
+					if (strpos($rule, ':') !== false) {
+						list($property, $value) = explode(':', $rule, 2);
+						$property = trim($property);
+						$value = trim($value);
+
+						$lower_val = strtolower(preg_replace('/\s+/', '', $value));
+						if (strpos($lower_val, 'expression(') !== false ||
+						    strpos($lower_val, '-moz-binding') !== false ||
+						    strpos($lower_val, 'behavior:') !== false ||
+						    strpos($lower_val, 'javascript:') !== false ||
+						    strpos($lower_val, 'vbscript:') !== false) {
+							continue;
+						}
+
+						if ( !is_null($property) && in_array($property, $allowed_properties)) {
+							if (strpos($value, 'url(') !== false) {
+								preg_match('/url\(["\']?([^"\')]+)["\']?\)/i', $value, $matches);
+								if (isset($matches[1]) && $this->validate_url_efb($matches[1])) {
+									$sanitized_rules[] = $property . ': ' . $value;
+								}
+							} else {
 								$sanitized_rules[] = $property . ': ' . $value;
 							}
-						} else {
-
-							$sanitized_rules[] = $property . ': ' . $value;
 						}
 					}
 				}
-			}
 
+				return implode('; ', $sanitized_rules);
+	}
 
-			return implode('; ', $sanitized_rules);
+	function ensure_trailing_colon_efb(string $s, string $colon = ':'): string
+	{
+
+		$punctClass = '[:：\.\!\?\…‥。！？｡．؟\x{06D4}؛;;‽‼⁇⁈⁉⸮።፧။។៕։\x{0964}\x{0965}\x{0589}\x{1362}\x{104B}\x{17D4}\x{17D5}\x{05C3}]';
+
+		if (preg_match('/' . $punctClass . '/u', $s)) {
+			return $s;
 		}
 
-			function ensure_trailing_colon_efb(string $s, string $colon = ':'): string
-			{
+		$closersRe = '(?:\p{Pe}|\p{Pf}|["\'»”’）\)\]】］｝〉》」』〕〗])*';
+		if (preg_match('/(?P<closers>' . $closersRe . ')(?P<spaces>[\s\x{00A0}\x{202F}]*)$/u', $s, $m)) {
+			$endClosers = $m['closers'];
+			$endSpaces  = $m['spaces'];
 
-				$punctClass = '[:：\.\!\?\…‥。！？｡．؟\x{06D4}؛;;‽‼⁇⁈⁉⸮።፧။។៕։\x{0964}\x{0965}\x{0589}\x{1362}\x{104B}\x{17D4}\x{17D5}\x{05C3}]';
+			$s = preg_replace('/' . $closersRe . '[\s\x{00A0}\x{202F}]*$/u', '', $s);
+		} else {
+			$endClosers = '';
+			$endSpaces  = '';
+		}
 
+		if (!preg_match('/\s$/u', $s)) {
+			$s .= ' ';
+		}
 
-				if (preg_match('/' . $punctClass . '/u', $s)) {
-					return $s;
+		return $s . $colon . $endClosers . $endSpaces;
+	}
+
+	public function invalidate_lang_cache_on_settings_update($old_value, $value){
+		self::$lang_cache = [];
+	}
+
+	function fun_is_plugin_active_by_slug( $slug ) {
+
+		if ( ! function_exists( 'is_plugin_active' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+
+		static $all_plugins = null;
+		if ( $all_plugins === null ) {
+
+			$all_plugins = get_plugins();
+		}
+
+		foreach ( $all_plugins as $plugin_file => $data ) {
+
+			$dir = ( strpos( $plugin_file, '/' ) !== false )
+				? substr( $plugin_file, 0, strpos( $plugin_file, '/' ) )
+				: basename( $plugin_file, '.php' );
+
+			if ( $dir === $slug || sanitize_title( $data['Name'] ) === $slug ) {
+
+				if ( is_multisite() && is_plugin_active_for_network( $plugin_file ) ) {
+					return true;
 				}
 
-
-				$closersRe = '(?:\p{Pe}|\p{Pf}|["\'»”’）\)\]】］｝〉》」』〕〗])*';
-				if (preg_match('/(?P<closers>' . $closersRe . ')(?P<spaces>[\s\x{00A0}\x{202F}]*)$/u', $s, $m)) {
-					$endClosers = $m['closers'];
-					$endSpaces  = $m['spaces'];
-
-					$s = preg_replace('/' . $closersRe . '[\s\x{00A0}\x{202F}]*$/u', '', $s);
-				} else {
-					$endClosers = '';
-					$endSpaces  = '';
+				if ( is_plugin_active( $plugin_file ) ) {
+					return true;
 				}
-
-
-				if (!preg_match('/\s$/u', $s)) {
-					$s .= ' ';
-				}
-
-				return $s . $colon . $endClosers . $endSpaces;
 			}
+		}
 
+		$mu_plugins = function_exists( 'get_mu_plugins' ) ? get_mu_plugins() : [];
+		foreach ( $mu_plugins as $mu_file => $data ) {
+
+			$base   = basename( $mu_file, '.php' );
+			$folder = basename( dirname( $mu_file ) );
+
+			if ( $folder === $slug || $base === $slug || sanitize_title( $data['Name'] ) === $slug ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	function fun_get_addons_list_efb($ac = null){
+
+		$addons = [
+			'AdnSPF' => 0,
+			'AdnOF' => 0,
+			'AdnPPF' => 0,
+			'AdnATC' => 0,
+			'AdnSS' => 0,
+			'AdnCPF' => 0,
+			'AdnESZ' => 0,
+			'AdnSE' => 0,
+			'AdnPDP' => 0,
+			'AdnADP' => 0,
+			'AdnPAP' => 0,
+			'AdnTLG' => 0,
+		];
+		if($ac!=null && isset($ac->AdnSPF)==true){
+			$addons['AdnSPF'] = isset($ac->AdnSPF) ? intval($ac->AdnSPF) : 0;
+			$addons["AdnOF"] =  isset($ac->AdnOF) ? intval($ac->AdnOF) : 0;
+			$addons["AdnPPF"] = isset($ac->AdnPPF) ? intval($ac->AdnPPF) : 0;
+			$addons["AdnSS"] =  isset($ac->AdnSS) ? intval($ac->AdnSS) : 0;
+			$addons["AdnESZ"] = isset($ac->AdnESZ) ? intval($ac->AdnESZ) : 0;
+			$addons["AdnSE"]  = isset($ac->AdnSE) ? intval($ac->AdnSE) : 0;
+			$addons["AdnCPF"] = isset($ac->AdnCPF) ? intval($ac->AdnCPF) : 0;
+			$addons["AdnATC"] = isset($ac->AdnATC) ? intval($ac->AdnATC) : 0;
+			$addons["AdnPDP"] = isset($ac->AdnPDP) ? intval($ac->AdnPDP) : 0;
+			$addons["AdnADP"] = isset($ac->AdnADP) ? intval($ac->AdnADP) : 0;
+			$addons["AdnPAP"]=  isset($ac->AdnPAP) ? intval($ac->AdnPAP) : 0;
+			$addons["AdnTLG"]=  isset($ac->AdnTLG) ? intval($ac->AdnTLG) : 0;
+		}
+
+		return $addons;
+	}
 
 	function user_permission_efb_admin_dashboard(){
 
@@ -2323,6 +3079,91 @@ public function sanitize_style_attribute_efb($style) {
 		}
 		return false;
 	}
+
+	public static function set_setting_Emsfb ($newSettings, $email = '')
+    {
+        if (empty($newSettings)) {
+            return false;
+        }
+
+        $json = '';
+        if(is_object($newSettings) || is_array($newSettings)){
+
+            $json = json_encode($newSettings, JSON_UNESCAPED_UNICODE);
+        }else{
+
+            $json = $newSettings;
+
+            if (json_decode($json) === null && json_last_error() !== JSON_ERROR_NONE) {
+                $unslashed = stripslashes($json);
+                if (json_decode($unslashed) !== null) {
+                    $json = $unslashed;
+                } else {
+                    return false;
+                }
+            }
+        }
+
+        if ($json === false) {
+            return false;
+        }
+
+        global $wpdb;
+        $table_name = $wpdb->prefix . "emsfb_setting";
+
+        $count = $wpdb->get_var("SELECT COUNT(*) FROM {$table_name}");
+
+        if ($count > 2) {
+
+            $last_id = $wpdb->get_var("SELECT MAX(id) FROM {$table_name}");
+
+            $wpdb->update(
+                $table_name,
+                [
+                    'setting' => $json,
+                    'edit_by' => get_current_user_id(),
+                    'date'    => wp_date('Y-m-d H:i:s'),
+                    'email'   => $email
+                ],
+                ['id' => $last_id],
+                ['%s', '%d', '%s', '%s'],
+                ['%d']
+            );
+        } else {
+
+            $wpdb->insert(
+                $table_name,
+                [
+                    'setting' => $json,
+                    'edit_by' => get_current_user_id(),
+                    'date'    => wp_date('Y-m-d H:i:s'),
+                    'email'   => $email
+                ],
+                ['%s', '%d', '%s', '%s']
+            );
+        }
+
+        update_option('emsfb_settings', $json);
+        set_transient('emsfb_settings_transient', $json, 1800);
+
+        $decoded_for_sync = json_decode($json);
+        if ($decoded_for_sync !== null && isset($decoded_for_sync->package_type)) {
+            $synced_pt = intval($decoded_for_sync->package_type);
+            if (in_array($synced_pt, [0, 1, 2, 3], true)) {
+                $current_pro = get_option('emsfb_pro');
+                if (intval($current_pro) !== $synced_pt) {
+                    update_option('emsfb_pro', $synced_pt);
+                }
+            }
+        }
+
+        wp_cache_delete('settings:decoded', 'emsfb');
+        wp_cache_delete('settings:pub', 'emsfb');
+        wp_cache_delete('settings:raw', 'emsfb');
+
+        \Emsfb::get_setting_Emsfb('_clear_cache');
+
+        return true;
+       }
+
 }
-
-
