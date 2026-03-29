@@ -4,7 +4,7 @@ Donate link: https://whitestudio.team/donate-easy-form-builder/
 Tags: form builder, form plugin, multi step form, survey form, payment form
 Requires at least: 5.0
 Tested up to: 6.9
-Stable tag: 4.0.2
+Stable tag: 4.0.3
 Requires PHP: 7.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.en.html
@@ -252,6 +252,20 @@ No personal or form submission data is sent to this external source. The CDN is 
 = Where can I find documentation and support? =
 For full setup instructions, and guides visit [ Easy Form Builder Documentation](https://whitestudio.team/documents)
 
+= What are the different confirmation code styles and how do I customize confirmation code (or tracking code) in my WordPress form submissions? =
+Easy Form Builder WordPress plugin includes seven confirmation code (or tracking code) styles with locale-aware character support for submitted forms. Each tracking ID style can use characters from 55+ languages including Chinese, Japanese, Korean, Russian, Hebrew, Hindi, Persian, Arabic, Bengali, Gujarati, Punjabi, Tamil, Telugu, Kannada, Malayalam, Greek, Thai, Khmer, Lao, Myanmar, Georgian, Armenian, and more.
+
+When users submit forms through the Easy Form Builder WordPress plugin, they receive a unique tracking code or confirmation code based on your chosen style. The seven available confirmation code styles for form submissions are:
+- Date + Random Number
+- Date + National Language Letters & Random Number
+- Date + National Language Letters Only
+- Date + English Characters
+- Date + National Random Numbers
+- Unique Number (date-based)
+- National Language Letters & Random Number
+
+In the Easy Form Builder plugin settings, you can choose your preferred confirmation code style from the form submission tracking options. The plugin automatically selects characters based on your website's language/locale, making it ideal for multilingual and RTL (right-to-left) language WordPress websites. This feature improves code readability and user experience when users submit forms, displaying confirmation codes and tracking IDs in the visitor's native language and script.
+
 
 == Installation ==
 
@@ -260,7 +274,7 @@ If your theme uses Bootstrap, go to “Easy Form Builder” → “Settings” a
 
 1. Download [*Easy Form Builder*](https://downloads.wordpress.org/plugin/easy-form-builder.zip)
 2. Navigate to Dashboard → “Plugins” → “Add New” → “Upload Plugin” → select *Easy Form Builder* zip file then “Activate”.
-3. In the menu bar, navigate to “Easy Form Builder” → “Settings'' → “Add Google recaptcha keys”
+3. In the menu bar, navigate to “Easy Form Builder” → “Settings'' → “Add Google reCAPTCHA keys”
 4. For local testing environments, you may use the key and secret below. For online websites, [click here to obtain the API keys for reCAPTCHA v2](https://www.google.com/recaptcha).
 
 
@@ -294,18 +308,22 @@ For more information, visit the official website:
 10. Localization Easy Form Builder to your language
 11. Email template Editor of Easy Form Builder
 12. Order payment forms
-13. configuration Response box of Easy Form Builder
+13. Configuration Response box of Easy Form Builder
 14. Email Setting of Easy Form Builder
-15. SMS configuration of Easy From Builder
+15. SMS configuration of Easy Form Builder
 16. Confirmation Code Search Field
 17. WordPress Support Ticket Conversation and Reply Form
 
 
 == Upgrade Notice ==
 
-= 4.0.2 =
+= 4.0.3 =
+
+* Improved UX of Easy Form Builder
 
 * Fixed issues
+
+= 4.0.2 =
 
 = 4.0.1 =
 
