@@ -66,10 +66,7 @@ class Create {
 		$lang = $efbFunction->text_efb(1);
 
 		$settings = get_setting_Emsfb('decoded');
-		//clean emailtemplate from settings  "emailTemp"
-		if (isset($settings->emailTemp)) {
-			unset($settings->emailTemp);
-		}
+
 
 		$pro = $efbFunction->is_efb_pro(1);
 		$efbFunction->setting_version_efb_update($settings, $pro, true);
@@ -263,6 +260,9 @@ class Create {
 			'pro' => $pro ? 1 : 0,
 			'rtl' => is_rtl() ,
 			'text' => $lang	,
+			'siteName' => get_bloginfo('name'),
+			'siteUrl' => home_url(),
+			'adminEmail' => get_option('admin_email'),
 			'images' => $img,
 			'captcha'=>$captcha,
 			'smtp'=>$smtp,

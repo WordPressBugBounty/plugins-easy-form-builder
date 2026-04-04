@@ -622,6 +622,10 @@ class efbFunction {
 			/* translators: Sync = Synchronize - to update and match data */
 			"sync" => $state ? $ac->text->sync : esc_html__('Sync','easy-form-builder'),
 			"enterTheValueThisField" => $state ? $ac->text->enterTheValueThisField : esc_html__('This field is required.','easy-form-builder'),
+			/* translators: %s will be replaced with field type like "Required", "Validation", etc. Example: "Custom Required Message" */
+			"customMessage" => $state && isset($ac->text->customMessage) ? $ac->text->customMessage : esc_html__('Custom %s Message','easy-form-builder'),
+			/* translators: Hint text for custom message field. %s will be replaced with type like "message", "value", etc. */
+			"customMessageHint" => $state && isset($ac->text->customMessageHint) ? $ac->text->customMessageHint : esc_html__('Leave empty to use default %s','easy-form-builder'),
 			"thankYou" => $state ? $ac->text->thankYou : esc_html__('Thank you','easy-form-builder'),
 			"YouSubscribed" => $state ? $ac->text->YouSubscribed : esc_html__('You are subscribed','easy-form-builder'),
 			"passwordRecovery" => $state ? $ac->text->passwordRecovery : esc_html__('Password recovery','easy-form-builder'),
@@ -2852,6 +2856,10 @@ public function addon_add_efb($value) {
 		$allowed_domains = array('google.com', 'gstatic.com', 'googleapis.com', 'googleusercontent.com', 'youtube.com', 'ytimg.com', 'microsoft.com', 'office.com', 'live.com', 'msn.com', 'outlook.com', 'amazonaws.com', 'cloudfront.net', 'cdnjs.cloudflare.com', 'maxcdn.bootstrapcdn.com', 'jsdelivr.net', 'unpkg.com', 'facebook.com', 'fbcdn.net', 'twitter.com', 'twimg.com', 'github.com', 'github.io', 'vimeo.com', 'vimeocdn.com', 'wikipedia.org', 'wikimedia.org', 'wikidata.org', 'stripe.com', 'paypal.com', 'braintreepayments.com', 'fonts.googleapis.com', 'fonts.gstatic.com', 'use.fontawesome.com', 'dailymotion.com', 'dmcdn.net', 'maps.googleapis.com', 'openstreetmap.org', 'mapbox.com', 'gravatar.com', 'unsplash.com', 'placekitten.com', 'placehold.co', 'akamaihd.net', 'cloudflare.com', 'fastly.net', 'linkedin.com', 'apple.com', 'adobe.com', 'cdn.shopify.com', 'example.com', 'example.org', 'trusted.com', 'cdn.trusted.com');
 
 		$allowed_tags = array(
+			'html' => array('xmlns' => true, 'lang' => true, 'dir' => true, 'xmlns:v' => true, 'xmlns:o' => true),
+			'head' => array(),
+			'body' => array_merge($global_attributes, array('bgcolor' => true)),
+			'style' => array('type' => true, 'media' => true),
 			'a' => array_merge($global_attributes, array(
 				'href' => true,
 				'title' => true,

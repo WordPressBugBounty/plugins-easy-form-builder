@@ -33,9 +33,7 @@ class Panel_edit  {
 			$pro =$efbFunction->is_efb_pro(1);;
 
 			$ac = get_setting_Emsfb('decoded');
-			if (isset($ac->emailTemp)) {
-				unset($ac->emailTemp);
-			}
+
 			$lang = $efbFunction->text_efb(2);
 			$smtp =false;
 			$captcha =false;
@@ -246,6 +244,9 @@ class Panel_edit  {
 				'check' => 0,
 				'rtl' => $rtl,
 				'text' => $lang,
+				'siteName' => get_bloginfo('name'),
+				'siteUrl' => home_url(),
+				'adminEmail' => get_option('admin_email'),
 				'images' => $img,
 				'captcha'=>$captcha,
 				'smtp'=>$smtp,

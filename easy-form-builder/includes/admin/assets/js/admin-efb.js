@@ -1470,7 +1470,8 @@ let change_el_edit_Efb = (el) => {
       case "requiredEl":
         valj_efb[indx].required = el.classList.contains('active')==true ? 1 :0;
 
-        document.getElementById(`${valj_efb[indx].id_}_req`).innerHTML = valj_efb[indx].required  == true ? '*' : '';
+        const reqEl = document.getElementById(`${valj_efb[indx].id_}_req`);
+        if(reqEl) reqEl.innerHTML = valj_efb[indx].required  == true ? '*' : '';
         const aId = {
           email: "_", text: "_", password: "_", tel: "_", url: "_", date: "_", color: "_", range: "_", number: "_", file: "_",
           textarea: "_", dadfile: "_", maps: "-map", checkbox: "_options", radio: "_options", select: "_options",
@@ -1480,6 +1481,24 @@ let change_el_edit_Efb = (el) => {
         id = valj_efb[indx].id_
         postId = document.getElementById(`${id}${postId}`)
         if(postId) postId.classList.toggle('required');
+
+        // Toggle customRequiredMsgWrapper visibility with fade animation
+        const customMsgWrapper = document.querySelector('.customRequiredMsgWrapper');
+        if(customMsgWrapper) {
+          if(valj_efb[indx].required == 1) {
+            // Show with fade in
+            customMsgWrapper.style.opacity = '1';
+            customMsgWrapper.style.maxHeight = '200px';
+            customMsgWrapper.style.padding = '';
+            customMsgWrapper.style.margin = '';
+          } else {
+            // Hide with fade out
+            customMsgWrapper.style.opacity = '0';
+            customMsgWrapper.style.maxHeight = '0';
+            customMsgWrapper.style.padding = '0';
+            customMsgWrapper.style.margin = '0';
+          }
+        }
 
         break;
       case "hideLabelEl":
@@ -1794,6 +1813,11 @@ let change_el_edit_Efb = (el) => {
 
         valj_efb[indx].placeholder = sanitize_text_efb(el.value);
         break;
+      case "customRequiredMsgEl":
+        // Save custom required validation message for the field
+        if(valj_efb[indx].hasOwnProperty('customRequiredMsg')==false) Object.assign(valj_efb[indx],{'customRequiredMsg':''})
+        valj_efb[indx].customRequiredMsg = sanitize_text_efb(el.value);
+        break;
       case "enableConEl":
          clss=true;
          const show_l_o =()=>{
@@ -2025,8 +2049,29 @@ let change_el_edit_Efb = (el) => {
 
         break;
       case "formTypeEl":
+        const oldFormType = valj_efb[0].type;
         valj_efb[0].type = el.options[el.selectedIndex].value;
         form_type_emsFormBuilder = valj_efb[0].type;
+
+        // Update thank you messages based on form type if user hasn't customized them
+        if (typeof getDefaultThankYouByType === 'function') {
+          const newDefaults = getDefaultThankYouByType(valj_efb[0].type);
+
+          // Update thankYou if it's still a default value
+          if (typeof isDefaultThankYou === 'function' && isDefaultThankYou(valj_efb[0].thank_you_message.thankYou)) {
+            valj_efb[0].thank_you_message.thankYou = newDefaults.thankYou;
+            const thankYouInput = document.getElementById('thankYouMessageEl');
+            if (thankYouInput) thankYouInput.value = newDefaults.thankYou;
+          }
+
+          // Update done if it's still a default value
+          if (typeof isDefaultDone === 'function' && isDefaultDone(valj_efb[0].thank_you_message.done)) {
+            valj_efb[0].thank_you_message.done = newDefaults.done;
+            const doneInput = document.getElementById('thankYouMessageDoneEl');
+            if (doneInput) doneInput.value = newDefaults.done;
+          }
+        }
+
         const surveyChartWrapper = document.getElementById('surveyChartOptionsWrapper');
         if (surveyChartWrapper) {
           if (valj_efb[0].type === 'survey') {
@@ -6515,7 +6560,7 @@ function timeOutCaptcha() {
 
 async function fun_validation_efb() {
   let offsetw = offset_view_efb();
-  const msg = Number(offsetw)<380 && window.matchMedia("(max-width: 480px)").matches==0 ? `<div class="efb fs-5 nmsgefb bi-exclamation-diamond-fill" onclick="alert_message_efb('${efb_var.text.enterTheValueThisField}','',10,'danger')"></div>` : efb_var.text.enterTheValueThisField;
+  const defaultMsg = efb_var.text.enterTheValueThisField;
   let state = true;
   let idi = "null";
   for (let row in valj_efb) {
@@ -6533,6 +6578,9 @@ async function fun_validation_efb() {
         if(Number(offsetw)<525 && window.matchMedia("(max-width: 480px)").matches==0){
           el.classList.add('unpx');
         }
+        // Use custom required message if set, otherwise use default
+        const fieldMsg = valj_efb[row].hasOwnProperty('customRequiredMsg') && valj_efb[row].customRequiredMsg.length > 0 ? valj_efb[row].customRequiredMsg : defaultMsg;
+        const msg = Number(offsetw)<380 && window.matchMedia("(max-width: 480px)").matches==0 ? `<div class="efb fs-5 nmsgefb bi-exclamation-diamond-fill" onclick="alert_message_efb('${fieldMsg}','',10,'danger')"></div>` : fieldMsg;
         el.innerHTML = msg;
         el.style.display='block';
         if (type_validate_efb(valj_efb[row].type) == true) {
@@ -6561,7 +6609,9 @@ async function fun_validation_efb() {
         }
       }
       if (state == false) {
-          noti_message_efb(efb_var.text.enterTheValueThisField, 'danger' , `step-${current_s_efb}-efb-msg` );
+          // Use custom required message if set, otherwise use default
+          const chlFieldMsg = valj_efb[row].hasOwnProperty('customRequiredMsg') && valj_efb[row].customRequiredMsg.length > 0 ? valj_efb[row].customRequiredMsg : defaultMsg;
+          noti_message_efb(chlFieldMsg, 'danger' , `step-${current_s_efb}-efb-msg` );
       }
     }
   }
@@ -7690,6 +7740,7 @@ function previewFormEfb(state) {
 
             const el = document.getElementById(`${v.id_}-sig-data`);
             const value = el.value;
+            document.getElementById(`${v.id_}_-message`).innerHTML='';
             document.getElementById(`${v.id_}_-message`).style.display='none';
             const o = [{ id_: v.id_, name: v.name, amount: v.amount, type: v.type, value: value, session: sessionPub_emsFormBuilder }];
             fun_sendBack_emsFormBuilder(o[0]);
