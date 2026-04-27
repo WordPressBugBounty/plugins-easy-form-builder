@@ -1146,7 +1146,7 @@ function fun_show_setting__emsFormBuilder() {
     showIp = f('showIp') =='null' ? false :f('showIp');
     dsupfile = f('dsupfile') =='null' ? true :f('dsupfile');
     phoneNumbers = f('phnNo');
-    adminSN  = f('adminSN') =='null' ? true :f('adminSN');
+    adminSN  = f('adminSN') =='null' ? false :f('adminSN');
     sessionDuration = f('sessionDuration') == 'null' ? 1 : parseInt(f('sessionDuration'));
     trackCodeStyle = f('trackCodeStyle') == 'null' ? 'date_en_mix' : f('trackCodeStyle');
     const shieldSilentCaptchaSetting = f('shield_silent_captcha');
@@ -1206,6 +1206,23 @@ function fun_show_setting__emsFormBuilder() {
   const stripemessage = efb_var.text.ufinyf.replace('%1$s', efb_var.text.payment.toLowerCase()).replace('%2$s', efb_var.text.stripe);
   const paypalmessage = efb_var.text.ufinyf.replace('%1$s', efb_var.text.payment.toLowerCase()).replace('%2$s', efb_var.text.paypal);
   const package_type = efb_var.setting.hasOwnProperty('package_type') ? Number(efb_var.setting.package_type) : Number(efb_var.pro) ;
+
+  const language_not_needed_show =['fa_IR','ar_AR' ,'fr_FR','de','en_US'].includes(efb_var.language) ? false : true;
+  let message_lanaguage = ''
+  console.log('language_not_needed_show', language_not_needed_show)
+  if(language_not_needed_show){
+    message_lanaguage = `<div class="efb my-3 mx-4 p-3" role="" style="border-radius:10px;border:1px solid #e0e7ff;background:linear-gradient(135deg,#f0f4ff 0%,#e8f5e9 100%);">
+                                 <p class="efb mb-2" style="line-height:1.7;">
+                                   <i class="efb bi-translate" style="margin-inline-end:6px;"></i>${efb_var.text.translateContrib.replace('%1$s', `<a class="efb pointer-efb ec-efb" style="font-weight:600;text-decoration:underline;" data-eventform="links" data-linkname="translateWP">`).replace('%2$s', '</a>')}
+                                 </p>
+                                 <div class="efb" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                   <span style="display:inline-block;background:linear-gradient(135deg,#ff6b35,#f7c948);color:#fff;font-weight:700;font-size:13px;padding:4px 12px;border-radius:20px;white-space:nowrap;">🎁 ${translateDiscountPercent}% ${efb_var.text.discountOff || 'OFF'}</span>
+                                   <p class="efb mb-0" style="line-height:1.6;font-size:13px;color:#37474f;">
+                                     ${efb_var.text.translateDiscount ? efb_var.text.translateDiscount.replace('%1$s', `<a class="efb pointer-efb ec-efb" style="font-weight:600;text-decoration:underline;" data-eventform="links" data-linkname="translateWP">`).replace('%2$s', '</a>').replace('%3$s', translateDiscountPercent + '%') : ''}
+                                   </p>
+                                 </div>
+                               </div>`
+  }
 
   const planBadgeHtml = getCurrentPlanBadge_efb();
   document.getElementById('content-efb').innerHTML = `
@@ -1539,17 +1556,7 @@ function fun_show_setting__emsFormBuilder() {
                                <h5 class="efb  card-title mt-3 mobile-title">
                                  <i class="efb  bi-fonts m-3"></i>${efb_var.text.localization}
                                </h5>
-                               <div class="efb my-3 mx-4 p-3" role="" style="border-radius:10px;border:1px solid #e0e7ff;background:linear-gradient(135deg,#f0f4ff 0%,#e8f5e9 100%);">
-                                 <p class="efb mb-2" style="line-height:1.7;">
-                                   <i class="efb bi-translate" style="margin-inline-end:6px;"></i>${efb_var.text.translateContrib.replace('%1$s', `<a class="efb pointer-efb ec-efb" style="font-weight:600;text-decoration:underline;" data-eventform="links" data-linkname="translateWP">`).replace('%2$s', '</a>')}
-                                 </p>
-                                 <div class="efb" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                                   <span style="display:inline-block;background:linear-gradient(135deg,#ff6b35,#f7c948);color:#fff;font-weight:700;font-size:13px;padding:4px 12px;border-radius:20px;white-space:nowrap;">🎁 ${translateDiscountPercent}% ${efb_var.text.discountOff || 'OFF'}</span>
-                                   <p class="efb mb-0" style="line-height:1.6;font-size:13px;color:#37474f;">
-                                     ${efb_var.text.translateDiscount ? efb_var.text.translateDiscount.replace('%1$s', `<a class="efb pointer-efb ec-efb" style="font-weight:600;text-decoration:underline;" data-eventform="links" data-linkname="translateWP">`).replace('%2$s', '</a>').replace('%3$s', translateDiscountPercent + '%') : ''}
-                                   </p>
-                                 </div>
-                               </div>
+                                ${message_lanaguage}
                                <p class="efb ${mxCSize}">${efb_var.text.translateLocal}</p>
                                <div class="efb card-body mx-0 py-1 mx-4">
 
@@ -2325,7 +2332,8 @@ function fun_set_setting_emsFormBuilder(state_auto = 0) {
     let temp = f('pno_emsFormBuilder');
     const phoneNumbers = temp.length<5 ? 'null' : temp;
     let AdnSPF=AdnOF=AdnPPF=AdnATC=AdnSS=AdnCPF=AdnESZ=AdnSE=
-    AdnWHS=AdnPAP=AdnWSP=AdnSMF=AdnPLF=AdnMSF=AdnBEF=AdnPDP=AdnADP=AdnATF=AdnTLG=0
+    AdnWHS=AdnPAP=AdnWSP=AdnSMF=AdnPLF=AdnMSF=AdnBEF=AdnPDP=AdnADP=AdnATF=AdnTLG=0,
+    AdnGoS=0
     if(valueJson_ws_setting.hasOwnProperty('AdnSPF')){
       AdnSPF=valueJson_ws_setting.AdnSPF;
       AdnOF=valueJson_ws_setting.AdnOF;
@@ -2336,6 +2344,9 @@ function fun_set_setting_emsFormBuilder(state_auto = 0) {
       AdnPAP=valueJson_ws_setting.AdnPAP;
       AdnPDP=valueJson_ws_setting.hasOwnProperty('AdnPDP') ?valueJson_ws_setting.AdnPDP :0;
       AdnADP=valueJson_ws_setting.hasOwnProperty('AdnADP') ? valueJson_ws_setting.AdnADP :0;
+      AdnATF=valueJson_ws_setting.hasOwnProperty('AdnATF') ? valueJson_ws_setting.AdnATF :0;
+      AdnTLG=valueJson_ws_setting.hasOwnProperty('AdnTLG') ? valueJson_ws_setting.AdnTLG :0;
+      AdnGoS=valueJson_ws_setting.hasOwnProperty('AdnGoS') ? valueJson_ws_setting.AdnGoS :0;
     }
     const email_key_efb = valueJson_ws_setting.email_key ??  Math.random().toString(36).substr(2, 10);
 
@@ -2397,6 +2408,9 @@ function fun_set_setting_emsFormBuilder(state_auto = 0) {
           AdnPAP: AdnPAP,
           AdnPDP: AdnPDP,
           AdnADP: AdnADP,
+          AdnATF: AdnATF,
+          AdnTLG: AdnTLG,
+          AdnGoS: AdnGoS,
 
           phnNo: phoneNumbers,
           femail: femail,

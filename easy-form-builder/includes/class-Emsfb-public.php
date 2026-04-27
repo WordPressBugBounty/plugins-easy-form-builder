@@ -70,6 +70,14 @@ class _Public {
 				'permission_callback' => [$this, 'check_nonce_permission_efb']
 			]);
 
+			register_rest_route('Emsfb/v1','nonce/refresh', [
+				'methods' => 'GET',
+				'callback' => function() {
+					return new \WP_REST_Response(['nonce' => wp_create_nonce('wp_rest')], 200);
+				},
+				'permission_callback' => '__return_true',
+			]);
+
 		});
 
 		add_shortcode( 'Easy_Form_Builder_confirmation_code_finder',  array( $this, 'EFB_Form_Builder' ) );
@@ -79,11 +87,6 @@ class _Public {
 		add_action('init',  array($this, 'hide_toolmenu'));
 		add_action('wp_ajax_form_preview_efb', [$this, 'form_preview_efb']);
 		add_action('delete_preview_page_efb', [$this,'delete_preview_page_efb'], 10, 1);
-
-		add_action('wp_ajax_efb_process_background', [$this, 'process_background_task']);
-		add_action('wp_ajax_nopriv_efb_process_background', [$this, 'process_background_task']);
-
-		add_action('efb_process_background_cron', [$this, 'process_background_cron'], 10, 1);
 
 		if (!is_admin()) {
 			add_action('wp_enqueue_scripts', [$this, 'init_elementor_compatibility'], 1);
@@ -254,13 +257,8 @@ public function check_nonce_permission_efb($request) {
 			return;
 		}
 
-		if (!isset(wp_scripts()->registered['jquery']) || version_compare(wp_scripts()->registered['jquery']->ver , '3.6.0' , '<')) {
-			$wp_version = get_bloginfo('version');
-			if (version_compare($wp_version, '6.0', '>')) {
-				wp_enqueue_script('jquery', includes_url('/js/jquery/jquery.js') , false, '3.7.1', true);
-			}else {
-				wp_enqueue_script('jquery', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/jquery.min-efb.js', false, '3.6.2', true);
-			}
+		if ( ! wp_script_is( 'jquery', 'enqueued' ) ) {
+			wp_enqueue_script('jquery');
 		}
 	}
 
@@ -547,97 +545,72 @@ public function check_nonce_permission_efb($request) {
 			if (isset($sc_setting->adminSN)) $adminSN_enabled = (bool) $sc_setting->adminSN;
 
 
-			// If user=admin without valid sc → must be logged in as admin
+			// Admin access control (single unified block covering ALL link types and adminSN states)
 			$is_legacy_admin_link = ($admin_form && ($admin_sc === null || !$admin_verified));
-			if ($admin_form && !$admin_verified) {
+			if ($admin_form) {
 				if (is_user_logged_in() && current_user_can('administrator')) {
+					// Logged-in WP admin: always grant access regardless of adminSN setting
 					$admin_verified = true;
 				} else if (!is_user_logged_in()) {
-				$overrides = $this->efb_build_inline_style_overrides();
-				$pl_warn = get_setting_Emsfb('pub');
-				$ps_warn = $pl_warn[1] ?? [];
+					if ($adminSN_enabled) {
+						// adminSN=true: login required — block ALL link types (email sc AND SMS legacy)
+						$admin_verified = false;
+						$admin_form    = false;
 
-				$warn_text_color  = !empty($ps_warn['respText'])       ? $ps_warn['respText']       : '#1a1a2e';
-				$warn_bg_color    = !empty($ps_warn['respBgCard'])     ? $ps_warn['respBgCard']     : '#ffffff';
-				$warn_primary     = !empty($ps_warn['respPrimary'])    ? $ps_warn['respPrimary']    : '#3644d2';
-				$warn_muted       = !empty($ps_warn['respTextMuted'])  ? $ps_warn['respTextMuted']  : '#657096';
-				$warn_font_family = !empty($ps_warn['respFontFamily']) ? $ps_warn['respFontFamily'] : 'inherit';
-				$warn_font_size   = !empty($ps_warn['respFontSize'])  ? $ps_warn['respFontSize']   : '0.9rem';
+						$overrides = $this->efb_build_inline_style_overrides();
+						$pl_warn = get_setting_Emsfb('pub');
+						$ps_warn = $pl_warn[1] ?? [];
 
-				$legacy_notice = '';
-				if ($is_legacy_admin_link) {
-					$legacy_notice = "
-					<div style='margin-top:16px; padding:10px 18px; border-radius:8px;
-					            background-color: rgba(54,68,210,0.07);
-					            display:inline-flex; align-items:center; gap:8px;'>
-						<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='" . esc_attr($warn_muted) . "' viewBox='0 0 16 16' style='flex-shrink:0;'>
-							<path d='M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.399l-.502 0 .07-.332C7.005 6.584 7.912 6.196 8.454 6h.37l-.82 4.588zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z'/>
-						</svg>
-						<span style='color:" . esc_attr($warn_muted) . "; font-family:" . esc_attr($warn_font_family) . ";
-						             font-size: calc(" . esc_attr($warn_font_size) . " * 0.93);'>"
-						. esc_html__('This link uses an older format. For improved security, new email notifications include updated links.', 'easy-form-builder') .
-						"</span>
-					</div>";
-				}
+						$warn_text_color  = !empty($ps_warn['respText'])       ? $ps_warn['respText']       : '#1a1a2e';
+						$warn_bg_color    = !empty($ps_warn['respBgCard'])     ? $ps_warn['respBgCard']     : '#ffffff';
+						$warn_primary     = !empty($ps_warn['respPrimary'])    ? $ps_warn['respPrimary']    : '#3644d2';
+						$warn_muted       = !empty($ps_warn['respTextMuted'])  ? $ps_warn['respTextMuted']  : '#657096';
+						$warn_font_family = !empty($ps_warn['respFontFamily']) ? $ps_warn['respFontFamily'] : 'inherit';
+						$warn_font_size   = !empty($ps_warn['respFontSize'])  ? $ps_warn['respFontSize']   : '0.9rem';
 
-				return $overrides['font_link'] . $overrides['inline_style'] . "
-				<div id='body_efb' class='efb card-public efb'
-				     style='display:flex; flex-direction:column; align-items:center; justify-content:center;
-				            color:" . esc_attr($warn_text_color) . "; background-color:" . esc_attr($warn_bg_color) . ";
-				            font-family:" . esc_attr($warn_font_family) . "; font-size:" . esc_attr($warn_font_size) . ";
-				            padding: 40px 20px; border-radius: 12px;
-				            box-shadow: 0 2px 16px rgba(0,0,0,0.07); text-align:center;'>
-					<div style='margin-bottom:18px; text-align:center;'>
-						<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' fill='" . esc_attr($warn_primary) . "' viewBox='0 0 16 16' style='display:inline-block;'>
-							<path d='M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zM8 4a.905.905 0 0 1 .9.995l-.35 3.507a.553.553 0 0 1-1.1 0L7.1 4.995A.905.905 0 0 1 8 4zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z'/>
-						</svg>
-					</div>
-					<h3 style='color:" . esc_attr($warn_text_color) . "; font-family:" . esc_attr($warn_font_family) . ";
-					           font-size: calc(" . esc_attr($warn_font_size) . " * 1.35); font-weight:600;
-					           margin:0 0 10px 0; text-align:center;'>"
-					    . esc_html__('It seems that you are the admin of this form. Please log in and try again.', 'easy-form-builder') .
-					"</h3>" . $legacy_notice . "
-				</div>";
+						$legacy_notice = '';
+						if ($is_legacy_admin_link) {
+							$legacy_notice = "
+							<div style='margin-top:16px; padding:10px 18px; border-radius:8px;
+							            background-color: rgba(54,68,210,0.07);
+							            display:inline-flex; align-items:center; gap:8px;'>
+								<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='" . esc_attr($warn_muted) . "' viewBox='0 0 16 16' style='flex-shrink:0;'>
+									<path d='M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.399l-.502 0 .07-.332C7.005 6.584 7.912 6.196 8.454 6h.37l-.82 4.588zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z'/>
+								</svg>
+								<span style='color:" . esc_attr($warn_muted) . "; font-family:" . esc_attr($warn_font_family) . ";
+								             font-size: calc(" . esc_attr($warn_font_size) . " * 0.93);'>"
+								. esc_html__('This link uses an older format. For improved security, new email notifications include updated links.', 'easy-form-builder') .
+								"</span>
+							</div>";
+						}
+
+						return $overrides['font_link'] . $overrides['inline_style'] . "
+						<div id='body_efb' class='efb card-public efb'
+						     style='display:flex; flex-direction:column; align-items:center; justify-content:center;
+						            color:" . esc_attr($warn_text_color) . "; background-color:" . esc_attr($warn_bg_color) . ";
+						            font-family:" . esc_attr($warn_font_family) . "; font-size:" . esc_attr($warn_font_size) . ";
+						            padding: 40px 20px; border-radius: 12px;
+						            box-shadow: 0 2px 16px rgba(0,0,0,0.07); text-align:center;'>
+							<div style='margin-bottom:18px; text-align:center;'>
+								<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' fill='" . esc_attr($warn_primary) . "' viewBox='0 0 16 16' style='display:inline-block;'>
+									<path d='M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zM8 4a.905.905 0 0 1 .9.995l-.35 3.507a.553.553 0 0 1-1.1 0L7.1 4.995A.905.905 0 0 1 8 4zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z'/>
+								</svg>
+							</div>
+							<h3 style='color:" . esc_attr($warn_text_color) . "; font-family:" . esc_attr($warn_font_family) . ";
+							           font-size: calc(" . esc_attr($warn_font_size) . " * 1.35); font-weight:600;
+							           margin:0 0 10px 0; text-align:center;'>"
+							    . esc_html__('It seems that you are the admin of this form. Please log in and try again.', 'easy-form-builder') .
+							"</h3>" . $legacy_notice . "
+						</div>";
+					} else {
+						// adminSN=false: allow without login (SMS link or email sc link)
+						$admin_verified = true;
+					}
 				} else {
-					$admin_form = false;
+					// Logged in but not a WP administrator
+					$admin_form    = false;
+					$admin_verified = false;
 				}
-			}
-
-			// If adminSN is enabled and admin verified via sc but not logged in → require login
-			if ($adminSN_enabled && $admin_verified && !is_user_logged_in()) {
-				$admin_verified = false;
-				$admin_form = false;
-
-				$overrides = $this->efb_build_inline_style_overrides();
-				$pl_warn = get_setting_Emsfb('pub');
-				$ps_warn = $pl_warn[1] ?? [];
-				$warn_text_color  = !empty($ps_warn['respText'])       ? $ps_warn['respText']       : '#1a1a2e';
-				$warn_bg_color    = !empty($ps_warn['respBgCard'])     ? $ps_warn['respBgCard']     : '#ffffff';
-				$warn_primary     = !empty($ps_warn['respPrimary'])    ? $ps_warn['respPrimary']    : '#3644d2';
-				$warn_muted       = !empty($ps_warn['respTextMuted'])  ? $ps_warn['respTextMuted']  : '#657096';
-				$warn_font_family = !empty($ps_warn['respFontFamily']) ? $ps_warn['respFontFamily'] : 'inherit';
-				$warn_font_size   = !empty($ps_warn['respFontSize'])  ? $ps_warn['respFontSize']   : '0.9rem';
-
-				return $overrides['font_link'] . $overrides['inline_style'] . "
-				<div id='body_efb' class='efb card-public efb'
-				     style='display:flex; flex-direction:column; align-items:center; justify-content:center;
-				            color:" . esc_attr($warn_text_color) . "; background-color:" . esc_attr($warn_bg_color) . ";
-				            font-family:" . esc_attr($warn_font_family) . "; font-size:" . esc_attr($warn_font_size) . ";
-				            padding: 40px 20px; border-radius: 12px;
-				            box-shadow: 0 2px 16px rgba(0,0,0,0.07); text-align:center;'>
-					<div style='margin-bottom:18px; text-align:center;'>
-						<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48' fill='" . esc_attr($warn_primary) . "' viewBox='0 0 16 16' style='display:inline-block;'>
-							<path d='M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zM8 4a.905.905 0 0 1 .9.995l-.35 3.507a.553.553 0 0 1-1.1 0L7.1 4.995A.905.905 0 0 1 8 4zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z'/>
-						</svg>
-					</div>
-					<h3 style='color:" . esc_attr($warn_text_color) . "; font-family:" . esc_attr($warn_font_family) . ";
-					           font-size: calc(" . esc_attr($warn_font_size) . " * 1.35); font-weight:600;
-					           margin:0 0 10px 0; text-align:center;'>"
-					    . esc_html__('It seems that you are the admin of this form. Please log in and try again', 'easy-form-builder') .
-					"</h3>
-					<p style='color:" . esc_attr($warn_muted) . "; font-family:" . esc_attr($warn_font_family) . ";
-					          font-size:" . esc_attr($warn_font_size) . "; margin:0; text-align:center;'></p>
-				</div>";
 			}
 
 			if(empty($this->db)){
@@ -767,14 +740,14 @@ public function check_nonce_permission_efb($request) {
 			$poster =  EMSFB_PLUGIN_URL . 'public/assets/images/efb-poster.svg';
 
 			$lang = get_locale();
-			$lang =strpos($lang,'_')!=false ? explode( '_', $lang )[0]:$lang;
+			$lang =strpos($lang,'_') !== false ? explode( '_', $lang )[0]:$lang;
 
 			$typeOfForm =$value_form_data->form_type ?? 'track';
 			$value = $value_form_data->form_structer ?? 'track';
 			$state="form";
 			$multi_exist = strpos($value , '"type\":\"multiselect\"');
-			if($multi_exist==true || strpos($value , '"type":"multiselect"') || strpos($value , '"type\":\"payMultiselect\"') || strpos($value , '"type":"payMultiselect"')){
-				wp_enqueue_script('efb-bootstrap-select-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/bootstrap-select.min-efb.js',false,EMSFB_PLUGIN_VERSION, true );
+			if($multi_exist !== false || strpos($value , '"type":"multiselect"') !== false || strpos($value , '"type\":\"payMultiselect\"') !== false || strpos($value , '"type":"payMultiselect"') !== false){
+				wp_enqueue_script('efb-bootstrap-select-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/bootstrap-select.min-efb.js', array('jquery'), EMSFB_PLUGIN_VERSION, true );
 				wp_register_style('Emsfb-bootstrap-select-css', EMSFB_PLUGIN_URL . 'includes/admin/assets/css/bootstrap-select-efb.css', true,EMSFB_PLUGIN_VERSION );
 				wp_enqueue_style('Emsfb-bootstrap-select-css');
 			}
@@ -822,9 +795,11 @@ public function check_nonce_permission_efb($request) {
 					}
 				}
 
-					if(strpos($value , '\"logic\":\"1\"') || strpos($value , '"logic":"1"')){
+					if(strpos($value , '\"logic\":\"1\"') !== false || strpos($value , '"logic":"1"') !== false || strpos($value , '"logic_rules"') !== false){
 						wp_register_script('logic-efb',EMSFB_PLUGIN_URL.'/vendor/logic/assets/js/logic.js', array(), EMSFB_PLUGIN_VERSION, true);
 						wp_enqueue_script('logic-efb');
+						wp_register_script('logic-runtime-efb',EMSFB_PLUGIN_URL.'/vendor/logic/assets/js/logic-runtime-efb.js', array(), EMSFB_PLUGIN_VERSION, true);
+						wp_enqueue_script('logic-runtime-efb');
 					}
 
 				$send=array();
@@ -868,7 +843,7 @@ public function check_nonce_permission_efb($request) {
 					}
 				}else{
 					$new_string_value = json_encode($value);
-					if(strpos($new_string_value , 'type":"maps"') || strpos($new_string_value , 'type\":\"maps\"')){
+					if(strpos($new_string_value , 'type":"maps"') !== false || strpos($new_string_value , 'type\":\"maps\"') !== false){
 						$sm = $this->efbFunction->openstreet_map_required_efb(1);
 						if($sm==false){
 							$s_m =" <script>alert('OpenStreetMap Error:".$lanText['tfnapca']."')</script>";
@@ -1032,7 +1007,7 @@ public function check_nonce_permission_efb($request) {
 
 				if($i>1){
 					if(in_array($valj_efb[$i]->type, $list_pro_elements) && $pro_element_exists == false && $pro == true){
-						wp_enqueue_script('efb-pro-els', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/pro_els-efb.js',false,EMSFB_PLUGIN_VERSION);
+						wp_enqueue_script('efb-pro-els', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/pro_els-efb.js', array('jquery'), EMSFB_PLUGIN_VERSION);
 						$pro_element_exists = true;
 					}
 					if(in_array($valj_efb[$i]->type, ["option","r_matrix"])) {continue;
@@ -1059,13 +1034,13 @@ public function check_nonce_permission_efb($request) {
 							}
 
 							if($autofill_id >0){
-								wp_enqueue_script('efb-autofill', EMSFB_PLUGIN_URL . 'vendor/autofill/assets/js/autofill-public-efb.js',false,EMSFB_PLUGIN_VERSION);
+								wp_enqueue_script('efb-autofill', EMSFB_PLUGIN_URL . 'vendor/autofill/assets/js/autofill-public-efb.js', array('jquery'), EMSFB_PLUGIN_VERSION);
 							}else if($autofill_id == 0){
 
 								$autofill_api = isset($valj_efb[0]->autofill_api) ? $valj_efb[0]->autofill_api : false;
 								$autofill_api_id = isset($valj_efb[0]->autofill_api_id) ? $valj_efb[0]->autofill_api_id : '';
 								if($autofill_api && !empty($autofill_api_id)){
-									wp_enqueue_script('efb-autofill-api', EMSFB_PLUGIN_URL . 'vendor/autofill/assets/js/autofill-api-public-efb.js',false,EMSFB_PLUGIN_VERSION);
+									wp_enqueue_script('efb-autofill-api', EMSFB_PLUGIN_URL . 'vendor/autofill/assets/js/autofill-api-public-efb.js', array('jquery'), EMSFB_PLUGIN_VERSION);
 								}
 							}
 						}
@@ -1076,7 +1051,7 @@ public function check_nonce_permission_efb($request) {
 							}
 							$autofill_api_id = isset($valj_efb[0]->autofill_api_id) ? $valj_efb[0]->autofill_api_id : '';
 							if(!empty($autofill_api_id)){
-								wp_enqueue_script('efb-autofill-api', EMSFB_PLUGIN_URL . 'vendor/autofill/assets/js/autofill-api-public-efb.js',false,EMSFB_PLUGIN_VERSION);
+								wp_enqueue_script('efb-autofill-api', EMSFB_PLUGIN_URL . 'vendor/autofill/assets/js/autofill-api-public-efb.js', array('jquery'), EMSFB_PLUGIN_VERSION);
 							}
 						}
 
@@ -1371,7 +1346,7 @@ public function check_nonce_permission_efb($request) {
 
 		$this->comper_version_efb($pl[1]['version']);
 		if($pro==true){
-			wp_enqueue_script('efb-pro-els', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/pro_els-efb.js',false,EMSFB_PLUGIN_VERSION);
+			wp_enqueue_script('efb-pro-els', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/pro_els-efb.js', array('jquery'), EMSFB_PLUGIN_VERSION);
 		}
 
 		$location = '';
@@ -1573,100 +1548,6 @@ public function check_nonce_permission_efb($request) {
 			isset($_SERVER['SERVER_SOFTWARE']) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_SOFTWARE'] ) ) : 'Unknown',
 			PHP_SAPI
 		);
-	}
-
-	private function trigger_background_processing($data) {
-
-		$transient_key = 'efb_bg_' . $data['track_id'];
-		set_transient($transient_key, $data, 300);
-
-		if (function_exists('wp_schedule_single_event')) {
-			wp_schedule_single_event(time(), 'efb_process_background_cron', [$data['track_id']]);
-			spawn_cron();
-			return;
-		}
-
-		$url = admin_url('admin-ajax.php');
-
-		wp_remote_post($url, [
-			'timeout'   => 0.01,
-			'blocking'  => false,
-			'sslverify' => false,
-			'body'      => [
-				'action'   => 'efb_process_background',
-				'track_id' => $data['track_id']
-			]
-		]);
-
-	}
-
-	public function process_background_task() {
-
-		$track_id = isset($_POST['track_id']) ? sanitize_text_field($_POST['track_id']) : '';
-
-		if (empty($track_id)) {
-			exit;
-		}
-
-		$transient_key = 'efb_bg_' . $track_id;
-		$data = get_transient($transient_key);
-
-		if (!$data) {
-			exit;
-		}
-
-		delete_transient($transient_key);
-
-		$timing_start = microtime(true);
-
-		$timing_sms_start = microtime(true);
-		if ($data['send_sms'] && !empty($data['phone_numbers'])) {
-			$smsSendResult = $this->efbFunction->sms_ready_for_send_efb(
-				$data['form_id'],
-				$data['phone_numbers'],
-				$data['url'],
-				'fform',
-				'wpsms',
-				$data['track_id']
-			);
-
-			if ($smsSendResult !== true) {
-			}
-		}
-		$timing_sms = round((microtime(true) - $timing_sms_start) * 1000, 2);
-
-		$timing_email_start = microtime(true);
-		if ($data['send_email']) {
-			$this->email_list_efb($data['email_user'], 0, $data['email_fa'], true);
-
-			$state_email_user = $data['trackingCode_state'] == 1
-				? 'notiToUserFormFilled_TrackingCode'
-				: 'notiToUserFormFilled';
-
-			$msg_content = 'null';
-			if (isset($data['formObj'][0]['email_noti_type']) && $data['formObj'][0]['email_noti_type'] == 'msg') {
-				$msg_content = $this->email_get_content_efb($data['valobj'], $data['track_id']);
-				$msg_content = str_replace("\"", "'", $msg_content);
-			}
-
-			$status_email = $this->email_status_efb($data['formObj'], $data['valobj'], $data['track_id']);
-			$state_of_email = ['newMessage', $state_email_user, $status_email['type']];
-
-			$this->send_email_Emsfb_(
-				$data['email_user'],
-				$data['track_id'],
-				$data['pro'],
-				$state_of_email,
-				$data['url'],
-				$status_email['content'],
-				$status_email['subject']
-			);
-		}
-		$timing_email = round((microtime(true) - $timing_email_start) * 1000, 2);
-
-		$timing_total = round((microtime(true) - $timing_start) * 1000, 2);
-
-		exit;
 	}
 
 	  public function get_form_public_efb($data_POST_) {
@@ -2228,7 +2109,7 @@ public function check_nonce_permission_efb($request) {
 									break;
 								case 'esign':
 									$is_valid = 0;
-									if (isset($item['value']) && strpos($item['value'], 'data:image/png;base64,') == 0) {
+									if (isset($item['value']) && is_string($item['value']) && strpos($item['value'], 'data:image/png;base64,') === 0) {
 										$is_valid = 1;
 										$item = $this->filter_attributes_by_type_efb($item,$f['type']);
 										$validated_item = $item;
@@ -2259,7 +2140,7 @@ public function check_nonce_permission_efb($request) {
 									$is_valid = 0;
 									$item = $this->filter_attributes_by_type_efb($item,$f['type']);
 									$l = strlen($item['value']);
-									if (isset($item['value']) && strpos($item['value'], '#') == 0 && $l == 7) {
+									if (isset($item['value']) && is_string($item['value']) && strpos($item['value'], '#') === 0 && $l == 7) {
 										$item['value'] = sanitize_text_field($item['value']);
 										$is_valid = 1;
 										$validated_item = $item;
@@ -3064,7 +2945,7 @@ public function check_nonce_permission_efb($request) {
         } else {$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );}
         $ip = strval($ip);
         $check =strpos($ip,',');
-        if($check!=false){$ip = substr($ip,0,$check);}
+        if($check !== false){$ip = substr($ip,0,$check);}
         return $ip;
     }
 	public function file_upload_public(){
@@ -3116,6 +2997,16 @@ public function check_nonce_permission_efb($request) {
 			if (empty($file_tmp) || !is_uploaded_file($file_tmp) || !is_readable($file_tmp)) {
 				$response = array( 'success' => false, 'error' => $this->lanText['errorFilePer']);
 				wp_send_json_success($response, 200);
+			}
+
+			if (function_exists('finfo_open')) {
+				$finfo = finfo_open(FILEINFO_MIME_TYPE);
+				$real_mime = finfo_file($finfo, $file_tmp);
+				finfo_close($finfo);
+				if (!in_array($real_mime, $arr_ext)) {
+					$response = array( 'success' => false, 'error' => $this->lanText['errorFilePer']);
+					wp_send_json_success($response, 200);
+				}
 			}
 
 			$name = 'efb-PLG-'. wp_date("ymd"). '-'.substr(str_shuffle("0123456789ASDFGHJKLQWERTYUIOPZXCVBNM"), 0, 8).'.'.pathinfo($file_name_raw, PATHINFO_EXTENSION) ;
@@ -3295,6 +3186,17 @@ public function check_nonce_permission_efb($request) {
 			if (empty($async_file_tmp) || !is_uploaded_file($async_file_tmp) || !is_readable($async_file_tmp)) {
 				$response = array( 'success' => false, 'error' => $this->lanText["errorFilePer"]);
 				wp_send_json_success($response,200);
+			}
+
+			if (function_exists('finfo_open')) {
+				$finfo = finfo_open(FILEINFO_MIME_TYPE);
+				$real_mime = finfo_file($finfo, $async_file_tmp);
+				finfo_close($finfo);
+				$allowed_mimes = array('image/png','image/jpeg','image/jpg','image/gif','application/pdf','audio/mpeg','image/heic','audio/wav','audio/ogg','video/mp4','video/webm','video/x-matroska','video/avi','video/mpeg','video/mpg','audio/mpg','video/mov','video/quicktime','text/plain','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.presentationml.presentation','application/zip','application/octet-stream','application/x-zip-compressed','multipart/x-zip');
+				if (!in_array($real_mime, $allowed_mimes)) {
+					$response = array( 'success' => false, 'error' => $this->lanText["errorFilePer"]);
+					wp_send_json_success($response,200);
+				}
 			}
 
 			$name = 'efb-PLG-'. wp_date("ymd"). '-'.substr(str_shuffle("0123456789ASDFGHJKLQWERTYUIOPZXCVBNM"), 0, 8).'.'.pathinfo($async_file_name, PATHINFO_EXTENSION) ;
@@ -3719,7 +3621,7 @@ public function check_nonce_permission_efb($request) {
 
 			$isRegistrationState = in_array($state[$i], ['newUser', 'register']) || (isset($state[0]) && $state[0] === 'newUser');
 			$trackParam = $isRegistrationState ? '' : urlencode($track);
-			$link_w[$i] = strpos($link,'?')!=false ? $link . ($trackParam ? '&track='.$trackParam : '') : $link . ($trackParam ? '?track='.$trackParam : '');
+			$link_w[$i] = strpos($link,'?')!==false ? $link . ($trackParam ? '&track='.$trackParam : '') : $link . ($trackParam ? '?track='.$trackParam : '');
 			if($i==0 && !$isRegistrationState){
 				$sc = $this->genrate_sacure_code_admin_email($track);
 				$link_w[$i] .= (strpos($link_w[$i],'?')!==false ? '&' : '?') . 'sc='.$sc;
@@ -4292,7 +4194,7 @@ public function check_nonce_permission_efb($request) {
 
 					if (isset($c['type']) && strpos($c['type'],'imgRadio')!==false){
 						$q = '<b>'.($c['value'] ?? '').'</b>';
-					}else if (isset($c['value']) && strpos($c['type'],'imgRadio')){
+					}else if (isset($c['value']) && strpos($c['type'],'imgRadio') !== false){
 
 						$q = $this->fun_imgRadio_efb($c['id_'], $c['src'] ?? '', $c);
 						$addPair('', $q);
@@ -5264,7 +5166,7 @@ public function check_nonce_permission_efb($request) {
 			}
 			if(!isset($email_user[$pointer])) $email_user[$pointer] = $state_array ? [] : '';
 			if($state_array){
-				if (strpos($email, ',') != -1){
+				if (strpos($email, ',') !== false){
 					$emails = explode(',', $email);
 					foreach ($emails as $email_) {
 						if(!in_array($email_, $email_user[$pointer])){ array_push($email_user[$pointer] ,$email_); }
@@ -6111,8 +6013,119 @@ public function check_nonce_permission_efb($request) {
 
 		do_action('efb_3rd_party_telegram_notify', $context);
 
+		do_action('efb_3rd_party_google_sheet_sync', $context);
+
 		do_action('efb_after_form_integration', $context);
 
+	}
+
+	/**
+	 * Server-side conditional logic evaluation
+	 * Determines which fields should be visible/required based on submitted values and logic_rules
+	 */
+	public function evaluate_logic_rules($form_fields_array, $submitted_values) {
+		if (!isset($form_fields_array[0]['logic_rules']) || !is_array($form_fields_array[0]['logic_rules'])) {
+			return array('hidden_fields' => array(), 'required_fields' => array(), 'optional_fields' => array());
+		}
+
+		$rules = $form_fields_array[0]['logic_rules'];
+		$hidden_fields = array();
+		$required_fields = array();
+		$optional_fields = array();
+
+		/* Build a map of submitted values by field id */
+		$values_map = array();
+		foreach ($submitted_values as $sv) {
+			if (isset($sv['id_'])) {
+				$values_map[$sv['id_']] = isset($sv['value']) ? $sv['value'] : '';
+			}
+			if (isset($sv['id_ob'])) {
+				if (!isset($values_map[$sv['id_ob']])) $values_map[$sv['id_ob']] = array();
+				if (is_array($values_map[$sv['id_ob']])) {
+					$values_map[$sv['id_ob']][] = isset($sv['id_']) ? $sv['id_'] : '';
+				}
+			}
+		}
+
+		/* Sort rules by priority */
+		usort($rules, function($a, $b) {
+			return (isset($a['priority']) ? intval($a['priority']) : 10) - (isset($b['priority']) ? intval($b['priority']) : 10);
+		});
+
+		foreach ($rules as $rule) {
+			if (!isset($rule['enabled']) || !$rule['enabled']) continue;
+			if (!isset($rule['conditions']) || !isset($rule['conditions']['items'])) continue;
+
+			$matched = $this->evaluate_condition_group($rule['conditions'], $values_map);
+
+			if (isset($rule['actions']) && is_array($rule['actions'])) {
+				foreach ($rule['actions'] as $action) {
+					if (!isset($action['target']) || empty($action['target'])) continue;
+					$target = $action['target'];
+					$type = isset($action['type']) ? $action['type'] : '';
+
+					if ($type === 'hide_field' && $matched) $hidden_fields[$target] = true;
+					if ($type === 'show_field' && !$matched) $hidden_fields[$target] = true;
+					if ($type === 'set_required' && $matched) $required_fields[$target] = true;
+					if ($type === 'set_optional' && $matched) $optional_fields[$target] = true;
+				}
+			}
+		}
+
+		return array(
+			'hidden_fields' => array_keys($hidden_fields),
+			'required_fields' => array_keys($required_fields),
+			'optional_fields' => array_keys($optional_fields)
+		);
+	}
+
+	private function evaluate_condition_group($group, $values_map) {
+		if (!isset($group['items']) || !is_array($group['items']) || count($group['items']) === 0) return true;
+		$operator = isset($group['operator']) ? $group['operator'] : 'AND';
+
+		foreach ($group['items'] as $item) {
+			$result = $this->evaluate_single_condition($item, $values_map);
+			if ($operator === 'OR' && $result) return true;
+			if ($operator === 'AND' && !$result) return false;
+		}
+
+		return ($operator === 'AND');
+	}
+
+	private function evaluate_single_condition($cond, $values_map) {
+		$field_id = isset($cond['field_id']) ? $cond['field_id'] : '';
+		$compare = isset($cond['compare']) ? $cond['compare'] : 'is';
+		$expected = isset($cond['value']) ? $cond['value'] : '';
+
+		$val = isset($values_map[$field_id]) ? $values_map[$field_id] : '';
+
+		/* Handle array values (checkbox/multiselect) */
+		if (is_array($val)) {
+			switch ($compare) {
+				case 'is': return in_array($expected, $val, true);
+				case 'is_not': return !in_array($expected, $val, true);
+				case 'is_empty': return count($val) === 0;
+				case 'is_not_empty': return count($val) > 0;
+				case 'contains': return count(array_filter($val, function($v) use ($expected) { return stripos($v, $expected) !== false; })) > 0;
+				case 'not_contains': return count(array_filter($val, function($v) use ($expected) { return stripos($v, $expected) !== false; })) === 0;
+				default: return false;
+			}
+		}
+
+		$str_val = trim(strval($val));
+		switch ($compare) {
+			case 'is': return $str_val === $expected;
+			case 'is_not': return $str_val !== $expected;
+			case 'contains': return stripos($str_val, $expected) !== false;
+			case 'not_contains': return stripos($str_val, $expected) === false;
+			case 'starts_with': return stripos($str_val, $expected) === 0;
+			case 'ends_with': return substr(strtolower($str_val), -strlen($expected)) === strtolower($expected);
+			case 'gt': return floatval($str_val) > floatval($expected);
+			case 'lt': return floatval($str_val) < floatval($expected);
+			case 'is_empty': return $str_val === '';
+			case 'is_not_empty': return $str_val !== '';
+			default: return false;
+		}
 	}
 
 }

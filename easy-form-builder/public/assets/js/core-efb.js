@@ -528,7 +528,7 @@ function alarm_emsFormBuilder(val) {
         checkFile += 1;
       } else if (files_emsFormBuilder.length > 0 && file.state == 3) {
         checkFile = -100;
-        efb_final_step.innerHTML = `<h3 class='efb emsFormBuilder'><i class="efb nmsgefb bi-exclamation-triangle-fill text-center"></i></h1><h3 class="efb font-weight-bold  text-center">File Error</h3> <span class="efb font-weight-bold  text-center">${ajax_object_efm.text.youNotPermissionUploadFile}</br>${file.url}</span>
+        efb_final_step.innerHTML = `<h3 class='efb emsFormBuilder'><i class="efb nmsgefb bi-exclamation-triangle-fill text-center"></i></h1><h3 class="efb font-weight-bold  text-center">${ajax_object_efm.text.error} - ${ajax_object_efm.text.file}</h3> <span class="efb font-weight-bold  text-center">${ajax_object_efm.text.youNotPermissionUploadFile}</br>${file.url}</span>
          <div class="efb m-1"> <button id="prev_efb_send" type="button" class="efb btn efb ${valj_efb[0].button_color}   ${corner}   ${valj_efb[0].el_height}  p-2 text-center  btn-lg  " onclick="${btn_prev}"><i class="efb  ${valj_efb[0].button_Previous_icon} ${valj_efb[0].button_Previous_icon} ${valj_efb[0].icon_color} mx-2 fs-6 " id="button_group_Previous_icon"></i><span id="button_group_Previous_button_text" class="efb  ${valj_efb[0].el_text_color} ">${valj_efb[0].button_Previous_text}</span></button></div></div>`;
         return;
       }
@@ -553,7 +553,7 @@ function alarm_emsFormBuilder(val) {
             checkFile += 1;
           } else if (files_emsFormBuilder.length > 0 && file.state == 3) {
             checkFile = -100;
-            efb_final_step.innerHTML = `<h3 class='efb emsFormBuilder'><i class="efb nmsgefb bi-exclamation-triangle-fill text-center"></i></h1><h3 class="efb fs-4  text-center">File Error</h3> <span class="efb fs-6  text-center">${ajax_object_efm.text.youNotPermissionUploadFile}</br>${file.url}</span>
+            efb_final_step.innerHTML = `<h3 class='efb emsFormBuilder'><i class="efb nmsgefb bi-exclamation-triangle-fill text-center"></i></h1><h3 class="efb fs-4  text-center">${ajax_object_efm.text.error} - ${ajax_object_efm.text.file}</h3> <span class="efb fs-6  text-center">${ajax_object_efm.text.youNotPermissionUploadFile}</br>${file.url}</span>
                <div class="efb m-1"> <button id="prev_efb_send" type="button" class="efb btn efb ${valj_efb[0].button_color}   ${corner}   ${valj_efb[0].el_height}  p-2 text-center  btn-lg  " onclick="${btn_prev}"><i class="efb  ${valj_efb[0].button_Previous_icon} ${valj_efb[0].button_Previous_icon} ${valj_efb[0].icon_color} mx-2 fs-6 " id="button_group_Previous_icon"></i><span id="button_group_Previous_button_text" class="efb  ${valj_efb[0].el_text_color} ">${valj_efb[0].button_Previous_text}</span></button></div></div>`;
             return;
           }
@@ -895,7 +895,7 @@ async function validation_before_send_efb(form_id) {
     }
   }
   require = require > fill ? 1 : 0;
-  if (((count[1] == 0 && count[0] != 0) || (count[0] == 0 && count[1] == 0) || require == 1) && ( (valj_efb[0].hasOwnProperty("logic")== true || valj_efb[0].hasOwnProperty("logic")==false) && valj_efb.logic==false )) {
+  if (((count[1] == 0 && count[0] != 0) || (count[0] == 0 && count[1] == 0) || require == 1) && ( (valj_efb[0].hasOwnProperty("logic")== true || valj_efb[0].hasOwnProperty("logic")==false) && valj_efb[0].logic==false )) {
     const body_efb = document.getElementById(id_body);
     const efb_final_step = body_efb.getElementsByClassName('efb-final-step');
     efb_final_step.innerHTML = `<h3 class='efb emsFormBuilder'><i class="efb nmsgefb bi-exclamation-triangle-fill text-center fs-2 efb"></i></h1><h3 class="efb fs-3 efb text-muted">${ajax_object_efm.text.error}</h3> <span class="efb mb-2 fs-5 efb text-muted"> ${require != 1 ? ajax_object_efm.text.PleaseFillForm : ajax_object_efm.text.pleaseFillInRequiredFields} </br></span>
@@ -1322,6 +1322,16 @@ window.addEventListener("popstate",e=>{
     }
   return  r;
  }
+efb_refresh_nonce=async()=>{
+  try {
+    const r = await fetch(efb_var.rest_url+'Emsfb/v1/nonce/refresh',{method:'GET',credentials:'same-origin'});
+    if(r.ok){
+      const d = await r.json();
+      if(d && d.nonce){ efb_var.nonce = d.nonce; return true; }
+    }
+  } catch(e){}
+  return false;
+}
  post_api_forms_efb=async(data,form_id)=>{
     const url = efb_var.rest_url+'Emsfb/v1/forms/message/add';
     const headers = new Headers({
@@ -1332,7 +1342,6 @@ window.addEventListener("popstate",e=>{
     });
 
     const jsonData = JSON.stringify(data);
-    console.error("🚀 ~ file: core-efb.js:1234 ~ post_api_forms_efb ~ jsonData:", data);
 
     const requestOptions = {
       method: 'POST',
@@ -1341,8 +1350,25 @@ window.addEventListener("popstate",e=>{
     };
 
   try {
-    const response = await fetch(url, requestOptions);
+    let response = await fetch(url, requestOptions);
+    if (response.status === 403) {
+      const refreshed = await efb_refresh_nonce();
+      if (refreshed) {
+        const retryHeaders = new Headers({
+          'Content-Type': 'application/json',
+          'X-WP-Nonce': efb_var.nonce,
+          'form-id': form_id ? form_id : 0,
+          'sid': data.sid ? data.sid : '',
+        });
+        response = await fetch(url, { method: 'POST', headers: retryHeaders, body: jsonData });
+      }
+    }
     if (!response.ok) {
+      if (response.status === 403) {
+        const msg403 = (ajax_object_efm && ajax_object_efm.text && ajax_object_efm.text.nonceExpired) ? ajax_object_efm.text.nonceExpired : 'Your session has expired. Please refresh the page and try again.';
+        await response_fill_form_efb({ success: false, data: { success: false, m: msg403 } }, form_id);
+        return;
+      }
       throw new Error('Network response was not ok');
     }
     const responseData = await response.json();
