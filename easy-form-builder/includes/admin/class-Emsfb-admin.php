@@ -367,9 +367,10 @@ class Admin {
         $vwp = get_bloginfo('version');
         $vwp = substr($vwp,0,3);
         $vefb = EMSFB_PLUGIN_VERSION;
-        $domain =  get_option('emsfb_dev_mode', '0') === '1' ? 'demo.whitestudio.team' : 'whitestudio.team';
-        $u = 'https://' . $domain . '/wp-json/wl/v1/addons-link/' . $server_name . '/' . $post_value . '/' . $vwp . '/' . $vefb . '/';
-        if (get_locale() == 'fa_IR' && false) {
+        $admin_test = get_option('EMSFB_team_test', '0') === '1';
+		$domain =  $admin_test ? 'demo.whitestudio.team' : 'whitestudio.team';
+        $u = 'https://' . $domain . '/wp-json/wl/v1/addons-link/' . $server_name . '/' . $value . '/' . $vwp . '/' . $vefb . '/';
+        if (get_locale() == 'fa_IR')  {
             $u = 'https://easyformbuilder.ir/wp-json/wl/v1/addons-link/' . $server_name . '/' . $post_value . '/' . $vwp . '/' . $vefb . '/';
         }
 
@@ -1223,7 +1224,9 @@ class Admin {
                 $moved = rename($r, EMSFB_PLUGIN_DIRECTORY . 'temp/temp.zip');
             }
             if(!$moved){
-                @unlink($r);
+                if (file_exists($r)) {
+                    @unlink($r);
+                }
                 return new \WP_Error('move_failed',
                     esc_html__('Cannot install add-ons of Easy Form Builder because the plugin is not able to move the downloaded file', 'easy-form-builder')
                 );
@@ -1232,7 +1235,9 @@ class Admin {
                 WP_Filesystem();
             }
             $r = unzip_file(EMSFB_PLUGIN_DIRECTORY . 'temp/temp.zip', EMSFB_PLUGIN_DIRECTORY . 'vendor/');
-            @unlink(EMSFB_PLUGIN_DIRECTORY . 'temp/temp.zip');
+            if (file_exists(EMSFB_PLUGIN_DIRECTORY . 'temp/temp.zip')) {
+                @unlink(EMSFB_PLUGIN_DIRECTORY . 'temp/temp.zip');
+            }
             if(is_wp_error($r)){
                 return new \WP_Error('unzip_failed',
                     esc_html__('Cannot install add-ons of Easy Form Builder because the plugin is not able to unzip files', 'easy-form-builder')

@@ -3,8 +3,8 @@ Contributors: hassantafreshi, mostafas1990, mrlast, aminkhadivar, presskopp
 Donate link: https://whitestudio.team/donate-easy-form-builder/
 Tags: form builder, form plugin, multi step form, survey form, payment form
 Requires at least: 5.0
-Tested up to: 6.9
-Stable tag: 4.0.7
+Tested up to: 7.0
+Stable tag: 4.0.9
 Requires PHP: 7.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.en.html
@@ -324,6 +324,10 @@ Major update. New form rendering engine, Gutenberg block, Elementor/WPBakery/Vis
 
 
 == Changelog ==
+
+= 4.0.9 =
+
+* Improved add-on installation reliability across different site languages.
 
 = 4.0.7 =
 
