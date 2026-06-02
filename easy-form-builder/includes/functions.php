@@ -1984,9 +1984,11 @@ public function addon_add_efb($value) {
 		$admin_test = get_option('EMSFB_team_test', '0') === '1';
 		$domain =  $admin_test ? 'demo.whitestudio.team' : 'whitestudio.team';
         $u = 'https://' . $domain . '/wp-json/wl/v1/addons-link/' . $server_name . '/' . $value . '/' . $vwp . '/' . $vefb . '/';
+        $fallback_u = '';
         $name_space = 'emsfb_addon_' . $value;
         if (get_locale() == 'fa_IR' ) {
             $u = 'https://easyformbuilder.ir/wp-json/wl/v1/addons-link/' . $server_name . '/' . $value . '/' . $vwp . '/' . $vefb . '/';
+            $fallback_u = 'https://' . $domain . '/wp-json/wl/v1/addons-link/' . $server_name . '/' . $value . '/' . $vwp . '/' . $vefb . '/';
         }
 		delete_option($name_space);
 
@@ -1997,12 +1999,18 @@ public function addon_add_efb($value) {
 		$error_messag = sprintf($error_message, $domain, 'not_success');
 
         while ($attempt < $max_attempts && !$success) {
-            $request = wp_remote_get($u);
+            $request = wp_remote_get($u, ['timeout' => 15]);
 
             if (is_wp_error($request)) {
                 $attempt++;
                 $error_message = esc_html__('Cannot install add-ons of Easy Form Builder because the plugin is not able to connect to the whitestudio.team server','easy-form-builder');
 
+                if ($attempt >= $max_attempts && !empty($fallback_u) && $u !== $fallback_u) {
+                    $u = $fallback_u;
+                    $fallback_u = '';
+                    $attempt = 0;
+                    continue;
+                }
                 if ($attempt >= $max_attempts) {
                     return array('status' => false, 'message' => $error_message);
                 }
@@ -2570,10 +2578,7 @@ public function addon_add_efb($value) {
 		}
 		$st->efb_version=EMSFB_PLUGIN_VERSION;
 
-		$st_ = json_encode($st,JSON_UNESCAPED_UNICODE);
-
-        $setting = str_replace('"', '\"', $st_);
-		$this->set_setting_Emsfb($setting,$st->emailSupporter);
+		$this->set_setting_Emsfb($st, isset($st->emailSupporter) ? $st->emailSupporter : '');
 
 		if($pro == true || $pro ==1){
 
@@ -2773,43 +2778,18 @@ public function addon_add_efb($value) {
 	}
 
 	public function update_pro_status_efb($code) {
+		$activeCode = explode('@', $code)[0];
+		if (!$this->validated_pro_efb($activeCode)) {
+			delete_option('emsfb_pro');
+			delete_option('emsfb_pro_ac_date');
+			delete_option('emsfb_pro_activeCode');
+			return false;
+		}
+
 		update_option('emsfb_pro', 1);
 		update_option('emsfb_pro_activeCode', $code);
-		$json = $this->make_post_request_efb($code);
-
-		$r = isset($json->r) ? $json->r : false;
-		if($r===false) {
-			delete_option('emsfb_pro');
-			delete_option('emsfb_pro_ac_date');
-			delete_option('emsfb_pro_activeCode');
-			return false;
-		}
 		update_option('emsfb_pro_ac_date', date('Y-m-d H:i:s'));
-		$state = isset($json->state) ? $json->state : '';
-		if($state=="new") {
-			$activeCode = $json->key;
-			update_option('emsfb_pro_activeCode', $activeCode);
-			update_option('emsfb_pro_ac_date', date('Y-m-d H:i:s'));
-			update_option('emsfb_pro', 1);
-			$st = get_setting_Emsfb();
-			if(!is_object($st)){ $st = new \stdClass(); }
-			$st->activeCode = $activeCode;
-			$this->setting_version_efb_update($st,1);
-			return true;
-		}elseif($state=="active") {
-			update_option('emsfb_pro_ac_date', date('Y-m-d H:i:s'));
-			return true;
-		}elseif ($state=="deactive") {
-			update_option('emsfb_pro' , 0);
-			delete_option('emsfb_pro_ac_date');
-			update_option('emsfb_pro_activeCode' ,$code);
-			return false;
-		}elseif ($state=="notExists") {
-			delete_option('emsfb_pro');
-			delete_option('emsfb_pro_ac_date');
-			delete_option('emsfb_pro_activeCode');
-			return false;
-		}
+		return true;
 	}
 
 	public function weekly_check_pro_efb($activeCode) {
@@ -3402,8 +3382,28 @@ public function addon_add_efb($value) {
 
         $json = '';
         if(is_object($newSettings) || is_array($newSettings)){
-
-            $json = json_encode($newSettings, JSON_UNESCAPED_UNICODE);
+            if (is_array($newSettings) && isset($newSettings[0]) && in_array($newSettings[0], ['{', '['], true) && count($newSettings) > 20) {
+                $keys = array_keys($newSettings);
+                $is_char_map = true;
+                $expected = 0;
+                foreach ($keys as $key) {
+                    if (!is_int($key) || $key !== $expected || !is_string($newSettings[$key]) || strlen($newSettings[$key]) > 8) {
+                        $is_char_map = false;
+                        break;
+                    }
+                    $expected++;
+                }
+                if ($is_char_map) {
+                    $candidate = implode('', $newSettings);
+                    $candidate_decoded = json_decode($candidate);
+                    if (is_object($candidate_decoded) || is_array($candidate_decoded)) {
+                        $json = $candidate;
+                    }
+                }
+            }
+            if ($json === '') {
+                $json = json_encode($newSettings, JSON_UNESCAPED_UNICODE);
+            }
         }else{
 
             $json = $newSettings;

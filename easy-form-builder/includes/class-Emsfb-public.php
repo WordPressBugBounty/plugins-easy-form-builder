@@ -779,7 +779,7 @@ public function check_nonce_permission_efb($request) {
 						$smssendefb = new smssendefb() ;
 					}
 
-					$setting;
+					$setting = null;
 					if($typeOfForm=="payment"){
 						$this->setting= $this->setting!=NULL  && empty($this->setting)!=true ? $this->setting:  get_setting_Emsfb('raw');
 						$r = $this->setting;
@@ -787,6 +787,14 @@ public function check_nonce_permission_efb($request) {
 							$setting =str_replace('\\', '', $r);
 							$setting =json_decode($setting);
 
+						} elseif ( is_object( $r ) ) {
+							$setting = $r;
+						} elseif ( is_array( $r ) ) {
+							$setting = (object) $r;
+						}
+						if ( ! is_object( $setting ) ) {
+							$raw_setting = get_setting_Emsfb('raw');
+							$setting = is_string( $raw_setting ) ? json_decode( str_replace( '\\', '', $raw_setting ) ) : null;
 						}
 						$ar_core = array_merge($ar_core , array(
 							'paymentGateway' =>$paymentType,
@@ -1074,11 +1082,38 @@ public function check_nonce_permission_efb($request) {
 							}
 							if($valj_efb[$i]->type =='paypal'){
 								$paymentType="paypal";
-								$paymentKey=isset($setting->paypalPKey)  ? $setting->paypalPKey:'null';
+								$paypal_public_key = ( isset( $setting ) && is_object( $setting ) && isset( $setting->paypalPKey ) ) ? trim( (string) $setting->paypalPKey ) : '';
+								if ( strlen( $paypal_public_key ) <= 5 ) {
+									$decoded_settings = get_setting_Emsfb( 'decoded' );
+									if ( is_object( $decoded_settings ) && isset( $decoded_settings->paypalPKey ) ) {
+										$paypal_public_key = trim( (string) $decoded_settings->paypalPKey );
+									}
+								}
+								if ( strlen( $paypal_public_key ) <= 5 ) {
+									$option_settings = get_option( 'emsfb_settings', '' );
+									$option_settings = is_string( $option_settings ) ? json_decode( str_replace( '\\', '', $option_settings ) ) : null;
+									if ( is_object( $option_settings ) && isset( $option_settings->paypalPKey ) ) {
+										$paypal_public_key = trim( (string) $option_settings->paypalPKey );
+									}
+								}
+								if ( strlen( $paypal_public_key ) <= 5 ) {
+									if ( empty( $this->db ) ) {
+										global $wpdb;
+										$this->db = $wpdb;
+									}
+									$table_name = $this->db->prefix . 'emsfb_setting';
+									$latest_raw = $this->db->get_var( "SELECT setting FROM `$table_name` ORDER BY id DESC LIMIT 1" );
+									$latest_settings = is_string( $latest_raw ) ? json_decode( str_replace( '\\', '', $latest_raw ) ) : null;
+									if ( is_object( $latest_settings ) && isset( $latest_settings->paypalPKey ) ) {
+										$paypal_public_key = trim( (string) $latest_settings->paypalPKey );
+									}
+								}
+								$paymentKey = strlen( $paypal_public_key ) > 5 ? $paypal_public_key : 'null';
+								error_log('[EFB][PayPal][PUBLIC] Localizing client id: form_id=' . $form_id . ', setting_type=' . gettype( $setting ?? null ) . ', client_id_length=' . strlen( $paypal_public_key ) . ', sent=' . ( $paymentKey === 'null' ? 'null' : 'set' ));
 								$currency ='USD';
 
 								!is_dir(EMSFB_PLUGIN_DIRECTORY."/vendor/paypal") ? $this->efbFunction->download_all_addons_efb() : '';
-								wp_register_script('paypalefb-js', EMSFB_PLUGIN_URL . 'vendor/paypal/assets/js/paypal_efb.js',array('jquery'), EMSFB_PLUGIN_VERSION, true);
+								wp_register_script('paypalefb-js', EMSFB_PLUGIN_URL . 'vendor/paypal/assets/js/paypal_efb.js',array('jquery', 'Emsfb-core_js'), filemtime(EMSFB_PLUGIN_DIRECTORY . 'vendor/paypal/assets/js/paypal_efb.js'), true);
 								wp_enqueue_script('paypalefb-js');
 								$ar_core = array_merge($ar_core , array(
 									'paymentGateway' =>'paypal',
@@ -2445,7 +2480,7 @@ public function check_nonce_permission_efb($request) {
 								$saved_payment_content = json_decode(str_replace('\\', '', $value[0]->content), true);
 								$submitted_values = $submitted_values;
 								$filtered = array_filter($submitted_values, function ($item) use ($saved_payment_content) {
-									return strpos($item['type'], 'pay') === false;
+									return !isset($item['type']) || strpos($item['type'], 'pay') === false;
 								});
 								$amount = array_reduce($saved_payment_content, function ($carry, $item) {
 									return $carry + ($item['price'] ?? 0);
@@ -2854,7 +2889,7 @@ public function check_nonce_permission_efb($request) {
 			}
 
 	  }
-	public function insert_message_db($read,$uniqid,$style_trackingCode){
+	public function insert_message_db($read, $uniqid, $style_trackingCode = 'date_en_mix'){
 		if(isset($read)==false) $read=0;
 
 		if($uniqid==false){

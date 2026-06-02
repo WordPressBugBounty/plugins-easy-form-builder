@@ -369,9 +369,11 @@ class Admin {
         $vefb = EMSFB_PLUGIN_VERSION;
         $admin_test = get_option('EMSFB_team_test', '0') === '1';
 		$domain =  $admin_test ? 'demo.whitestudio.team' : 'whitestudio.team';
-        $u = 'https://' . $domain . '/wp-json/wl/v1/addons-link/' . $server_name . '/' . $value . '/' . $vwp . '/' . $vefb . '/';
+        $u = 'https://' . $domain . '/wp-json/wl/v1/addons-link/' . $server_name . '/' . $post_value . '/' . $vwp . '/' . $vefb . '/';
+        $fallback_u = '';
         if (get_locale() == 'fa_IR')  {
             $u = 'https://easyformbuilder.ir/wp-json/wl/v1/addons-link/' . $server_name . '/' . $post_value . '/' . $vwp . '/' . $vefb . '/';
+            $fallback_u = 'https://' . $domain . '/wp-json/wl/v1/addons-link/' . $server_name . '/' . $post_value . '/' . $vwp . '/' . $vefb . '/';
         }
 
         $max_attempts = 2;
@@ -381,11 +383,17 @@ class Admin {
         $error_message = sprintf($error_message, $domain, 'not_success');
 
         while ($attempt < $max_attempts && !$success) {
-            $request = wp_remote_get($u);
+            $request = wp_remote_get($u, ['timeout' => 15]);
 
             if (is_wp_error($request)) {
                 $attempt++;
                 $error_message = esc_html__('Cannot install add-ons of Easy Form Builder because the plugin is not able to connect to the whitestudio.team server', 'easy-form-builder');
+                if ($attempt >= $max_attempts && !empty($fallback_u) && $u !== $fallback_u) {
+                    $u = $fallback_u;
+                    $fallback_u = '';
+                    $attempt = 0;
+                    continue;
+                }
                 if ($attempt >= $max_attempts) {
                     $response = ['success' => false, 'm' => $error_message];
                     wp_send_json_error($response, 200);
