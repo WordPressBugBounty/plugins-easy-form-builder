@@ -4834,7 +4834,6 @@ public function check_nonce_permission_efb($request) {
 	public function fun_present_others_action_efb($state, $username, $sid,$fid){
 
 		$this->efbFunction = get_efbFunction();
-		$s_sid = $this->efbFunction->efb_code_validate_select($sid, $fid);
 		$texts =['sxnlex','uraatn'];
 		$lan =$this->efbFunction->text_efb($texts);
 		function Js_() {
@@ -4973,14 +4972,14 @@ public function check_nonce_permission_efb($request) {
 			}
 			return '<p text-align: center;">'.$lan['uraatn'].'</p>' . Js_();
 		}
-		if ($s_sid !=1 || $sid==null){
-			$this->efbFunction->send_email_noti_sid_plugins_efb('userActionEvent');
-			return '<p style="color:#ff4b93;text-align: center;">'.$lan['sxnlex'].'</p>'.Js_();
-		}
 		if(empty($this->db)){
             global $wpdb;
             $this->db = $wpdb;
         }
+		if (empty($sid) || strlen($sid) < 32) {
+			$this->efbFunction->send_email_noti_sid_plugins_efb('userActionEvent');
+			return '<p style="color:#ff4b93;text-align: center;">'.$lan['sxnlex'].'</p>'.Js_();
+		}
 		$table_name = $this->db->prefix . 'emsfb_temp_links';
 		$sql = $this->db->prepare("SELECT * FROM $table_name WHERE code = %s", $sid);
 		$row = $this->db->get_row($sql);
@@ -4992,6 +4991,7 @@ public function check_nonce_permission_efb($request) {
 				$st = $state == 1 ? 'register' : 'recovery';
 				if($state==1){
 					$this->efbFunction->efb_code_validate_update($sid, $st, 0);
+					$this->db->delete($table_name, ['id' => (int) $row->id], ['%d']);
 					return register_( $lan,$username);
 				}else if($state==0){
 					$this->public_scripts_and_css_head('css');
@@ -5004,6 +5004,22 @@ public function check_nonce_permission_efb($request) {
 			$m= esc_html__('error', 'easy-form-builder') . ': R404';
 			return '<p style="color:#ff4b93;text-align: center;">'.$m.'</p>';
 
+	}
+
+	private function generate_temp_link_token_efb($table_name) {
+		do {
+			if (function_exists('wp_generate_password')) {
+				$token = wp_generate_password(32, false, false);
+			} else {
+				$token = bin2hex(random_bytes(16));
+			}
+			$exists = $this->db->get_var($this->db->prepare(
+				"SELECT id FROM $table_name WHERE code = %s LIMIT 1",
+				$token
+			));
+		} while ($exists);
+
+		return $token;
 	}
 
 
@@ -5030,7 +5046,7 @@ public function check_nonce_permission_efb($request) {
 		$table_name = $this->db->prefix . 'emsfb_temp_links';
 		$ip = !empty($this->ip) ? $this->ip : $this->get_ip_address();
 
-		$sid = $this->efbFunction->efb_code_validate_create($this->id, 0, $type_, 0);
+		$sid = $this->generate_temp_link_token_efb($table_name);
 		$status_ = ($type_ === 'register') ? 1 : 0;
 
 		$data = [
@@ -5060,19 +5076,24 @@ public function check_nonce_permission_efb($request) {
 	public function set_password_efb_api(){
 
 		$data = json_decode(file_get_contents('php://input'), true);
+		if (!is_array($data)) {
+			return new WP_REST_Response(array('success' => false, 'data' => esc_html__('Error! Please try again later.', 'easy-form-builder')), 400);
+		}
 
-		$st = sanitize_text_field($data['st']);
-		$fid = sanitize_text_field($data['fid']);
+		$st = sanitize_text_field($data['st'] ?? '');
+		$fid = sanitize_text_field($data['fid'] ?? '');
 		$this->efbFunction = get_efbFunction();
-		 $s_sid = $this->efbFunction->efb_code_validate_select($st, $fid);
 
-		$password = sanitize_text_field($data['password']);
+		$password = sanitize_text_field($data['password'] ?? '');
+		if ($st === '' || strlen($st) < 32 || $fid === '' || $password === '') {
+			return new WP_REST_Response(array('success' => false, 'data' => esc_html__('Error! Please try again later.', 'easy-form-builder')), 400);
+		}
 		if(empty($this->db)){
             global $wpdb;
             $this->db = $wpdb;
         }
 		$table_name = $this->db->prefix . 'emsfb_temp_links';
-		$sql = $this->db->prepare("SELECT * FROM $table_name WHERE code = %s", $st);
+		$sql = $this->db->prepare("SELECT * FROM $table_name WHERE code = %s AND status_ = %d", $st, 0);
 		$row = $this->db->get_row($sql);
 		if ($row) {
 			$created_at = strtotime($row->created_at);
@@ -5083,6 +5104,7 @@ public function check_nonce_permission_efb($request) {
 				if ($user) {
 					wp_set_password($password, $user->ID);
 					$this->efbFunction->efb_code_validate_update($st, 'recovery', 1);
+					$this->db->delete($table_name, ['id' => (int) $row->id], ['%d']);
 					return new WP_REST_Response(array('success' => true, 'data' => esc_html__('Password has been changed successfully!', 'easy-form-builder')));
 				}
 			}

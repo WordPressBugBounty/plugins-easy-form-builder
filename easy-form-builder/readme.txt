@@ -1,10 +1,10 @@
 === Easy Form Builder by WhiteStudio — Drag & Drop Form Builder ===
-Contributors: hassantafreshi, mostafas1990, mrlast, aminkhadivar, presskopp
+Contributors: hassantafreshi, mostafas1990, 6arshid, aminkhadivar, presskopp
 Donate link: https://whitestudio.team/donate-easy-form-builder/
 Tags: form builder, form plugin, multi step form, survey form, payment form
 Requires at least: 5.0
 Tested up to: 7.0
-Stable tag: 4.0.11
+Stable tag: 4.0.12
 Requires PHP: 7.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.en.html
@@ -324,6 +324,10 @@ Major update. New form rendering engine, Gutenberg block, Elementor/WPBakery/Vis
 
 
 == Changelog ==
+
+= 4.0.12 =
+
+* Fixed an important security issue.
 
 = 4.0.11 =
 
