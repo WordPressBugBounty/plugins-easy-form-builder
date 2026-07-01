@@ -1386,12 +1386,12 @@ public function check_nonce_permission_efb($request) {
 		$location = '';
 
 		$sid = $this->efbFunction->efb_code_validate_create( 0 , 0, 'visit' , 0);
-		$sc = isset($_GET['sc']) ? sanitize_text_field($_GET['sc']) : 'null';
+		$sc = isset($_GET['sc']) ? sanitize_text_field(wp_unslash($_GET['sc'])) : 'null';
 
 		$get_track ='';
 		$captcha_exist = false;
 		if(isset($_GET['track'])){
-			$get_track = sanitize_text_field($_GET['track']);
+			$get_track = sanitize_text_field(wp_unslash($_GET['track']));
 		}
 			$script_call_captcha = '';
 			if (isset($valstng->siteKey) && isset($valstng->scaptcha) && $valstng->scaptcha==true ){
@@ -1404,7 +1404,7 @@ public function check_nonce_permission_efb($request) {
 							loadCaptcha_efb(20);
 						});
 						</script>' ,
-								$valstng->siteKey
+								esc_attr($valstng->siteKey)
 				);
 				$captcha_exist = true;
 			}
@@ -1430,12 +1430,12 @@ public function check_nonce_permission_efb($request) {
 			</div>
 			<div id="alert_efb" class="efb mx-5"></div>',
 			is_rtl() ? 'rtl-text' : '',
-			$text['pleaseEnterTheTracking'],
-			$text['trackingCode'],
-			$text['entrTrkngNo'],
-			$get_track,
+			esc_html($text['pleaseEnterTheTracking']),
+			esc_html($text['trackingCode']),
+			esc_attr($text['entrTrkngNo']),
+			esc_attr($get_track),
 			$script_call_captcha,
-			$text['search']
+			esc_html($text['search'])
 		);
 		 $val = $pro==true ? '<!--efb.app-->' : '<div class="efb d-none"><a href="https://whitestudio.team"  class="efb text-decoration-none" target="_blank"><p class="efb fs-7 text-darkb mb-4" style="text-align: center;">'.$text['easyFormBuilder'].'<p></a></div>';
 
@@ -3580,7 +3580,7 @@ public function check_nonce_permission_efb($request) {
 		$sid = sanitize_text_field($data_POST['sid']);
 		$s_sid = $this->efbFunction->efb_code_validate_select($sid, $fid);
 		if ($s_sid !=1 || $sid==null){
-			$this->efbFunction->send_email_noti_sid_plugins_efb;('replyMessageAction');
+			$this->efbFunction->send_email_noti_sid_plugins_efb('replyMessageAction');
 			$m = $this->lanText['sxnlex'];
 			$response = array( 'success' => false  , 'm'=>$m );
 			wp_send_json_success($response,200);
