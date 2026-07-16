@@ -4,7 +4,7 @@ Donate link: https://whitestudio.team/donate-easy-form-builder/
 Tags: form builder, form plugin, multi step form, email templates, payment form
 Requires at least: 5.0
 Tested up to: 7.0
-Stable tag: 4.1.0
+Stable tag: 4.1.1
 Requires PHP: 7.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.en.html
@@ -408,6 +408,10 @@ For more information, visit the official website:
 
 
 == Upgrade Notice ==
+
+= 4.1.1 =
+
+* Fixed issues
 
 = 4.1.0 =
 Big update: a new no-code Conditional Logic Builder for smart forms, an AI-analyzed email deliverability monitor (spam score + SPF/DKIM/DMARC) with weekly reports, multiple file uploads, form-builder autosave, session/nonce hardening for cached pages, automatic CDN failover, and several security fixes. Tested up to WordPress 7.0
