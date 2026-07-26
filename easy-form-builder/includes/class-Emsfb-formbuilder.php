@@ -79,14 +79,19 @@
 			case 'postalcode':
 			case 'address_line':
 				$textElements = ['firstName', 'lastName', 'postalcode', 'address_line','datetime-local'];
-				$placeholderElements = ['color', 'range', 'password', 'date'];
+				// The HTML placeholder attribute is supported for password inputs.
+				// Keep it disabled only for native controls where browsers do not
+				// consistently render it.
+				$placeholderElements = ['color', 'range', 'date'];
 
 				$isTextType = in_array($elementId, $textElements);
 				$isPlaceholderType = !in_array($elementId, $placeholderElements);
 
 				$type = $isTextType ? 'text' : $elementId;
 				$autocomplete = $this->generateAutocomplete_efb($elementId);
-				$placeholder = $isPlaceholderType ? sprintf('placeholder="%s"', $vj->placeholder) : '';
+				$placeholder = $isPlaceholderType && isset($vj->placeholder)
+					? sprintf('placeholder="%s"', esc_attr($vj->placeholder))
+					: '';
 				$telPattern = ($elementId === 'tel') ? 'pattern="^\+?(?:[0-9]|\s|\.|\(|\)|-){7,25}$"' : '';
 				$lenAttributes = $this->generateLengthAttributes_efb($elementId, $vj);
 				$classes = $elementId !== 'range' ? sprintf('form-control %s', $vj->el_border_color) : 'form-range';
@@ -136,7 +141,7 @@
 					$desc
 				);
 
-				$fields['ui']  = $this->pro_efb ? $ui : $this->public_pro_message_efb($texts['tfnapca']);
+				$fields['ui']  = $this->pro_efb ? $ui : $this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 				$fields['dataTag'] = $elementId;
 
 				break;
@@ -422,9 +427,21 @@
 		return $newClasses;
 	}
 
-	private function public_pro_message_efb($text){
+	/**
+	 * Notice shown in place of a field that needs the Free Plus / Pro version.
+	 *
+	 * A privileged viewer (someone who can edit content — the form builder /
+	 * editor / admin) gets the actionable $admin_text ("activate Free Plus or
+	 * Pro"), because they can actually do something about it. A normal visitor
+	 * gets the neutral $text notice. When $admin_text is empty every viewer gets
+	 * $text (backward compatible with the existing callers).
+	 */
+	private function public_pro_message_efb($text, $admin_text = ''){
+		if ($admin_text !== '' && function_exists('current_user_can') && current_user_can('edit_posts')) {
+			$text = $admin_text;
+		}
 		$r = sprintf(
-			'<div class="efb text-white fs-6 bg-danger px-1 rounded px-2">%s</div>',
+			'<div class="efb text-white fs-6 bg-danger px-1 rounded px-2 py-1">%s</div>',
 			$text
 		);
 
@@ -1409,6 +1426,7 @@
 		$meta = isset($kindMeta[$kind]) ? $kindMeta[$kind] : $kindMeta['audio_recorder'];
 		$quality = property_exists($vj, 'record_quality') && $vj->record_quality ? $vj->record_quality : ($kind == 'audio_recorder' ? 'standard' : '720p');
 		$maxDuration = property_exists($vj, 'max_duration') && $vj->max_duration ? intval($vj->max_duration) : 90;
+		$maxFileSize = property_exists($vj, 'max_fsize') && is_numeric($vj->max_fsize) && floatval($vj->max_fsize) > 0 ? floatval($vj->max_fsize) : 20;
 		$requiredClass = ($vj->required == 1 || $vj->required == true) ? 'required' : '';
 		$requiredAttr = ($vj->required == 1 || $vj->required == true) ? 'required' : '';
 		$readonlyAttr = $disabled == 'disabled' ? 'disabled' : '';
@@ -1421,6 +1439,12 @@
 		$facing = property_exists($vj, 'rec_facing') && $vj->rec_facing === 'environment' ? 'environment' : 'user';
 		$mirror = property_exists($vj, 'rec_mirror') ? (intval($vj->rec_mirror) ? 1 : 0) : 1;
 		$watermark = property_exists($vj, 'rec_watermark') ? (intval($vj->rec_watermark) ? 1 : 0) : 1;
+		// Generic style settings live on the shell, same class list the JS factory emits;
+		// recorder-efb.css translates them onto the inner frame.
+		$elHeight = property_exists($vj, 'el_height') && $vj->el_height ? $vj->el_height : 'h-d-efb';
+		$corner = property_exists($vj, 'corner') && $vj->corner ? $vj->corner : 'efb-square';
+		$borderColor = property_exists($vj, 'el_border_color') && $vj->el_border_color ? $vj->el_border_color : 'border-d';
+		$extraClasses = property_exists($vj, 'classes') && $vj->classes ? trim(str_replace(',', ' ', $vj->classes)) : '';
 
 		$mediaPreview = $kind == 'audio_recorder'
 			? sprintf('<canvas class="efb efb-recorder-meter d-none" id="%1$s-meter" width="300" height="64"></canvas>', $vj->id_)
@@ -1434,24 +1458,25 @@
 			);
 
 		return sprintf(
-			'<div class="efb efb-recorder-shell %1$s" id="%2$s_" data-id="%2$s" data-kind="%3$s" data-quality="%4$s" data-duration="%5$s" data-countdown="%22$s" data-download="%23$s" data-noise="%24$s" data-facing="%25$s" data-mirror="%26$s" data-formid="%6$s" data-state="idle">
+			'<div class="efb efb-recorder-shell %1$s %30$s %31$s %32$s efb1 %33$s" data-css="%2$s" id="%2$s_" data-id="%2$s" data-kind="%3$s" data-quality="%4$s" data-duration="%5$s" data-max-size="%28$s" data-countdown="%22$s" data-download="%23$s" data-noise="%24$s" data-facing="%25$s" data-mirror="%26$s" data-formid="%6$s" data-state="idle">
 				<div class="efb efb-recorder-frame" id="%2$s-frame">
 					%7$s
 					<div class="efb efb-recorder-idle-hint" id="%2$s-idle"><i class="efb bi %8$s"></i><span>%9$s</span></div>
 					<div class="efb efb-recorder-timer d-none" id="%2$s-timer">00:00</div>
 					<div class="efb efb-recorder-action-row" id="%2$s-controls">
 						<button type="button" class="efb efb-recorder-secondary-btn d-none" data-action="pause" data-id="%2$s" title="%10$s" %11$s><i class="efb bi-pause-fill"></i></button>
-						<button type="button" class="efb efb-recorder-primary-btn" data-action="start" data-id="%2$s" title="%12$s" %11$s><i class="efb bi %8$s"></i></button>
+						<button type="button" class="efb efb-recorder-primary-btn" data-action="start" data-id="%2$s" data-start-icon="%8$s" data-stop-icon="bi-stop-fill" title="%12$s" %11$s><i class="efb bi %8$s"></i></button>
 						<button type="button" class="efb efb-recorder-secondary-btn d-none" data-action="resume" data-id="%2$s" title="%13$s" %11$s><i class="efb bi-record-circle"></i></button>
 						<button type="button" class="efb efb-recorder-secondary-btn d-none" data-action="redo" data-id="%2$s" title="%14$s" %11$s><i class="efb bi-arrow-counterclockwise"></i></button>
 						<button type="button" class="efb efb-recorder-secondary-btn d-none" data-action="play" data-id="%2$s" title="%15$s"><i class="efb bi-play-fill"></i></button>
 						<button type="button" class="efb efb-recorder-secondary-btn d-none" data-action="download" data-id="%2$s" title="%27$s"><i class="efb bi-download"></i></button>
+						<button type="button" class="efb efb-recorder-secondary-btn d-none" data-action="upload" data-id="%2$s" id="%2$s-upload" title="%29$s" aria-label="%29$s" %11$s><i class="efb bi-cloud-arrow-up-fill" aria-hidden="true"></i></button>
 					</div>
 					<div class="efb efb-recorder-progress-track"><div class="efb efb-recorder-progress-bar" id="%2$s-progress"></div></div>
 				</div>
 				<div class="efb efb-recorder-status-row">
 					<span class="efb efb-recorder-status" id="%2$s-status"><span class="efb efb-recorder-status-dot"></span>%16$s</span>
-					<span class="efb efb-recorder-badge">%21$s</span>
+					<span class="efb efb-recorder-badge"><i class="efb bi %8$s" aria-hidden="true"></i><span>%21$s</span></span>
 				</div>
 				<input type="file" hidden accept="%17$s" data-type="%3$s" data-vid="%2$s" data-id="%2$s" class="efb emsFormBuilder_v %18$s %19$s" id="%2$s_file" data-formid="%6$s" onchange="valid_file_emsFormBuilder(\'%2$s\',\'msg\',\'\',%6$s)" %20$s %11$s>
 			</div>',
@@ -1481,7 +1506,13 @@
 			$noise,
 			$facing,
 			$mirror,
-			esc_html(isset($texts['recDownload']) ? $texts['recDownload'] : 'Download recording')
+			esc_html(isset($texts['recDownload']) ? $texts['recDownload'] : 'Download recording'),
+			$maxFileSize,
+			esc_html(isset($texts['recUpload']) ? $texts['recUpload'] : 'Upload'),
+			esc_attr($elHeight),
+			esc_attr($corner),
+			esc_attr($borderColor),
+			esc_attr($extraClasses)
 		);
 	}
 
@@ -2401,7 +2432,7 @@
 					);
 
 					$dataTag = $elementId;
-					$ui = $pro ? $ui : $this->public_pro_message_efb($texts['tfnapca']);
+					$ui = $pro ? $ui : $this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 
 					if($isPdate){
 						if(!is_dir(EMSFB_PLUGIN_DIRECTORY."/vendor/persiadatepicker")) {
@@ -2530,7 +2561,7 @@
 						 $js_s .= $temp[1];
 						 $optn= $temp[0];
 					}else{
-						$optn=$this->public_pro_message_efb($texts['tfnapca']);
+						$optn=$this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 					}
 					wp_register_script('intlTelInput-js', EMSFB_PLUGIN_URL . 'includes/admin/assets/js/intlTelInput.min-efb.js', array(), EMSFB_PLUGIN_VERSION, true);
 					wp_enqueue_script('intlTelInput-js');
@@ -2554,7 +2585,7 @@
 				break;
 				case 'dadfile':
 
-					$el =$pro ? $this->dadfile_el_pro_efb(true, $element_Id, $vj,$form_id,$texts) : $this->public_pro_message_efb($texts['tfnapca']);
+					$el =$pro ? $this->dadfile_el_pro_efb(true, $element_Id, $vj,$form_id,$texts) : $this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 					$ui = sprintf('
 						%1$s
 						<div class="efb %2$s ' . $this->mobile_pos[3] . ' px-0 mx-0 ttEfb show" id="%3$s-f">
@@ -2588,6 +2619,7 @@
 						$el,
 						$desc
 					);
+					$ui = $pro == true ? $ui : $this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 					$dataTag = $elementId;
 				break;
 				case 'checkbox':
@@ -2693,7 +2725,7 @@
 					$ui = '
 					' . $label . '
 					' . $ttip . '
-					' . ($pro == true ? $this->esign_el_pro_efb(true, $pos, $rndm, $vj, $desc,$form_id,$texts['updateUrbrowser']) : $this->public_pro_message_efb($texts['tfnapca']));
+					' . ($pro == true ? $this->esign_el_pro_efb(true, $pos, $rndm, $vj, $desc,$form_id,$texts['updateUrbrowser']) : $this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : ''));
 
 					$ui.= sprintf(
 						"<script>
@@ -2797,7 +2829,7 @@
 					if($efbFunction === null)$efbFunction = get_efbFunction();
 					$efbFunction->openstreet_map_required_efb(0);
 					if ($pro!==true &&  $pro!==1) {
-						$ui = $this->public_pro_message_efb($texts['tfnapca']);
+						$ui = $this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 					}
 
 					$style = $this->field_maps_style_efb();
@@ -2807,7 +2839,7 @@
 
 				case 'rating':
 
-					$ui = $pro == true ? $this->rating_el_pro_efb(true, $pos, $rndm, $vj, $desc, $form_id, $label, $ttip, $aire_describedby, $texts) : $this->public_pro_message_efb($texts['tfnapca']);
+					$ui = $pro == true ? $this->rating_el_pro_efb(true, $pos, $rndm, $vj, $desc, $form_id, $label, $ttip, $aire_describedby, $texts) : $this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 					$dataTag = $elementId;
 				break;
                 case 'select':
@@ -2819,18 +2851,18 @@
 				case 'conturyList':
 				case 'country':
 
-					$ui =$pro == true ? $this->generate_country_list_efb($rndm, $vj, $pos, $form_id, $texts ,$desc,$label,$ttip,$aire_describedby): $this->public_pro_message_efb($texts['tfnapca']);
+					$ui =$pro == true ? $this->generate_country_list_efb($rndm, $vj, $pos, $form_id, $texts ,$desc,$label,$ttip,$aire_describedby): $this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 
 					$dataTag = $elementId;
 				break;
 				case 'stateProvince':
 				case 'statePro':
-					$ui = $pro == true ? $this->generate_state_province_efb($rndm, $vj, $pos, $form_id, $texts ,$desc,$label,$ttip,$aire_describedby) : $this->public_pro_message_efb($texts['tfnapca']);
+					$ui = $pro == true ? $this->generate_state_province_efb($rndm, $vj, $pos, $form_id, $texts ,$desc,$label,$ttip,$aire_describedby) : $this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 					$dataTag = $elementId;
 				break;
 				case 'city':
 				case 'cityList':
-					$ui = $pro == true ? $this->generate_city_list_efb($rndm, $vj, $pos, $form_id, $texts ,$desc,$label,$ttip,$aire_describedby) : $this->public_pro_message_efb($texts['tfnapca']);
+					$ui = $pro == true ? $this->generate_city_list_efb($rndm, $vj, $pos, $form_id, $texts ,$desc,$label,$ttip,$aire_describedby) : $this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 					$dataTag = $elementId;
 				break;
 				case 'multiselect':
@@ -2842,23 +2874,23 @@
 
 				case 'html':
 
-					$ui = $pro == true ? $this->generate_html_code_efb($rndm, $vj, $pos, $form_id, $texts, true) : $this->public_pro_message_efb($texts['tfnapca']);
+					$ui = $pro == true ? $this->generate_html_code_efb($rndm, $vj, $pos, $form_id, $texts, true) : $this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 					$dataTag = $elementId;
 				break;
 				case 'heading':
 
-					$ui = $pro == true ? $this->generate_heading_efb($rndm, $pos, $vj, $form_id) : $this->public_pro_message_efb($texts['tfnapca']);
+					$ui = $pro == true ? $this->generate_heading_efb($rndm, $pos, $vj, $form_id) : $this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 					$dataTag = $elementId;
 
 				break;
 				case 'link':
 
-					$ui = $pro == true ? $this->generate_link_efb(true, $pos, $rndm, $vj, $form_id) : $this->public_pro_message_efb($texts['tfnapca']);
+					$ui = $pro == true ? $this->generate_link_efb(true, $pos, $rndm, $vj, $form_id) : $this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 					$dataTag = $elementId;
 				break;
 				case 'yesNo':
 					if($pro!==true && $pro!==1){
-						$ui =$this->public_pro_message_efb($texts['tfnapca']);
+						$ui =$this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 						break;
 					}
 
@@ -2869,7 +2901,7 @@
 				break;
 				case 'pointr5':
 					if($pro!==true && $pro!==1){
-						$ui =$this->public_pro_message_efb($texts['tfnapca']);
+						$ui =$this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 						break;
 					}
 
@@ -2881,7 +2913,7 @@
 				case 'pointr10':
 
 					if($pro!==true && $pro!==1){
-						$ui =$this->public_pro_message_efb($texts['tfnapca']);
+						$ui =$this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 						break;
 					}
 					$r  = $this->pointer10_el_pro_efb(true, $vj, $form_id);
@@ -2890,7 +2922,7 @@
 				break;
 				case 'smartcr':
 					if($pro!==true && $pro!==1){
-						$ui =$this->public_pro_message_efb($texts['tfnapca']);
+						$ui =$this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 						break;
 					}
 					$r  = $this->smartcr_el_pro_efb(true, $vj, $form_id);
@@ -2899,7 +2931,7 @@
 				break;
 				case 'table_matrix':
 					if($pro!==true && $pro!==1){
-						$ui =$this->public_pro_message_efb($texts['tfnapca']);
+						$ui =$this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 						break;
 					}
 
@@ -2909,7 +2941,7 @@
 				break;
 				case 'prcfld':
 					if($pro!==true && $pro!==1){
-						$ui =$this->public_pro_message_efb($texts['tfnapca']);
+						$ui =$this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 						break;
 					}
 					$maxlen = (property_exists($vj, 'mlen') && $vj->mlen > 0) ? 'maxlength="' . $vj->mlen . '"' : '';
@@ -2967,7 +2999,7 @@
 				break;
 				case 'ttlprc':
 					if($pro!==true && $pro!==1){
-						$ui =$this->public_pro_message_efb($texts['tfnapca']);
+						$ui =$this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 						break;
 					}
 
@@ -2987,7 +3019,7 @@
 				break;
 				case 'stripe':
 					if($pro!==true && $pro!==1){
-						$ui =$this->public_pro_message_efb($texts['tfnapca']);
+						$ui =$this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 						break;
 					}
 					$sub = $texts['onetime'];
@@ -3005,7 +3037,7 @@
 				break;
 				case 'paypal':
 					if($pro!==true && $pro!==1){
-						$ui =$this->public_pro_message_efb($texts['tfnapca']);
+						$ui =$this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 						break;
 					}
 					$sub = $texts['onetime'];
@@ -3023,7 +3055,7 @@
 				case "zarinPal":
 
 					if($pro!==true && $pro!==1){
-						$ui =$this->public_pro_message_efb($texts['tfnapca']);
+						$ui =$this->public_pro_message_efb($texts['tfnapca'], isset($texts['thisFeatureAvailableFreePlusPro']) ? $texts['thisFeatureAvailableFreePlusPro'] : '');
 						break;
 					}
 
@@ -3064,7 +3096,7 @@
 				$newElement .= $ui;
 			}
 
-			if (!in_array($elementId, ['option', 'html', 'stripe', 'heading', 'link','conturyList','country','stateProvince','statePro','city','cityList','maps','ttlprc'])) {
+			if (!in_array($elementId, ['option', 'html', 'stripe', 'heading', 'link','conturyList','country','stateProvince','statePro','city','cityList','maps','ttlprc','audio_recorder','video_recorder','screen_recorder'])) {
 				$newElement .= '<!--test2--></div></div>';
 			} else {
 				$newElement .= '<!--test--></div>';
@@ -4279,9 +4311,8 @@ public function check_error_console_efb(){
 							nameOverride: self.t.jqueryMissing
 						});
 					}
-					if (typeof $ === "undefined" && typeof jQuery !== "undefined") {
-						console.warn("[EFB] $ is undefined. If using jQuery in noConflict mode, use jQuery instead of $");
-					}
+					/* WordPress deliberately runs jQuery in noConflict mode, so a missing
+					 * global `$` is normal and must not be reported as an application error. */
 				}, 500);
 
 				window.addEventListener("error", function(event) {

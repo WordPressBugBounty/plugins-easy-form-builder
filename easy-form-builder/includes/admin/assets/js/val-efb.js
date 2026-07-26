@@ -40,9 +40,9 @@ const fields_efb = [
   { name: efb_var.text.ddate, icon: 'bi-calendar-date', id: 'date', pro: false, tag:'basic all' },
   { name: efb_var.text.file, icon: 'bi-file-earmark-plus', id: 'file', pro: false, tag:'basic all' },
   { name: efb_var.text.dadfile, icon: 'bi-plus-square-dotted', id: 'dadfile', pro: true, tag:'advance all' },
- // { name: efb_var.text.audio_recorder, icon: 'bi-mic', id: 'audio_recorder', pro: false, tag:'advance all' },
- // { name: efb_var.text.video_recorder, icon: 'bi-camera-video', id: 'video_recorder', pro: false, tag:'advance all' },
- // { name: efb_var.text.screen_recorder, icon: 'bi-display', id: 'screen_recorder', pro: false, tag:'advance all' },
+  { name: efb_var.text.audio_recorder, icon: 'bi-mic', id: 'audio_recorder', pro: true, tag:'advance all' },
+  { name: efb_var.text.video_recorder, icon: 'bi-camera-video', id: 'video_recorder', pro: true, tag:'advance all' },
+  { name: efb_var.text.screen_recorder, icon: 'bi-display', id: 'screen_recorder', pro: true, tag:'advance all' },
   { name: efb_var.text.address, icon: 'bi-geo-alt', id: 'address', pro: true, tag:'advance all' },
 
   { name: efb_var.text.payCheckbox, icon: 'bi-basket2', id: 'payCheckbox', pro: true, tag:'payment all' },
@@ -2234,7 +2234,7 @@ function creator_form_builder_Efb() {
   <div id="panel_efb">
       <nav class="efb navbar navbar-expand-lg navbar-light bg-light my-2 bg-response efb">
           <div class="efb container-fluid">
-              <button class="efb navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarTogglerDemo01" aria-controls="navbarTogglerDemo01" aria-expanded="false" aria-label="Toggle navigation"><span class="efb navbar-toggler-icon"></span></button>
+              <button class="efb navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarTogglerDemo01" aria-controls="navbarTogglerDemo01" aria-expanded="false" aria-label="${efb_var.text.toggleNavigation}"><span class="efb navbar-toggler-icon"></span></button>
               <div class="efb collapse navbar-collapse py-1" id="navbarTogglerDemo01"><ul class="efb navbar-nav me-auto mb-2 mb-lg-0">${nav}</ul></div>
           </div>
       </nav>
@@ -2262,7 +2262,7 @@ function creator_form_builder_Efb() {
           <div class="efb row">${els}</div></div>
          <div class="efb  col-md-8 body-dpz-efb">
          <div class="efb d-flex justify-content-center mb-2" id="viewToggleEfb">
-           <div class="efb btn-group" role="group" aria-label="View toggle">
+           <div class="efb btn-group" role="group" aria-label="${efb_var.text.viewToggle}">
              <button type="button" class="efb btn btn-sm btn-outline-primary active" id="desktopViewBtnEfb" onclick="switchViewEfb('desktop')">
                <i class="efb bi-display me-1"></i>${efb_var.text.desktop || 'Desktop'}
              </button>

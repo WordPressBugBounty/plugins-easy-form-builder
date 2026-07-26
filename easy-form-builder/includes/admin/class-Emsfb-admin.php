@@ -391,7 +391,7 @@ class Admin {
             return $this->addon_install_sanitize_log_context_efb((array) $value);
         }
         if (is_string($value)) {
-            return strlen($value) > 2000 ? substr($value, 0, 2000) . '...[truncated]' : $value;
+            return strlen($value) > 2000 ? substr($value, 0, 2000) . '…[truncated]' : $value;
         }
         return $value;
     }
@@ -587,7 +587,7 @@ class Admin {
 
             $response_code = wp_remote_retrieve_response_code($request);
             $body = wp_remote_retrieve_body($request);
-            $body_preview = strlen($body) > 1000 ? substr($body, 0, 1000) . '...[truncated]' : $body;
+            $body_preview = strlen($body) > 1000 ? substr($body, 0, 1000) . '…[truncated]' : $body;
 
             $this->addon_install_log_efb('remote_response_received', [
                 'requested_addon' => $post_value,
@@ -2363,7 +2363,7 @@ class Admin {
     }
 
     private function email_tester_log_efb($event, $context = []) {
-        $debug_enabled = (defined('WP_DEBUG') && WP_DEBUG) || (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG);
+        $debug_enabled = defined('EFB_DEBUG') ? EFB_DEBUG : ((defined('WP_DEBUG') && WP_DEBUG) || (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG));
         if (!$debug_enabled) {
             return;
         }
@@ -2398,9 +2398,9 @@ class Admin {
                 return $this->email_tester_mask_email_efb($value);
             }
             if (preg_match('/^[a-f0-9]{64}$/i', $value)) {
-                return substr($value, 0, 12) . '...' . substr($value, -8);
+                return substr($value, 0, 12) . '…' . substr($value, -8);
             }
-            return strlen($value) > 2000 ? substr($value, 0, 2000) . '...[truncated]' : $value;
+            return strlen($value) > 2000 ? substr($value, 0, 2000) . '…[truncated]' : $value;
         }
         return $value;
     }
@@ -2858,12 +2858,11 @@ function admin_notices_efb () {
                     if($email_status === 'ok_set_smtp') {
                         return;
                     }else if ($email_status === 'ok' ) {
-                        if (isset($settings->smtp) && !in_array($settings->smtp, ['1', 'true', true,1], true)) {
-                            $settings->smtp = true;
-                            $email = isset($settings->emailSupporter) ? $settings->emailSupporter : '';
-                            $efbFunction->set_setting_Emsfb($settings, $email);
-                        }
-
+                        /* 'ok' is written by the automated (background) delivery
+                         * test. It is a diagnostic only - it must not switch
+                         * "This site can send emails" on by itself, otherwise a
+                         * fresh install shows the switch already enabled without
+                         * the admin ever confirming it. */
                         return;
                     }
                     $msg_id = isset($check['message']['id']) ? $check['message']['id'] : '';

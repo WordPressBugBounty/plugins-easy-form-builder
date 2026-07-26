@@ -450,6 +450,16 @@ class Email_Monitor {
         ]);
     }
 
+    /**
+     * Record that the automated delivery test succeeded.
+     *
+     * This only stores the diagnostic status. The "This site can send emails"
+     * switch (settings->smtp) is what actually enables notification emails, and
+     * it stays under the admin's control: a background test running minutes
+     * after activation used to flip it on by itself, so a brand-new site showed
+     * the switch already enabled while nobody had verified real delivery.
+     * Enabling it is now always an explicit admin action.
+     */
     private static function mark_email_ready() {
         update_option('emsfb_email_status', [
             'status' => 'ok',
@@ -463,17 +473,6 @@ class Email_Monitor {
                 'test_timestamp' => current_time('mysql', true),
             ],
         ], false);
-
-        if (!function_exists('get_setting_Emsfb') || !function_exists('get_efbFunction')) {
-            return;
-        }
-        $settings = get_setting_Emsfb('decoded');
-        if (!is_object($settings) || !empty($settings->smtp)) {
-            return;
-        }
-        $settings->smtp = true;
-        $email = isset($settings->emailSupporter) ? sanitize_email($settings->emailSupporter) : '';
-        get_efbFunction()->set_setting_Emsfb($settings, $email);
     }
 
     private static function save_status($state, $message, $context, $result = []) {

@@ -987,7 +987,11 @@ function fun_show_content_page_emsFormBuilder(state) {
     history.pushState("setting",null,'?page=Emsfb');
     window.location.reload();
   } else if (state == "setting" || state == "reload-setting") {
-    history.pushState("setting",null,'?page=Emsfb&state=setting');
+    /* Keep ?tab= in the pushed URL: this runs before the settings markup is
+       rendered, and dropping it here would break the deep link that lands on
+       the Email Settings tab. */
+    const deepTab = sanitize_text_efb(new URLSearchParams(location.search).get('tab') || '');
+    history.pushState("setting",null,`?page=Emsfb&state=setting${deepTab ? '&tab=' + encodeURIComponent(deepTab) : ''}`);
     fun_show_setting__emsFormBuilder();
     fun_backButton_efb(0);
     state = 2
@@ -1576,12 +1580,13 @@ function fun_show_setting__emsFormBuilder() {
                                     </button>
                                    <input type="hidden" id="smtp_emsFormBuilder" value="${smtp == "null" ? 'false' : smtp}">
                                 </div>
-                                <div class="efb card-body mx-0 py-1 mx-4">
+                                <div class="efb card-body mx-0 py-1 mx-4" id="hostSupportSmtp_box_efb">
 
                                 <button type="button" id="hostSupportSmtp_emsFormBuilder" data-state="off" data-name="disabled" class="efb mx-0 btn h-s-efb  btn-toggle ${smtp == true ? "active" : ""}" data-toggle="button" aria-pressed="false" autocomplete="off"   >
                                 <div class="efb handle"></div>
                                 </button>
                                 <label class="efb form-check-label fs-6 efb mx-2 my-3" for="hostSupportSmtp_emsFormBuilder">${efb_var.text.hostSupportSmtp}</label>
+                                <p class="efb text-muted fs-7 mb-0 ${mxCSize4}">${efb_var.text.emailSendingOffHowTo || 'Click "Check Email Server" to test delivery, turn this switch on, then press Save.'}</p>
 
                                 </div>
                                 <p class="efb mb-1 ${mxCSize4}">${efb_var.text.weeklyEmailReportDesc}</p>
@@ -1743,6 +1748,55 @@ function fun_show_setting__emsFormBuilder() {
     })
   }
 
+  efb_apply_setting_deeplink();
+
+}
+
+/* ?page=Emsfb&state=setting&tab=email lands straight on the Email Settings tab.
+ * The form builder links here when notification emails are still switched off,
+ * so the admin never has to hunt for the switch across the tab bar. */
+function efb_open_setting_tab_efb(target) {
+  const btn = document.querySelector(`#nav-tab [data-bs-target="${target}"]`);
+  const pane = document.querySelector(target);
+  if (!btn || !pane) return false;
+
+  for (const b of document.querySelectorAll('#nav-tab .nav-link')) {
+    b.classList.remove('active');
+    b.setAttribute('aria-selected', 'false');
+  }
+  for (const p of document.querySelectorAll('#nav-tabContent .tab-pane')) {
+    p.classList.remove('show', 'active');
+  }
+  btn.classList.add('active');
+  btn.setAttribute('aria-selected', 'true');
+  pane.classList.add('show', 'active');
+  return true;
+}
+
+function efb_apply_setting_deeplink() {
+  const params = new URLSearchParams(window.location.search);
+  const tab = sanitize_text_efb(params.get('tab') || '');
+  if (tab !== 'email') return;
+
+  if (!efb_open_setting_tab_efb('#nav-email')) return;
+
+  const toggle = document.getElementById('hostSupportSmtp_emsFormBuilder');
+  if (!toggle) return;
+
+  const box = document.getElementById('hostSupportSmtp_box_efb') || toggle.parentElement;
+  toggle.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (box) {
+    box.classList.add('efb-highlight-setting');
+    setTimeout(() => box.classList.remove('efb-highlight-setting'), 6000);
+  }
+  if (toggle.classList.contains('active') == false) {
+    alert_message_efb(
+      efb_var.text.emailSendingOffTitle || 'Notification emails are turned off',
+      efb_var.text.emailSendingOffHowTo || 'Click "Check Email Server" to test delivery, turn this switch on, then press Save.',
+      20,
+      'warning'
+    );
+  }
 }
 
 function efb_open_color_modal() {
@@ -1814,7 +1868,7 @@ function efb_open_color_modal() {
     { value: "Tahoma, Geneva, sans-serif", label: 'Tahoma' },
     { value: "Georgia, 'Times New Roman', serif", label: 'Georgia (Serif)' },
     { value: "'Courier New', Courier, monospace", label: 'Courier (Mono)' },
-    { value: '__custom__', label: '✦ ' + (efb_var.text.respCustomFont || 'Custom Font') + '...' },
+    { value: '__custom__', label: '✦ ' + (efb_var.text.respCustomFont || 'Custom Font') + '&hellip;' },
   );
 
   const fontCssMap = {
@@ -1900,7 +1954,7 @@ function efb_open_color_modal() {
       <!-- Editor preview -->
       <div class="efb-preview-editor-wrap" style="margin-top:10px;border:1px solid var(--efb-resp-border);border-radius:8px;overflow:hidden">
         <div class="efb-preview-editor-area" style="padding:8px 10px;min-height:32px;background:var(--efb-resp-bg-editor);color:var(--efb-resp-editor-text);font-size:var(--efb-resp-font-size);font-family:var(--efb-resp-font-family)">
-          <span class="efb-preview-editor-ph" style="color:var(--efb-resp-editor-ph);opacity:0.8">${efb_var.text.replyMsg || 'Type your reply...'}</span>
+          <span class="efb-preview-editor-ph" style="color:var(--efb-resp-editor-ph);opacity:0.8">${efb_var.text.replyMsg || 'Type your reply&hellip;'}</span>
         </div>
       </div>
       <button class="efb-preview-btn" disabled style="color:var(--efb-resp-btn-text)"><i class="bi bi-reply me-1"></i>${efb_var.text.reply || 'Reply'}</button>
@@ -3403,7 +3457,7 @@ function efbEmailTestPoll(test, uiState, button, buttonHtml, startedAt) {
 
       if (status == 'pending' || stage == 'pending') {
         uiState.steps.wait = 'active';
-        uiState.message = result.message || efbEmailTestText('waitingForEmail', 'Waiting for the test email to arrive...');
+        uiState.message = result.message || efbEmailTestText('waitingForEmail', 'Waiting for the test email to arrive…');
         uiState.percent = Math.min(75, 35 + Math.floor((elapsed / maxDuration) * 40));
         efbEmailTestShow(uiState);
         const nextDelay = efbEmailTestNextPendingDelay(uiState, result);
@@ -3471,7 +3525,7 @@ function efbEmailTestPoll(test, uiState, button, buttonHtml, startedAt) {
         return;
       }
 
-      uiState.message = result.message || payload.m || efbEmailTestText('stillChecking', 'Still checking — please wait a moment...');
+      uiState.message = result.message || payload.m || efbEmailTestText('stillChecking', 'Still checking — please wait a moment…');
       efbEmailTestShow(uiState);
       efbEmailServerTestTimer = setTimeout(function () {
         efbEmailTestPoll(test, uiState, button, buttonHtml, startedAt);
@@ -3519,7 +3573,7 @@ function clickToCheckEmailServer() {
     percent: 12,
     adminEmail: email,
     runId: runId,
-    message: efbEmailTestText('startingEmailTest', 'Starting email delivery test...')
+    message: efbEmailTestText('startingEmailTest', 'Starting email delivery test…')
   };
   efbEmailTestShow(uiState);
 
@@ -3546,7 +3600,7 @@ function clickToCheckEmailServer() {
         uiState.steps.send = 'done';
         uiState.steps.wait = 'active';
         uiState.percent = 35;
-        uiState.message = payload.m || efbEmailTestText('testEmailSent', 'Test email sent! Waiting for delivery confirmation...');
+        uiState.message = payload.m || efbEmailTestText('testEmailSent', 'Test email sent! Waiting for delivery confirmation…');
         uiState.test = test;
         uiState.result = {
           delivery: {
@@ -3687,7 +3741,7 @@ function funNproEmailTemp() {
  const ws = efb_var.language != "fa_IR" ? "https://whitestudio.team/" : 'https://easyformbuilder.ir';
 
   return `<table role='presentation' bgcolor='#F5F8FA' width='100%'>
-  <a type="button" onclick="pro_show_efb(1)" class="efb pro-version-efb" data-bs-toggle="tooltip" data-bs-placement="top" title="This field available in Pro version" data-original-title="This field available in Pro version"><i class="efb  bi-gem text-light"></i></a>
+  <a type="button" onclick="pro_show_efb(1)" class="efb pro-version-efb" data-bs-toggle="tooltip" data-bs-placement="top" title="${efb_var.text.availableInProversion}" data-original-title="${efb_var.text.availableInProversion}"><i class="efb  bi-gem text-light"></i></a>
   <tr> <td align='left' style='padding: 30px 30px; font-size:12px; text-align:center'><a class='efb subtle-link' target='_blank' href='https://wordpress.org/plugins/easy-form-builder/'><img src="https://ps.w.org/easy-form-builder/assets/icon-256x256.gif" style="margin: 5px; width:16px;height:16px" >  ${efb_var.text.easyFormBuilder}</a>
  <br> <img src="${ws}img/favicon.png" style="margin: 5px"> <a class='efb subtle-link' target='_blank' href='${ws}'>White Studio Team</a></td></tr>`
 }

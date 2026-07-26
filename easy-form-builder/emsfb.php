@@ -3,7 +3,7 @@
  * Plugin Name:         Easy Form Builder
  * Plugin URI:          https://whitestudio.team
  * Description:         Create multi-step WordPress forms with drag and drop, confirmation codes, notification emails, and free custom email notification templates with a built-in visual editor. Build professional contact, survey, payment, login, and registration forms without coding.
- * Version:             4.1.1
+ * Version:             4.1.2
  * Author:              WhiteStudio
  * Author URI:          https://whitestudio.team
  * Text Domain:         easy-form-builder
@@ -24,10 +24,17 @@ if (!defined("EMSFB_PLUGIN_DIRECTORY")) {
     define("EMSFB_PLUGIN_DIRECTORY", plugin_dir_path(__FILE__));
 }
 if (!defined("EMSFB_PLUGIN_VERSION")) {
-    define("EMSFB_PLUGIN_VERSION", "4.1.1");
+    define("EMSFB_PLUGIN_VERSION", "4.1.2");
 }
 if (!defined("EMSFB_DB_VERSION")) {
     define("EMSFB_DB_VERSION", 1.1);
+}
+
+if (!defined("EFB_DEBUG")) {
+    // Single global switch for Easy Form Builder's own diagnostic logging
+    // (Human Shield, Telegram, the email tester, …). Defaults to true; override
+    // in wp-config.php with define('EFB_DEBUG', false); to turn EFB logging off.
+    define("EFB_DEBUG", false);
 }
 
 if (!defined("EMSFB_PLUGIN_URL")) {
@@ -326,5 +333,17 @@ if (!function_exists('get_efbFunction')) {
 if (!function_exists('get_locale_script_chars_efb')) {
     function get_locale_script_chars_efb() {
         return Emsfb::get_locale_script_chars_efb();
+    }
+}
+
+if (!function_exists('emsfb_is_email_sending_enabled_efb')) {
+    /**
+     * Whether "This site can send emails" is on. Gates every notification email.
+     *
+     * @param object|array|null $settings Decoded settings object or array.
+     * @return bool
+     */
+    function emsfb_is_email_sending_enabled_efb($settings) {
+        return Emsfb::is_email_sending_enabled_efb($settings);
     }
 }
