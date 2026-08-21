@@ -943,10 +943,20 @@ function fun_send_replayMessage_ajax_emsFormBuilder(message, id) {
           document.getElementById('replayM_emsFormBuilder').value = "";
           const richEditor = document.getElementById('efb_rich_editor');
           if (richEditor) richEditor.innerHTML = '';
-          fun_emsFormBuilder__add_a_response_to_messages(message, message[0].by, ajax_object_efm.user_ip, 0, date);
+          const replyBy = typeof efb_reply_sender_name_efb === 'function'
+            ? efb_reply_sender_name_efb(res, message)
+            : ajax_object_efm.user_name;
+          fun_emsFormBuilder__add_a_response_to_messages(message, replyBy, ajax_object_efm.user_ip, 0, date);
           const chatHistory = document.getElementById("resp_efb");
           chatHistory.scrollTop = chatHistory.scrollHeight;
+          /* Clear the queue before dropping the attachment chips: `message` is
+             the very array `sendBack_emsFormBuilder_pub` points at, and the
+             reset splices the file rows out of it - doing that first would
+             empty the card that was just rendered from it. */
           sendBack_emsFormBuilder_pub=[];
+          if (typeof EfbResponseViewer !== 'undefined' && EfbResponseViewer.resetReplyUploads) {
+            EfbResponseViewer.resetReplyUploads();
+          }
         }else{
           alert_message_efb(res.data.m,'', 7 , 'info')
         }
@@ -988,10 +998,12 @@ function fun_show_content_page_emsFormBuilder(state) {
     window.location.reload();
   } else if (state == "setting" || state == "reload-setting") {
     /* Keep ?tab= in the pushed URL: this runs before the settings markup is
-       rendered, and dropping it here would break the deep link that lands on
-       the Email Settings tab. */
-    const deepTab = sanitize_text_efb(new URLSearchParams(location.search).get('tab') || '');
-    history.pushState("setting",null,`?page=Emsfb&state=setting${deepTab ? '&tab=' + encodeURIComponent(deepTab) : ''}`);
+       rendered, and dropping it here would break every deep link into a tab.
+       Replace instead of push when the URL already reads that way, otherwise a
+       direct visit leaves a twin entry that makes the first Back do nothing. */
+    const deepUrl = efb_setting_tab_url_efb(efb_setting_tab_slug_efb(new URLSearchParams(location.search).get('tab') || ''));
+    if (location.search === deepUrl) history.replaceState("setting",null,deepUrl);
+    else history.pushState("setting",null,deepUrl);
     fun_show_setting__emsFormBuilder();
     fun_backButton_efb(0);
     state = 2
@@ -1020,9 +1032,12 @@ function fun_show_content_page_emsFormBuilder(state) {
 
 }
 
+/* Highlights the top bar entry (1 Forms, 2 Settings, 4 Help). Scoped to that
+   navbar on purpose: an unscoped .nav-link sweep also cleared the settings tab
+   bar, which renders before this runs, leaving every tab unhighlighted. */
 function fun_hande_active_page_emsFormBuilder(no) {
   let count = 0;
-  for (const el of document.querySelectorAll(`.nav-link`)) {
+  for (const el of document.querySelectorAll(`#navbarSupportedContent .navbar-nav .nav-link`)) {
     count += 1;
     if (el.classList.contains('active')) el.classList.remove('active');
     if (count == no) el.classList.add('active');
@@ -1277,18 +1292,18 @@ function fun_show_setting__emsFormBuilder() {
                 <div class="efb card-body">
                         <nav>
                             <div class="efb nav nav-tabs" id="nav-tab" role="tablist">
-                            <button class="efb  nav-link active" id="nav-home-tab" data-bs-toggle="tab" data-bs-target="#nav-general" type="button" role="tab" aria-controls="nav-home" aria-selected="true"><i class="efb  bi bi-gear mx-2"></i>${efb_var.text.general}</button>
-                            <button class="efb  nav-link " id="nav-response-tab" data-bs-toggle="tab" data-bs-target="#nav-response" type="button" role="tab" aria-controls="nav-respons" aria-selected="true"><i class="efb  bi bi-chat-left-text mx-2"></i>${efb_var.text.rspcon}</button>
-                            <button class="efb  nav-link" id="nav-profile-tab" data-bs-toggle="tab" data-bs-target="#nav-google" type="button" role="tab" aria-controls="nav-profile" aria-selected="false"><i class="efb  bi bi-robot mx-2"></i>${efb_var.text.captchas}</button>
-                            <button class="efb  nav-link" id="nav-contact-tab" data-bs-toggle="tab" data-bs-target="#nav-email" type="button" role="tab" aria-controls="nav-contact" aria-selected="false"><i class="efb  bi bi-at mx-2"></i>${efb_var.text.emailSetting}</button>
-                            <button class="efb  nav-link" id="nav-contact-tab " data-bs-toggle="tab" data-bs-target="#nav-emailtemplate" type="button" role="tab" aria-controls="nav-emailtemplate" aria-selected="false"><i class="efb  bi bi-envelope mx-2"></i>${efb_var.text.emailTemplate}</button>
-                            <button class="efb  nav-link" id="nav-contact-tab" data-bs-toggle="tab" data-bs-target="#nav-text" type="button" role="tab" aria-controls="nav-text" aria-selected="false"><i class="efb  bi bi-fonts mx-2"></i>${efb_var.text.localization}</button>
-                            <button class="efb  nav-link" id="nav-stripe-tab" data-bs-toggle="tab" data-bs-target="#nav-stripe" type="button" role="tab" aria-controls="nav-stripe" aria-selected="false"><i class="efb  bi bi-credit-card mx-2"></i>${efb_var.text.payments}</button>
-                            <button class="efb  nav-link" id="nav-smsconfig-tab" data-bs-toggle="tab" data-bs-target="#nav-smsconfig" type="button" role="tab" aria-controls="nav-smsconfig" aria-selected="false"><i class="efb  bi bi-chat-left-dots mx-2"></i>${efb_var.text.sms_config}</button>
+                            <button class="efb nav-link active" id="nav-general-tab" data-efb-tab="general" data-bs-toggle="tab" data-bs-target="#nav-general" type="button" role="tab" aria-controls="nav-general" aria-selected="true"><i class="efb  bi bi-gear mx-2"></i>${efb_var.text.general}</button>
+                            <button class="efb nav-link" id="nav-response-tab" data-efb-tab="responses" data-bs-toggle="tab" data-bs-target="#nav-response" type="button" role="tab" aria-controls="nav-response" aria-selected="false"><i class="efb  bi bi-chat-left-text mx-2"></i>${efb_var.text.rspcon}</button>
+                            <button class="efb nav-link" id="nav-captchas-tab" data-efb-tab="captchas" data-bs-toggle="tab" data-bs-target="#nav-google" type="button" role="tab" aria-controls="nav-google" aria-selected="false"><i class="efb  bi bi-robot mx-2"></i>${efb_var.text.captchas}</button>
+                            <button class="efb nav-link" id="nav-email-tab" data-efb-tab="email" data-bs-toggle="tab" data-bs-target="#nav-email" type="button" role="tab" aria-controls="nav-email" aria-selected="false"><i class="efb  bi bi-at mx-2"></i>${efb_var.text.emailSetting}</button>
+                            <button class="efb nav-link" id="nav-emailtemplate-tab" data-efb-tab="email-template" data-bs-toggle="tab" data-bs-target="#nav-emailtemplate" type="button" role="tab" aria-controls="nav-emailtemplate" aria-selected="false"><i class="efb  bi bi-envelope mx-2"></i>${efb_var.text.emailTemplate}</button>
+                            <button class="efb nav-link" id="nav-text-tab" data-efb-tab="localization" data-bs-toggle="tab" data-bs-target="#nav-text" type="button" role="tab" aria-controls="nav-text" aria-selected="false"><i class="efb  bi bi-fonts mx-2"></i>${efb_var.text.localization}</button>
+                            <button class="efb nav-link" id="nav-stripe-tab" data-efb-tab="payments" data-bs-toggle="tab" data-bs-target="#nav-stripe" type="button" role="tab" aria-controls="nav-stripe" aria-selected="false"><i class="efb  bi bi-credit-card mx-2"></i>${efb_var.text.payments}</button>
+                            <button class="efb nav-link" id="nav-smsconfig-tab" data-efb-tab="sms" data-bs-toggle="tab" data-bs-target="#nav-smsconfig" type="button" role="tab" aria-controls="nav-smsconfig" aria-selected="false"><i class="efb  bi bi-chat-left-dots mx-2"></i>${efb_var.text.sms_config}</button>
                         </div>
                         </nav>
                         <div class="efb tab-content" id="nav-tabContent">
-                          <div class="efb tab-pane fade show active" id="nav-general" role="tabpanel" aria-labelledby="nav-home-tab">
+                          <div class="efb tab-pane fade show active" id="nav-general" role="tabpanel" aria-labelledby="nav-general-tab">
                             <!--General-->
                             <div class="efb m-3">
                                 <h5 class="efb  card-title mt-3 mobile-title">
@@ -1311,7 +1326,7 @@ function fun_show_setting__emsFormBuilder() {
                                     ${planBadgeHtml}
                                 </div>
                                 <div class="efb card-body text-center py-1">
-                                    <button type="button" class="efb btn efb btn-outline-primary btn-lg" onclick="showSetupAsOverlayPage()" id="changePlanBtn">
+                                    <button type="button" class="efb btn efb btn-outline-primary btn-lg" onclick="showSetupAsOverlayPage({ planOnly: true })" id="changePlanBtn">
                                         <i class="efb  bi-gear mx-1 efb mobile-text"></i>${efb_var.text.chngPln}
                                     </button>
                                     <p class="efb text-muted fs-7 mt-2">${efb_var.text.plnMngSw}</p>
@@ -1503,13 +1518,13 @@ function fun_show_setting__emsFormBuilder() {
                             <!--End Response Customize window-->
                             </div>
                         </div>
-                        <div class="efb tab-pane fade" id="nav-google" role="tabpanel" aria-labelledby="nav-profile-tab">
+                        <div class="efb tab-pane fade" id="nav-google" role="tabpanel" aria-labelledby="nav-captchas-tab">
                             <div class="efb m-3">
                                 <div id="message-google-efb"></div>
 
                              <!--Google-->
 
-                             ${apiKeyMap == 'null' ? `<div class="efb m-3 p-3 efb alert-info" role=""><h5 class="efb alert-heading">🎉 ${efb_var.text.SpecialOffer} </h5> <div>${googleCloudOffer()} </div></div>` : ``}
+
                              <h5 class="efb  card-title mt-3 mobile-title">
                                 <i class="efb  bi-person-check m-3"></i>${efb_var.text.reCAPTCHAv2}
                             </h5>
@@ -1550,7 +1565,7 @@ function fun_show_setting__emsFormBuilder() {
                               <!--End Google-->
                             </div>
                         </div>
-                        <div class="efb tab-pane fade" id="nav-email" role="tabpanel" aria-labelledby="nav-contact-tab">
+                        <div class="efb tab-pane fade" id="nav-email" role="tabpanel" aria-labelledby="nav-email-tab">
                             <div class="efb mx-3 ">
                                 <!--Email-->
                                 <h5 class="efb  card-title mt-3 mobile-title">
@@ -1573,23 +1588,22 @@ function fun_show_setting__emsFormBuilder() {
                                 <h5 class="efb card-title mt-3col-12 efb ">
                                     <i class="efb  bi-envelope m-3"></i>${efb_var.text.emailServer}
                                 </h5>
-                                <p class="efb ${mxCSize}">${efb_var.text.beforeUsingYourEmailServers}</p>
-                                <div class="efb card-body mx-0 py-1 ${mxCSize4}">
-                                    <button type="button" class="efb btn  efb btn-outline-pink btn-lg "onclick="clickToCheckEmailServer()" id="clickToCheckEmailServer">
-                                        <i class="efb  bi-chevron-double-up mx-1 text-center"></i>${efb_var.text.clickToCheckEmailServer}
+                                <div class="efb m-0 p-0" id="emailServerBox_efb">
+                                  <p class="efb ${mxCSize}">${efb_var.text.beforeUsingYourEmailServers}</p>
+                                  <div class="efb card-body mx-0 py-1 ${mxCSize4}">
+                                      <button type="button" class="efb btn  efb btn-outline-pink btn-lg "onclick="clickToCheckEmailServer()" id="clickToCheckEmailServer">
+                                          <i class="efb  bi-chevron-double-up mx-1 text-center"></i>${efb_var.text.clickToCheckEmailServer}
+                                      </button>
+                                    <input type="hidden" id="smtp_emsFormBuilder" value="${smtp == "null" ? 'false' : smtp}">
+                                  </div>
+                                  <div class="efb card-body mx-0 py-1 mx-4" id="hostSupportSmtp_box_efb">
+                                    <button type="button" id="hostSupportSmtp_emsFormBuilder" data-state="off" data-name="disabled" class="efb mx-0 btn h-s-efb  btn-toggle ${smtp == true ? "active" : ""}" data-toggle="button" aria-pressed="false" autocomplete="off"   >
+                                    <div class="efb handle"></div>
                                     </button>
-                                   <input type="hidden" id="smtp_emsFormBuilder" value="${smtp == "null" ? 'false' : smtp}">
+                                    <label class="efb form-check-label fs-6 efb mx-2 my-3" for="hostSupportSmtp_emsFormBuilder">${efb_var.text.hostSupportSmtp}</label>
+                                    <p class="efb text-muted fs-7 ${mxCSize4}">${efb_var.text.emailSendingOffHowTo || 'Click "Check Email Server" to test delivery, turn this switch on, then press Save.'}</p>
+                                  </div>
                                 </div>
-                                <div class="efb card-body mx-0 py-1 mx-4" id="hostSupportSmtp_box_efb">
-
-                                <button type="button" id="hostSupportSmtp_emsFormBuilder" data-state="off" data-name="disabled" class="efb mx-0 btn h-s-efb  btn-toggle ${smtp == true ? "active" : ""}" data-toggle="button" aria-pressed="false" autocomplete="off"   >
-                                <div class="efb handle"></div>
-                                </button>
-                                <label class="efb form-check-label fs-6 efb mx-2 my-3" for="hostSupportSmtp_emsFormBuilder">${efb_var.text.hostSupportSmtp}</label>
-                                <p class="efb text-muted fs-7 mb-0 ${mxCSize4}">${efb_var.text.emailSendingOffHowTo || 'Click "Check Email Server" to test delivery, turn this switch on, then press Save.'}</p>
-
-                                </div>
-                                <p class="efb mb-1 ${mxCSize4}">${efb_var.text.weeklyEmailReportDesc}</p>
                                 <div class="efb card-body mx-0 py-0 ${mxCSize4} mt-2">
                                     <button type="button" id="weeklyEmailReport_emsFormBuilder" data-state="off" data-name="disabled"
                                         class="efb mx-0 btn h-s-efb btn-toggle ${weeklyEmailReport ? "active" : ""}"
@@ -1598,9 +1612,9 @@ function fun_show_setting__emsFormBuilder() {
                                         <div class="efb handle"></div>
                                     </button>
                                     <label class="efb form-check-label fs-6 efb mx-2 my-3" for="weeklyEmailReport_emsFormBuilder">${efb_var.text.weeklyEmailReport}</label>
+                                    <p class="efb text-muted fs-7 ${mxCSize4} mb-0">${efb_var.text.weeklyEmailLastCheck.replace('%s', weeklyEmailStatus)}</p>
+                                    <p class="efb mb-1 ${mxCSize4} mt-2">${efb_var.text.emailStatsReportDesc}</p>
                                 </div>
-                                <p class="efb text-muted fs-7 ${mxCSize4} mb-0">${efb_var.text.weeklyEmailLastCheck.replace('%s', weeklyEmailStatus)}</p>
-                                <p class="efb mb-1 ${mxCSize4} mt-3">${efb_var.text.emailStatsReportDesc}</p>
                                 <div class="efb card-body mx-0 py-0 ${mxCSize4} mt-2">
                                     <button type="button" id="emailStatsReport_emsFormBuilder" data-state="off" data-name="disabled"
                                         class="efb mx-0 btn h-s-efb btn-toggle ${(emailStatsReport || !emailStatsReportAllowed) ? "active" : ""}"
@@ -1609,6 +1623,7 @@ function fun_show_setting__emsFormBuilder() {
                                         <div class="efb handle"></div>
                                     </button>
                                     <label class="efb form-check-label fs-6 efb mx-2 my-3" for="emailStatsReport_emsFormBuilder">${efb_var.text.emailStatsReport}</label>
+                                    <p class="efb mb-1 mt-2 ${mxCSize4}">${efb_var.text.weeklyEmailReportDesc}</p>
                                 </div>
                                 <!--End Email-->
                             </div>
@@ -1672,7 +1687,7 @@ function fun_show_setting__emsFormBuilder() {
                             </div>
                         </div>
 
-                        <div class="efb tab-pane fade" id="nav-emailtemplate" role="tabpanel" aria-labelledby="nav-contact-tab">
+                        <div class="efb tab-pane fade" id="nav-emailtemplate" role="tabpanel" aria-labelledby="nav-emailtemplate-tab">
                         <div class="efb my-2 mx-1">
                           <!-- Drag & Drop Email Template Builder -->
                           <div id="efb-email-builder"></div>
@@ -1752,12 +1767,57 @@ function fun_show_setting__emsFormBuilder() {
 
 }
 
-/* ?page=Emsfb&state=setting&tab=email lands straight on the Email Settings tab.
- * The form builder links here when notification emails are still switched off,
- * so the admin never has to hunt for the switch across the tab bar. */
-function efb_open_setting_tab_efb(target) {
-  const btn = document.querySelector(`#nav-tab [data-bs-target="${target}"]`);
-  const pane = document.querySelector(target);
+/* Every settings tab owns a URL: ?page=Emsfb&state=setting&tab=<slug>.
+ * The slug lives on the button itself (data-efb-tab) so the markup stays the
+ * single source of truth; these are public URLs admins bookmark and the form
+ * builder links to 'email' directly, so slugs must not be renamed. */
+const EFB_SETTING_TABS_EFB = ['general', 'responses', 'captchas', 'email', 'email-template', 'localization', 'payments', 'sms'];
+
+const EFB_SETTING_TAB_ALIASES_EFB = {
+  'response': 'responses',
+  'confirmation': 'responses',
+  'captcha': 'captchas',
+  'google': 'captchas',
+  'emailsetting': 'email',
+  'emailtemplate': 'email-template',
+  'template': 'email-template',
+  'text': 'localization',
+  'stripe': 'payments',
+  'payment': 'payments',
+  'smsconfig': 'sms',
+  'sms_config': 'sms',
+};
+
+/* Alias-resolved slug, or '' for anything not on the list. Pure string work, so
+ * it can vet ?tab= before the settings markup exists — which is what keeps a
+ * hand-typed value from riding along in the address bar. */
+function efb_setting_tab_slug_efb(slug) {
+  slug = String(sanitize_text_efb(slug) || '').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  if (slug === '') return '';
+  slug = EFB_SETTING_TAB_ALIASES_EFB[slug] || slug;
+  return EFB_SETTING_TABS_EFB.includes(slug) ? slug : '';
+}
+
+/* '' when the tab does not exist, so a hand-typed ?tab= never blanks the
+ * screen: the caller just leaves General active. */
+function efb_normalize_setting_tab_efb(slug) {
+  slug = efb_setting_tab_slug_efb(slug);
+  return slug && document.querySelector(`#nav-tab [data-efb-tab="${slug}"]`) ? slug : '';
+}
+
+function efb_setting_tab_url_efb(slug) {
+  return `?page=Emsfb&state=setting${slug ? '&tab=' + encodeURIComponent(slug) : ''}`;
+}
+
+/* The tab currently painted as active, '' before the settings markup exists. */
+function efb_current_setting_tab_efb() {
+  const btn = document.querySelector('#nav-tab .nav-link.active[data-efb-tab]');
+  return btn ? btn.dataset.efbTab : '';
+}
+
+function efb_open_setting_tab_efb(slug) {
+  const btn = document.querySelector(`#nav-tab [data-efb-tab="${slug}"]`);
+  const pane = btn ? document.querySelector(btn.getAttribute('data-bs-target')) : null;
   if (!btn || !pane) return false;
 
   for (const b of document.querySelectorAll('#nav-tab .nav-link')) {
@@ -1773,17 +1833,53 @@ function efb_open_setting_tab_efb(target) {
   return true;
 }
 
-function efb_apply_setting_deeplink() {
-  const params = new URLSearchParams(window.location.search);
-  const tab = sanitize_text_efb(params.get('tab') || '');
-  if (tab !== 'email') return;
+/* Bootstrap already does the visual switching through data-bs-toggle; this only
+ * mirrors the click into the address bar so the tab is linkable and Back works.
+ * A distinct 'setting-tab' history token keeps popstate from re-rendering the
+ * whole settings screen (which would throw away unsaved edits). */
+function efb_bind_setting_tabs_efb() {
+  const bar = document.getElementById('nav-tab');
+  if (!bar || bar.dataset.efbTabLinks === '1') return;
+  bar.dataset.efbTabLinks = '1';
 
-  if (!efb_open_setting_tab_efb('#nav-email')) return;
+  bar.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-efb-tab]');
+    if (!btn || !bar.contains(btn)) return;
+    const url = efb_setting_tab_url_efb(btn.dataset.efbTab);
+    if (location.search === url) return;
+    history.pushState('setting-tab', null, url);
+  });
+}
+
+/* Back/forward between tabs: repaint the tab bar only. If the settings screen
+ * has been replaced in the meantime (help, panel, a form), rebuild it — the
+ * render path re-reads ?tab= on its own. */
+function efb_restore_setting_tab_efb() {
+  if (!document.getElementById('nav-tab')) {
+    if (typeof fun_show_setting__emsFormBuilder !== 'function') return;
+    fun_show_setting__emsFormBuilder();
+    fun_backButton_efb(0);
+    fun_hande_active_page_emsFormBuilder(2);
+    return;
+  }
+  const slug = efb_normalize_setting_tab_efb(new URLSearchParams(location.search).get('tab') || '');
+  efb_open_setting_tab_efb(slug || 'general');
+}
+
+/* Runs once per settings render: opens the tab named in the URL and, for
+ * ?tab=email, nudges the notification switch the form builder linked here for. */
+function efb_apply_setting_deeplink() {
+  efb_bind_setting_tabs_efb();
+
+  const params = new URLSearchParams(window.location.search);
+  const slug = efb_normalize_setting_tab_efb(params.get('tab') || '');
+  if (slug === '' || !efb_open_setting_tab_efb(slug)) return;
+  if (slug !== 'email') return;
 
   const toggle = document.getElementById('hostSupportSmtp_emsFormBuilder');
   if (!toggle) return;
 
-  const box = document.getElementById('hostSupportSmtp_box_efb') || toggle.parentElement;
+  const box = document.getElementById('emailServerBox_efb') || toggle.parentElement;
   toggle.scrollIntoView({ behavior: 'smooth', block: 'center' });
   if (box) {
     box.classList.add('efb-highlight-setting');
@@ -1831,19 +1927,19 @@ function efb_open_color_modal() {
   const _efbIsRtlLang = _efbIsPersian || _efbIsArabic;
 
   const fontFamilies = [
-    { value: 'inherit', label: 'Default (Inherit)' },
+    { value: 'inherit', label: efb_var.text.respFontDefault || 'Default (Inherit)' },
   ];
 
   if (_efbIsPersian) {
     fontFamilies.push(
-      { value: "Vazirmatn, Tahoma, sans-serif", label: 'Vazirmatn (فارسی)' },
-      { value: "Vazir, Tahoma, sans-serif", label: 'Vazir (فارسی)' },
-      { value: "Sahel, Tahoma, sans-serif", label: 'Sahel (فارسی)' },
-      { value: "Samim, Tahoma, sans-serif", label: 'Samim (فارسی)' },
-      { value: "'Shabnam', Tahoma, sans-serif", label: 'Shabnam (فارسی)' },
-      { value: "Parastoo, Tahoma, sans-serif", label: 'Parastoo (فارسی)' },
-      { value: "Gandom, Tahoma, sans-serif", label: 'Gandom (فارسی)' },
-      { value: "Lalezar, Tahoma, sans-serif", label: 'Lalezar (فارسی)' },
+      { value: "Vazirmatn, Tahoma, sans-serif", label: 'Vazirmatn (وزیرمتن)' },
+      { value: "Vazir, Tahoma, sans-serif", label: 'Vazir (وزیر)' },
+      { value: "Sahel, Tahoma, sans-serif", label: 'Sahel (ساحل)' },
+      { value: "Samim, Tahoma, sans-serif", label: 'Samim (صمیم)' },
+      { value: "'Shabnam', Tahoma, sans-serif", label: 'Shabnam (شبنم)' },
+      { value: "Parastoo, Tahoma, sans-serif", label: 'Parastoo (پرستو)' },
+      { value: "Gandom, Tahoma, sans-serif", label: 'Gandom (گندم)' },
+      { value: "Lalezar, Tahoma, sans-serif", label: 'Lalezar (لاله‌زار)' },
     );
   }
 
@@ -1939,6 +2035,7 @@ function efb_open_color_modal() {
   }).join('');
   const fontSizeOpts = fontSizes.map(fs =>
     `<option value="${fs.value}" ${fs.value === curFontSize ? 'selected' : ''}>${fs.label}</option>`).join('');
+    console.log(efb_var.text.replyMsg);
 
   const previewHtml = `
     <div class="efb-color-modal-preview" id="efbColorPreviewBox">
@@ -2676,7 +2773,10 @@ function fun_send_setting_emsFormBuilder(data , state_auto = 0) {
       }
       if(state_auto==1){return}
       if(res.data.success == true){
-        history.replaceState("panel",null,'?page=Emsfb&state=reload-setting&save=ok');
+        /* Saving reloads the page; carry the open tab over so the admin lands
+           back where they were instead of on General. */
+        const openTab = efb_current_setting_tab_efb();
+        history.replaceState("panel",null,`?page=Emsfb&state=reload-setting&save=ok${openTab ? '&tab=' + encodeURIComponent(openTab) : ''}`);
         window.location=location.search;
 
       }else{
@@ -3117,12 +3217,43 @@ function emsFormBuilder_chart(titles, colname, colvalue) {
 
 }
 
-function googleCloudOffer() { return `<p>${efb_var.text.offerGoogleCloud} <a href="https://gcpsignup.page.link/8cwn" target="blank">${efb_var.text.getOfferTextlink}</a> </p> ` }
+
 
 let efbEmailServerTestTimer = null;
 
 function efbEmailTestText(key, fallback) {
   return efb_var && efb_var.text && efb_var.text[key] ? efb_var.text[key] : fallback;
+}
+
+/**
+ * The score under which delivery counts as broken. Comes from
+ * Email_Monitor::MIN_DELIVERY_SCORE so this panel, the setup wizard and the
+ * server all draw the line in the same place.
+ */
+function efbEmailTestMinScore() {
+  const value = Number(efb_var && efb_var.emailMonitor ? efb_var.emailMonitor.min_delivery_score : 0);
+  return value > 0 ? value : 40;
+}
+
+/**
+ * The service answers can_send_email on arrival alone, so a message that landed
+ * in spam with a score of 12 still comes back as a success. A report without a
+ * score cannot disprove anything; only a measured score under the threshold does.
+ */
+function efbEmailTestScoreTooLow(result) {
+  if (!result || result.score === null || result.score === undefined) return false;
+  const score = Number(result.score);
+  return isFinite(score) && score < efbEmailTestMinScore();
+}
+
+function efbEmailTestDeliveryConfirmed(result) {
+  return !!(result && result.can_send_email && !efbEmailTestScoreTooLow(result));
+}
+
+function efbEmailTestLowScoreMessage(result) {
+  return efbEmailTestText('emailDeliveryLowScore', 'Your test email was delivered, but its deliverability score is only %1$s out of 100 (below %2$s). The emails your forms send will most likely be filtered as spam. Set up SMTP and run the check again.')
+    .replace('%1$s', Number(result.score))
+    .replace('%2$s', efbEmailTestMinScore());
 }
 
 function efbEmailTestFormat(str) {
@@ -3263,8 +3394,11 @@ function efbEmailTestRender(state) {
   const test = state.test || null;
   const adminEmail = state.adminEmail ? efbEmailTestEscape(state.adminEmail) : '';
 
+  const deliveryConfirmed = efbEmailTestDeliveryConfirmed(quick);
+  const scoreTooLow = quick && quick.can_send_email && efbEmailTestScoreTooLow(quick);
+
   const progressBarClass = isComplete
-    ? 'efb progress-bar ' + (quick && quick.can_send_email ? 'bg-success' : 'bg-danger')
+    ? 'efb progress-bar ' + (deliveryConfirmed ? 'bg-success' : 'bg-danger')
     : 'efb progress-bar progress-bar-striped progress-bar-animated bg-primary';
 
   const stepsHtml = [
@@ -3279,7 +3413,10 @@ function efbEmailTestRender(state) {
     ? `<div class="efb mt-3 d-flex align-items-center gap-2 px-3 py-2 rounded-3" style="background:#f1f5f9;font-size:0.85rem;color:#475569;"><i class="efb bi bi-arrow-right-circle-fill" style="color:#3b82f6;opacity:0.6;font-size:0.95rem;flex-shrink:0;"></i><span>${efbEmailTestEscape(state.message)}</span></div>`
     : '';
 
-  const failedEmail = quick && quick.can_send_email === false;
+  // A score under the threshold is treated exactly like a delivery failure:
+  // the amber "delivery is not working" block and the SMTP guide belong there
+  // just as much, because form emails from this site will not be read.
+  const failedEmail = quick && (quick.can_send_email === false || scoreTooLow);
   const scoreHtml = quick && quick.score != null
     ? `<span class="efb badge rounded-pill" style="background:#e0f2fe;color:#0369a1;font-size:0.78rem;">${efbEmailTestEscape(efbEmailTestFormat(efbEmailTestText('score', 'Score: %s'), Number(quick.score)))}</span>`
     : '';
@@ -3295,7 +3432,7 @@ function efbEmailTestRender(state) {
         </div>
         <div class="efb d-flex gap-1 flex-wrap">${scoreHtml}${gradeHtml}</div>
       </div>
-      <div style="font-size:0.85rem;color:${failedEmail ? '#92400e' : '#166534'};line-height:1.5;">${efbEmailTestEscape(quick.message || '')}</div>
+      <div style="font-size:0.85rem;color:${failedEmail ? '#92400e' : '#166534'};line-height:1.5;">${efbEmailTestEscape(scoreTooLow ? efbEmailTestLowScoreMessage(quick) : (quick.message || ''))}</div>
     </div>`
     : '';
 
@@ -3308,11 +3445,11 @@ function efbEmailTestRender(state) {
           <div style="font-size:0.82rem;color:#78350f;line-height:1.55;">${efbEmailTestEscape(efbEmailTestText('emailDeliveryNotWorkingDesc', 'Your WordPress site cannot send emails reliably. This is a very common hosting issue — the default PHP mail function is often blocked or ends up in spam. Installing an SMTP plugin routes your emails through a verified mail service and fixes this in minutes.'))}</div>
         </div>
       </div>
-      <a class="efb btn btn-sm btn-warning fw-semibold" href="https://whitestudio.team/document/send-email-using-smtp-plugin/" target="_blank" rel="noopener noreferrer"><i class="efb bi-box-arrow-up-right me-1"></i>${efbEmailTestEscape(efbEmailTestText('smtpSetupGuideBtn', 'Step-by-step SMTP setup guide'))}</a>
+      <a class="efb btn btn-sm btn-warning fw-semibold" href="${Link_emsFormBuilder('EmailSpam')}" target="_blank" rel="noopener noreferrer"><i class="efb bi-box-arrow-up-right me-1"></i>${efbEmailTestEscape(efbEmailTestText('smtpSetupGuideBtn', 'Step-by-step SMTP setup guide'))}</a>
     </div>`
     : '';
 
-  const reportBox = quick && quick.can_send_email
+  const reportBox = deliveryConfirmed
     ? `<div class="efb mt-3 d-flex align-items-center gap-2 px-3 py-2 rounded-3" style="background:#f0fdf4;border:1px solid #a7f3d0;font-size:0.85rem;color:#166534;">
       <i class="efb bi bi-envelope-check-fill flex-shrink-0" style="font-size:1.1rem;"></i>
       <span>${efbEmailTestFormat(efbEmailTestText('emailServerWorkingReport', 'Your email server is working. A detailed HTML report has been sent to %s.'), adminEmail ? `<b>${adminEmail}</b>` : efbEmailTestEscape(efbEmailTestText('yourAdminEmail', 'your admin email address')))}</span>
@@ -3493,13 +3630,15 @@ function efbEmailTestPoll(test, uiState, button, buttonHtml, startedAt) {
 
       if (status == 'analyzed' && stage == 'quick') {
         uiState.steps.wait = 'done';
-        uiState.steps.quick = result.can_send_email ? 'done' : 'error';
+        uiState.steps.quick = efbEmailTestDeliveryConfirmed(result) ? 'done' : 'error';
         uiState.steps.full = result.full_report_pending ? 'active' : 'done';
         uiState.quick = result;
         uiState.result = result;
         uiState.message = result.message || '';
         uiState.percent = 88;
-        if (result.can_send_email) efbEmailTestSetSmtpState(true);
+        // A delivered but badly scored email must not switch sending on: the
+        // server refuses to save that state, so the toggle would lie.
+        if (efbEmailTestDeliveryConfirmed(result)) efbEmailTestSetSmtpState(true);
         efbEmailTestShow(uiState);
         if (result.full_report_pending) {
           efbEmailServerTestTimer = setTimeout(function () {
@@ -3513,13 +3652,15 @@ function efbEmailTestPoll(test, uiState, button, buttonHtml, startedAt) {
 
       if (status == 'analyzed' && stage == 'full') {
         uiState.steps.wait = 'done';
-        uiState.steps.quick = result.can_send_email ? 'done' : 'error';
+        uiState.steps.quick = efbEmailTestDeliveryConfirmed(result) ? 'done' : 'error';
         uiState.steps.full = 'done';
         uiState.quick = uiState.quick || result;
         uiState.result = result;
         uiState.message = result.message || '';
         uiState.percent = 100;
-        if (result.can_send_email) efbEmailTestSetSmtpState(true);
+        // A delivered but badly scored email must not switch sending on: the
+        // server refuses to save that state, so the toggle would lie.
+        if (efbEmailTestDeliveryConfirmed(result)) efbEmailTestSetSmtpState(true);
         efbEmailTestShow(uiState);
         efbEmailTestFinishButton(button, buttonHtml);
         return;

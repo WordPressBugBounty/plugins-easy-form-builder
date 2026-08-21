@@ -378,20 +378,10 @@ class EfbAddonPhrases {
             /* translators: Learn how to use the SMS feature = help subtitle */
             "smsHelpDesc" => $state && isset($ac->text->smsHelpDesc) ? $ac->text->smsHelpDesc : esc_html__('Learn how to use the SMS feature', 'easy-form-builder'),
 
-            /* translators: Quick Start Guide = help section title */
-            "smsHelpQuickStart" => $state && isset($ac->text->smsHelpQuickStart) ? $ac->text->smsHelpQuickStart : esc_html__('Quick Start Guide', 'easy-form-builder'),
 
-            /* translators: Step 1 of SMS quick start guide */
-            "smsHelpStep1" => $state && isset($ac->text->smsHelpStep1) ? $ac->text->smsHelpStep1 : esc_html__('Go to EFB Settings and configure your SMS provider (e.g. WP SMS Pro)', 'easy-form-builder'),
 
-            /* translators: Step 2 of SMS quick start guide */
-            "smsHelpStep2" => $state && isset($ac->text->smsHelpStep2) ? $ac->text->smsHelpStep2 : esc_html__('Navigate to the "Send Message" tab', 'easy-form-builder'),
 
-            /* translators: Step 3 of SMS quick start guide */
-            "smsHelpStep3" => $state && isset($ac->text->smsHelpStep3) ? $ac->text->smsHelpStep3 : esc_html__('Type your message and enter the phone number with country code', 'easy-form-builder'),
 
-            /* translators: Step 4 of SMS quick start guide */
-            "smsHelpStep4" => $state && isset($ac->text->smsHelpStep4) ? $ac->text->smsHelpStep4 : esc_html__('Click "Send" — the message will appear in Message History', 'easy-form-builder'),
 
             /* translators: Important Notes = help section title */
             "smsHelpNotes" => $state && isset($ac->text->smsHelpNotes) ? $ac->text->smsHelpNotes : esc_html__('Important Notes', 'easy-form-builder'),
@@ -639,6 +629,26 @@ class EfbAddonPhrases {
             "hsFieldPaymentIpMinLabel" => $state && isset($ac->text->hsFieldPaymentIpMinLabel) ? $ac->text->hsFieldPaymentIpMinLabel : __('Payment starts per IP/min', 'easy-form-builder'),
             /* translators: Hint for the payment-start rate limit field */
             "hsFieldPaymentIpMinHint" => $state && isset($ac->text->hsFieldPaymentIpMinHint) ? $ac->text->hsFieldPaymentIpMinHint : __('Protects payment REST routes.', 'easy-form-builder'),
+            /* translators: Section title for the settings that control how many files one visitor may upload */
+            "hsUploadBudgetTitle" => $state && isset($ac->text->hsUploadBudgetTitle) ? $ac->text->hsUploadBudgetTitle : __('File upload budget', 'easy-form-builder'),
+            /* translators: Description of the upload budget section. Explains that the plugin already limits uploads by itself and these boxes only override it. */
+            "hsUploadBudgetDesc" => $state && isset($ac->text->hsUploadBudgetDesc) ? $ac->text->hsUploadBudgetDesc : __('Easy Form Builder already limits uploads on its own: each visitor may upload three files per file field on the form, and the response box allows three. Leave a box at 0 to keep that automatic behaviour, or enter a number to set it yourself.', 'easy-form-builder'),
+            /* translators: Field label - how many uploads are allowed for each file field on a form */
+            "hsFieldUploadRetryLabel" => $state && isset($ac->text->hsFieldUploadRetryLabel) ? $ac->text->hsFieldUploadRetryLabel : __('Uploads allowed per file field', 'easy-form-builder'),
+            /* translators: Hint for the per-file-field upload allowance; "0" refers to the field's own value */
+            "hsFieldUploadRetryHint" => $state && isset($ac->text->hsFieldUploadRetryHint) ? $ac->text->hsFieldUploadRetryHint : __('Default 3, so a two-field form allows six uploads. 0 keeps the default.', 'easy-form-builder'),
+            /* translators: Field label - a fixed total number of uploads allowed per visitor */
+            "hsFieldUploadQuotaLabel" => $state && isset($ac->text->hsFieldUploadQuotaLabel) ? $ac->text->hsFieldUploadQuotaLabel : __('Total uploads per visitor', 'easy-form-builder'),
+            /* translators: Hint for the fixed total upload limit; "0" refers to the field's own value */
+            "hsFieldUploadQuotaHint" => $state && isset($ac->text->hsFieldUploadQuotaHint) ? $ac->text->hsFieldUploadQuotaHint : __('A fixed total that ignores how many fields the form has. 0 keeps the automatic per-field calculation.', 'easy-form-builder'),
+            /* translators: Field label - how long before a visitor's upload allowance resets */
+            "hsFieldUploadWindowLabel" => $state && isset($ac->text->hsFieldUploadWindowLabel) ? $ac->text->hsFieldUploadWindowLabel : __('Budget resets after (seconds)', 'easy-form-builder'),
+            /* translators: Hint for the upload budget reset window; "0" refers to the field's own value */
+            "hsFieldUploadWindowHint" => $state && isset($ac->text->hsFieldUploadWindowHint) ? $ac->text->hsFieldUploadWindowHint : __('Default 3600 (one hour). 0 keeps the default.', 'easy-form-builder'),
+            /* translators: Field label - a site-wide maximum upload size in megabytes */
+            "hsFieldUploadMaxMbLabel" => $state && isset($ac->text->hsFieldUploadMaxMbLabel) ? $ac->text->hsFieldUploadMaxMbLabel : __('Maximum file size (MB)', 'easy-form-builder'),
+            /* translators: Hint for the site-wide maximum upload size; "0" refers to the field's own value */
+            "hsFieldUploadMaxMbHint" => $state && isset($ac->text->hsFieldUploadMaxMbHint) ? $ac->text->hsFieldUploadMaxMbHint : __('A site-wide ceiling. It can only tighten a per-field limit, never widen it. 0 keeps the field setting.', 'easy-form-builder'),
             /* translators: Toggle label - rate-limit tracking-code lookups without requiring a human token */
             "hsFieldProtectLookupLabel" => $state && isset($ac->text->hsFieldProtectLookupLabel) ? $ac->text->hsFieldProtectLookupLabel : __('Protect response lookup', 'easy-form-builder'),
             /* translators: Hint for the response-lookup protection toggle */
@@ -656,10 +666,7 @@ class EfbAddonPhrases {
             /* translators: Hint for the IP blocklist field */
             "hsFieldBlocklistHint" => $state && isset($ac->text->hsFieldBlocklistHint) ? $ac->text->hsFieldBlocklistHint : __('IPs that are always blocked on protected form routes.', 'easy-form-builder'),
 
-            /* translators: Paid Limits tab card title */
-            "hsPaidStopLossTitle" => $state && isset($ac->text->hsPaidStopLossTitle) ? $ac->text->hsPaidStopLossTitle : __('Paid service stop-loss', 'easy-form-builder'),
-            /* translators: Paid Limits tab card subtitle */
-            "hsPaidStopLossDesc" => $state && isset($ac->text->hsPaidStopLossDesc) ? $ac->text->hsPaidStopLossDesc : __('Limits used by the future side-effect filter before SMS, Telegram, email and webhooks.', 'easy-form-builder'),
+
             /* translators: Field label - minimum score required to send a paid notification */
             "hsFieldMinPaidScoreLabel" => $state && isset($ac->text->hsFieldMinPaidScoreLabel) ? $ac->text->hsFieldMinPaidScoreLabel : __('Minimum paid notification score', 'easy-form-builder'),
             /* translators: Hint for the minimum paid-notification score field */
@@ -740,8 +747,6 @@ class EfbAddonPhrases {
             "hsTablesReady" => $state && isset($ac->text->hsTablesReady) ? $ac->text->hsTablesReady : __('ready', 'easy-form-builder'),
             /* translators: Database tables status value - the add-on's tables have not been created yet */
             "hsTablesNotReady" => $state && isset($ac->text->hsTablesNotReady) ? $ac->text->hsTablesNotReady : __('not ready yet', 'easy-form-builder'),
-            /* translators: Toggle label - stop enforcing security rules when server requirements are not met */
-            "hsFieldFailClosedLabel" => $state && isset($ac->text->hsFieldFailClosedLabel) ? $ac->text->hsFieldFailClosedLabel : __('Fail closed when requirements are missing', 'easy-form-builder'),
             /* translators: Hint for the fail-closed toggle */
             "hsFieldFailClosedHint" => $state && isset($ac->text->hsFieldFailClosedHint) ? $ac->text->hsFieldFailClosedHint : __('Recommended only after you verify PHP functions and tables are ready.', 'easy-form-builder'),
             /* translators: Toggle label - trust reverse-proxy headers for the visitor's real IP address */
@@ -786,8 +791,6 @@ class EfbAddonPhrases {
             /* translators: Auto-Populate Dataset = menu title for dataset management */
             "autofill_dataset" => $state && isset($ac->text->autofill_dataset) ? $ac->text->autofill_dataset : esc_html__('Auto-Populate Dataset', 'easy-form-builder'),
 
-            /* translators: Auto-Populate Integrations = menu title for API integrations */
-            "autofill_integrations" => $state && isset($ac->text->autofill_integrations) ? $ac->text->autofill_integrations : esc_html__('Auto-Populate Integrations', 'easy-form-builder'),
 
             /* translators: Dataset page header subtitle */
             "datasetSubtitle" => $state && isset($ac->text->datasetSubtitle) ? $ac->text->datasetSubtitle : esc_html__('Manage & Upload Datasets', 'easy-form-builder'),
@@ -1080,9 +1083,6 @@ class EfbAddonPhrases {
             /* translators: Content = column header for message content preview */
             "content" => $state && isset($ac->text->content) ? $ac->text->content : esc_html__('Content', 'easy-form-builder'),
 
-            /* translators: Description shown when there are no responses yet */
-            "noResponseDesc" => $state && isset($ac->text->noResponseDesc) ? $ac->text->noResponseDesc : esc_html__('Submitted responses will appear here.', 'easy-form-builder'),
-
             /* translators: Saving message */
             "saving" => $state && isset($ac->text->saving) ? $ac->text->saving : esc_html__('Saving&hellip;', 'easy-form-builder'),
 
@@ -1246,10 +1246,6 @@ class EfbAddonPhrases {
             /* translators: camelCase alias of saving */
             "saving" => $state && isset($ac->text->saving) ? $ac->text->saving : esc_html__('Saving&hellip;', 'easy-form-builder'),
 
-            /* translators: Intro title on the API Integrations empty state */
-            "apiIntroTitle" => $state && isset($ac->text->api_intro_title) ? $ac->text->api_intro_title : esc_html__('Connect Your Forms to External APIs', 'easy-form-builder'),
-            /* translators: Intro description on the API Integrations empty state */
-            "apiIntroDesc" => $state && isset($ac->text->api_intro_desc) ? $ac->text->api_intro_desc : esc_html__('Easily auto-populate your form fields with data from any API. Just add your API endpoint and map the fields!', 'easy-form-builder'),
             /* translators: Prompt shown when no API connections exist yet */
             "clickToAdd" => $state && isset($ac->text->click_to_add) ? $ac->text->click_to_add : esc_html__('Click the button above to create your first API connection', 'easy-form-builder'),
 
@@ -1475,8 +1471,6 @@ class EfbAddonPhrases {
             /* translators: Failed = payment status */
             "pay_failed" => $state && isset($ac->text->pay_failed) ? $ac->text->pay_failed : esc_html__('Failed', 'easy-form-builder'),
 
-            /* translators: Suspended = subscription status */
-            "pay_suspended" => $state && isset($ac->text->pay_suspended) ? $ac->text->pay_suspended : esc_html__('Suspended', 'easy-form-builder'),
 
             /* translators: No payments found = empty table message */
             "pay_noPayments" => $state && isset($ac->text->pay_noPayments) ? $ac->text->pay_noPayments : esc_html__('No payments found.', 'easy-form-builder'),
@@ -1744,8 +1738,6 @@ class EfbAddonPhrases {
             "gs_saved" => $state && isset($ac->text->gs_saved) ? $ac->text->gs_saved : esc_html__('Saved successfully.', 'easy-form-builder'),
             /* translators: Save button */
             "gs_save" => $state && isset($ac->text->gs_save) ? $ac->text->gs_save : esc_html__('Save', 'easy-form-builder'),
-            /* translators: Saved short label */
-            "gs_savedShort" => $state && isset($ac->text->gs_savedShort) ? $ac->text->gs_savedShort : esc_html__('Saved', 'easy-form-builder'),
             /* translators: Cancel button */
             "gs_cancel" => $state && isset($ac->text->gs_cancel) ? $ac->text->gs_cancel : esc_html__('Cancel', 'easy-form-builder'),
             /* translators: Edit button */
@@ -2170,8 +2162,6 @@ class EfbAddonPhrases {
             "gs_logDetail" => $state && isset($ac->text->gs_logDetail) ? $ac->text->gs_logDetail : esc_html__('Detail', 'easy-form-builder'),
             /* translators: Logs status — synced */
             "gs_synced" => $state && isset($ac->text->gs_synced) ? $ac->text->gs_synced : esc_html__('Synced', 'easy-form-builder'),
-            /* translators: Access denied (page + ajax guard) */
-            "gs_accessDenied" => $state && isset($ac->text->gs_accessDenied) ? $ac->text->gs_accessDenied : esc_html__('Access denied', 'easy-form-builder'),
 
             /* ===== Sheet style preset gallery (Style & Save step / templates list) ===== */
             /* translators: Style preset name - no colors or formatting applied */

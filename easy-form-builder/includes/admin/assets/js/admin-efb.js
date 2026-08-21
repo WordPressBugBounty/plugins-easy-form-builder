@@ -4836,10 +4836,15 @@ window.addEventListener("popstate",e=>{
 
     break;
     case 'setting':
-      if(typeof fun_show_setting__emsFormBuilder === 'function'){
-      fun_show_setting__emsFormBuilder();
-      fun_backButton_efb(0);
-      fun_hande_active_page_emsFormBuilder(2);
+    case 'setting-tab':
+      /* 'setting-tab' entries only differ by ?tab=, so the restore repaints the
+         tab bar and re-renders the settings screen only when it is gone. */
+      if(typeof efb_restore_setting_tab_efb === 'function'){
+        efb_restore_setting_tab_efb();
+      }else if(typeof fun_show_setting__emsFormBuilder === 'function'){
+        fun_show_setting__emsFormBuilder();
+        fun_backButton_efb(0);
+        fun_hande_active_page_emsFormBuilder(2);
       }
       break;
     case 'help':
@@ -5295,8 +5300,8 @@ call_beat = async () => {
           store_form_efb();
         }
         alert_message_efb(
-          '<i class="efb bi-wifi-off mx-1"></i>' + efb_var.text.error,
-          `<p class="efb fs-6">${text}</p>`,
+          '<span class="efb text-white"><i class="efb bi-wifi-off mx-1"></i>' + efb_var.text.error + '</span>',
+          text,
           500,
           "danger"
         );
