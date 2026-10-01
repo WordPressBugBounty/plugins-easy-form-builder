@@ -819,6 +819,536 @@ if ( ! function_exists( 'efb_steps_inline_runtime_efb' ) ) {
 	}
 }
 
+/*
+ * Add-on translations.
+ *
+ * A migrated add-on ships its dashboard phrases in its own text domain,
+ * efb-<slug>, as vendor/<slug>/languages/efb-<slug>-<locale>.po|.mo|.l10n.php,
+ * next to a locales.json that lists every locale the package contains. The
+ * loader reads those files, the pruner keeps only the locales this site uses,
+ * and a locale found missing later is downloaded again from an EFB admin
+ * screen by efbFunction::process_addon_i18n_refetch_efb().
+ */
+
+if ( ! function_exists( 'emsfb_addon_i18n_can_efb' ) ) {
+	/**
+	 * Whether an optional PHP function may be called (php.ini disable_functions).
+	 *
+	 * @param string $function_name PHP function name.
+	 * @return bool
+	 */
+	function emsfb_addon_i18n_can_efb( $function_name ) {
+		return function_exists( 'emsfb_is_php_function_available_efb' )
+			? (bool) emsfb_is_php_function_available_efb( $function_name )
+			: function_exists( $function_name );
+	}
+}
+
+if ( ! function_exists( 'emsfb_addon_i18n_slug_efb' ) ) {
+	/**
+	 * Normalise an add-on folder name so it can never leave vendor/.
+	 *
+	 * @param string $slug vendor/<slug> folder name.
+	 * @return string
+	 */
+	function emsfb_addon_i18n_slug_efb( $slug ) {
+		return (string) preg_replace( '/[^a-z0-9_\-]/', '', strtolower( (string) $slug ) );
+	}
+}
+
+if ( ! function_exists( 'emsfb_addon_languages_dir_efb' ) ) {
+	/**
+	 * vendor/<slug>/languages/ with a trailing slash.
+	 *
+	 * @param string $slug Add-on folder name.
+	 * @return string '' when the plugin directory is unknown.
+	 */
+	function emsfb_addon_languages_dir_efb( $slug ) {
+		$slug = emsfb_addon_i18n_slug_efb( $slug );
+		$dir  = ( '' !== $slug && defined( 'EMSFB_PLUGIN_DIRECTORY' ) ) ? EMSFB_PLUGIN_DIRECTORY . 'vendor/' . $slug . '/languages/' : '';
+		if ( function_exists( 'apply_filters' ) ) {
+			/**
+			 * Filters where an add-on's language files are read from. The pruner
+			 * still refuses to delete anything outside the plugin's vendor/ folder.
+			 *
+			 * @param string $dir  Directory with a trailing slash.
+			 * @param string $slug Add-on folder name.
+			 */
+			$dir = (string) apply_filters( 'emsfb_addon_languages_dir_efb', $dir, $slug );
+		}
+		return '' === $dir ? '' : rtrim( str_replace( '\\', '/', $dir ), '/' ) . '/';
+	}
+}
+
+if ( ! function_exists( 'emsfb_get_addon_i18n_manifest_efb' ) ) {
+	/**
+	 * The add-on's languages/locales.json.
+	 *
+	 * @param string $slug    Add-on folder name.
+	 * @param bool   $refresh Re-read the file instead of the per-request copy.
+	 * @return array{domain: string, locales: string[]}|null Null for a package without translations.
+	 */
+	function emsfb_get_addon_i18n_manifest_efb( $slug, $refresh = false ) {
+		static $cache = array();
+		$slug = emsfb_addon_i18n_slug_efb( $slug );
+		$dir  = emsfb_addon_languages_dir_efb( $slug );
+		if ( ! $refresh && array_key_exists( $dir, $cache ) ) {
+			return $cache[ $dir ];
+		}
+		$manifest = null;
+		$file     = $dir . 'locales.json';
+		if ( '' !== $dir && is_file( $file ) ) {
+			$raw  = function_exists( 'emsfb_read_file_efb' ) ? emsfb_read_file_efb( $file ) : ( emsfb_addon_i18n_can_efb( 'file_get_contents' ) ? @file_get_contents( $file ) : false );
+			$data = is_string( $raw ) ? json_decode( $raw, true ) : null;
+			if ( is_array( $data ) && isset( $data['locales'] ) && is_array( $data['locales'] ) ) {
+				$manifest = array(
+					'domain'  => ! empty( $data['domain'] ) ? (string) $data['domain'] : 'efb-' . $slug,
+					'locales' => array_values( array_filter( array_map( 'strval', $data['locales'] ) ) ),
+				);
+			}
+		}
+		$cache[ $dir ] = $manifest;
+		return $manifest;
+	}
+}
+
+if ( ! function_exists( 'emsfb_get_addon_i18n_providers_efb' ) ) {
+	/**
+	 * Add-ons registered in EfbAddonPhrases as shipping their own phrases.
+	 *
+	 * @return array<string, array{group: string|null, slug: string, file: string, class: string}>
+	 */
+	function emsfb_get_addon_i18n_providers_efb() {
+		if ( ! class_exists( 'EfbAddonPhrases' ) ) {
+			if ( ! defined( 'EMSFB_PLUGIN_DIRECTORY' ) || ! file_exists( EMSFB_PLUGIN_DIRECTORY . 'includes/phrases.php' ) ) {
+				return array();
+			}
+			require_once EMSFB_PLUGIN_DIRECTORY . 'includes/phrases.php';
+		}
+		EfbAddonPhrases::get_instance();
+		return EfbAddonPhrases::get_addon_providers_efb();
+	}
+}
+
+if ( ! function_exists( 'emsfb_track_addon_textdomain_efb' ) ) {
+	/**
+	 * Remember a loaded add-on domain so a locale switch can unload it.
+	 *
+	 * @param string|null $domain Domain to add, or null to only read the list.
+	 * @return array<string, bool>
+	 */
+	function emsfb_track_addon_textdomain_efb( $domain = null ) {
+		static $domains = array();
+		static $hooked  = false;
+		if ( null !== $domain ) {
+			$domains[ (string) $domain ] = true;
+			if ( ! $hooked && function_exists( 'add_action' ) ) {
+				add_action( 'change_locale', 'emsfb_unload_addon_textdomains_efb', 1 );
+				$hooked = true;
+			}
+		}
+		return $domains;
+	}
+}
+
+if ( ! function_exists( 'emsfb_unload_addon_textdomains_efb' ) ) {
+	/**
+	 * change_locale: drop loaded add-on domains; the next provider call loads
+	 * the new locale's file.
+	 *
+	 * @return void
+	 */
+	function emsfb_unload_addon_textdomains_efb() {
+		if ( ! function_exists( 'unload_textdomain' ) ) {
+			return;
+		}
+		foreach ( array_keys( emsfb_track_addon_textdomain_efb() ) as $domain ) {
+			unload_textdomain( $domain, true );
+		}
+	}
+}
+
+if ( ! function_exists( 'emsfb_load_addon_textdomain_efb' ) ) {
+	/**
+	 * Load efb-<slug> for the current locale from vendor/<slug>/languages/.
+	 *
+	 * Works on every kind of request (admin, admin-ajax, REST, cron, front end):
+	 * providers call it lazily, only when their phrases are actually built.
+	 * Only this locale's own file is used. With no file English shows,
+	 * and when locales.json says the package contains that locale the add-on
+	 * is queued to be downloaded again.
+	 *
+	 * @param string $slug Add-on folder name.
+	 * @return bool True when a translation file is loaded.
+	 */
+	function emsfb_load_addon_textdomain_efb( $slug ) {
+		static $misses = array();
+		$slug = emsfb_addon_i18n_slug_efb( $slug );
+		if ( '' === $slug || ! function_exists( 'load_textdomain' ) ) {
+			return false;
+		}
+		$domain = 'efb-' . $slug;
+		if ( function_exists( 'is_textdomain_loaded' ) && is_textdomain_loaded( $domain ) ) {
+			return true;
+		}
+		$locale = function_exists( 'determine_locale' ) ? determine_locale() : ( function_exists( 'get_locale' ) ? get_locale() : 'en_US' );
+		if ( function_exists( 'apply_filters' ) ) {
+			$locale = (string) apply_filters( 'plugin_locale', $locale, $domain );
+		}
+		$miss_key = $domain . '|' . $locale;
+		if ( isset( $misses[ $miss_key ] ) ) {
+			return false;
+		}
+		$dir = emsfb_addon_languages_dir_efb( $slug );
+		if ( '' !== $dir ) {
+			// Only this locale's own file. Every WordPress locale is an independent
+			// language, so a variant never loads another locale's translation.
+			$mofile = $dir . $domain . '-' . $locale . '.mo';
+			if ( file_exists( $mofile ) || file_exists( $dir . $domain . '-' . $locale . '.l10n.php' ) ) {
+				if ( load_textdomain( $domain, $mofile, $locale ) ) {
+					emsfb_track_addon_textdomain_efb( $domain );
+					return true;
+				}
+			}
+		}
+		$misses[ $miss_key ] = true;
+		if ( 'en_US' !== $locale ) {
+			$manifest = emsfb_get_addon_i18n_manifest_efb( $slug );
+			if ( is_array( $manifest ) && in_array( $locale, $manifest['locales'], true ) ) {
+				emsfb_flag_addon_i18n_refetch_efb( $slug, $locale );
+			}
+		}
+		return false;
+	}
+}
+
+if ( ! function_exists( 'emsfb_flag_addon_i18n_refetch_efb' ) ) {
+	/**
+	 * Queue add-ons whose package contains $locale but whose
+	 * file for it is gone, usually pruned before the site started using that
+	 * language. The next Add-ons, Create or Panel screen downloads them again.
+	 *
+	 * Stored in option emsfb_addon_i18n_refetch as slug => locales. A slug and
+	 * locale already refetched in the last 7 days is not queued again, so a
+	 * package that lacks the file cannot cause a download on every screen.
+	 *
+	 * @param string|null $slug   One add-on, or null for every registered add-on.
+	 * @param string      $locale Locale that needs a file.
+	 * @return string[] Slugs now queued.
+	 */
+	function emsfb_flag_addon_i18n_refetch_efb( $slug, $locale ) {
+		$locale = (string) $locale;
+		if ( '' === $locale || 'en_US' === $locale || ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+			return array();
+		}
+		$slugs   = null === $slug ? array_keys( emsfb_get_addon_i18n_providers_efb() ) : array( $slug );
+		$pending = get_option( 'emsfb_addon_i18n_refetch', array() );
+		$pending = is_array( $pending ) ? $pending : array();
+		$log     = get_option( 'emsfb_addon_i18n_refetch_log', array() );
+		$log     = is_array( $log ) ? $log : array();
+		$changed = false;
+		foreach ( $slugs as $candidate ) {
+			$candidate = emsfb_addon_i18n_slug_efb( $candidate );
+			$manifest  = '' === $candidate ? null : emsfb_get_addon_i18n_manifest_efb( $candidate );
+			if ( ! is_array( $manifest ) ) {
+				// Not installed, or a package without translations: recovery owns that case.
+				continue;
+			}
+			if ( ! in_array( $locale, $manifest['locales'], true ) ) {
+				continue;
+			}
+			$wanted = $locale;
+			$base = emsfb_addon_languages_dir_efb( $candidate ) . $manifest['domain'] . '-' . $wanted;
+			if ( file_exists( $base . '.mo' ) || file_exists( $base . '.l10n.php' ) ) {
+				continue;
+			}
+			$log_key = $candidate . '|' . $wanted;
+			if ( isset( $log[ $log_key ] ) && ( time() - (int) $log[ $log_key ] ) < 604800 ) {
+				continue;
+			}
+			$queued = isset( $pending[ $candidate ] ) ? (array) $pending[ $candidate ] : array();
+			if ( ! in_array( $wanted, $queued, true ) ) {
+				$queued[]               = $wanted;
+				$pending[ $candidate ] = $queued;
+				$changed                = true;
+			}
+		}
+		if ( $changed ) {
+			update_option( 'emsfb_addon_i18n_refetch', $pending, false );
+		}
+		return array_keys( $pending );
+	}
+}
+
+if ( ! function_exists( 'emsfb_get_active_locales_efb' ) ) {
+	/**
+	 * Locales whose add-on language files must stay on disk: the site, network
+	 * and user languages, installed language packs, Polylang and WPML languages,
+	 * and locales recently downloaded again. Exact locales only.
+	 *
+	 * @return string[]
+	 */
+	function emsfb_get_active_locales_efb() {
+		global $wpdb;
+		$locales = array();
+		if ( function_exists( 'get_locale' ) ) {
+			$locales[] = get_locale();
+		}
+		if ( function_exists( 'get_option' ) ) {
+			$locales[] = (string) get_option( 'WPLANG', '' );
+		}
+		if ( function_exists( 'get_available_languages' ) ) {
+			$locales = array_merge( $locales, (array) get_available_languages() );
+		}
+		if ( isset( $wpdb ) && is_object( $wpdb ) && ! empty( $wpdb->usermeta ) && method_exists( $wpdb, 'get_col' ) ) {
+			$user_locales = $wpdb->get_col( "SELECT DISTINCT meta_value FROM {$wpdb->usermeta} WHERE meta_key = 'locale' AND meta_value <> ''" );
+			if ( is_array( $user_locales ) ) {
+				$locales = array_merge( $locales, $user_locales );
+			}
+		}
+		if ( function_exists( 'is_multisite' ) && is_multisite() ) {
+			if ( function_exists( 'get_site_option' ) ) {
+				$locales[] = (string) get_site_option( 'WPLANG', '' );
+			}
+			if ( function_exists( 'get_sites' ) && function_exists( 'get_blog_option' ) ) {
+				foreach ( (array) get_sites( array( 'fields' => 'ids', 'number' => 0 ) ) as $site_id ) {
+					$locales[] = (string) get_blog_option( $site_id, 'WPLANG', '' );
+				}
+			}
+		}
+		if ( function_exists( 'pll_languages_list' ) ) {
+			$pll = pll_languages_list( array( 'fields' => 'locale' ) );
+			if ( is_array( $pll ) ) {
+				$locales = array_merge( $locales, $pll );
+			}
+		}
+		if ( function_exists( 'apply_filters' ) && ( defined( 'ICL_SITEPRESS_VERSION' ) || ( function_exists( 'has_filter' ) && has_filter( 'wpml_active_languages' ) ) ) ) {
+			$wpml = apply_filters( 'wpml_active_languages', null, array( 'skip_missing' => 0 ) );
+			if ( is_array( $wpml ) ) {
+				foreach ( $wpml as $language ) {
+					if ( is_array( $language ) && ! empty( $language['default_locale'] ) ) {
+						$locales[] = (string) $language['default_locale'];
+					}
+				}
+			}
+		}
+		if ( function_exists( 'get_option' ) ) {
+			$pending = get_option( 'emsfb_addon_i18n_refetch', array() );
+			foreach ( is_array( $pending ) ? $pending : array() as $queued ) {
+				$locales = array_merge( $locales, (array) $queued );
+			}
+			$log = get_option( 'emsfb_addon_i18n_refetch_log', array() );
+			foreach ( is_array( $log ) ? $log : array() as $log_key => $time ) {
+				if ( ( time() - (int) $time ) < 2592000 && false !== strpos( (string) $log_key, '|' ) ) {
+					$locales[] = substr( (string) $log_key, strpos( (string) $log_key, '|' ) + 1 );
+				}
+			}
+		}
+
+		$kept = array();
+		foreach ( $locales as $locale ) {
+			$locale = trim( (string) $locale );
+			if ( '' === $locale || ! preg_match( '/^[A-Za-z]{2,3}(_[A-Za-z0-9]+)*$/', $locale ) ) {
+				continue;
+			}
+			$kept[ $locale ] = true;
+		}
+		$kept = array_keys( $kept );
+		if ( function_exists( 'apply_filters' ) ) {
+			/**
+			 * Filters the locales whose add-on language files are kept.
+			 *
+			 * @param string[] $kept Locales in use.
+			 */
+			$kept = (array) apply_filters( 'emsfb_addon_kept_locales_efb', $kept );
+		}
+		return array_values( array_unique( array_filter( array_map( 'strval', $kept ) ) ) );
+	}
+}
+
+if ( ! function_exists( 'emsfb_is_local_site_efb' ) ) {
+	/**
+	 * Whether home_url() or site_url() points at this machine.
+	 *
+	 * @return bool
+	 */
+	function emsfb_is_local_site_efb() {
+		foreach ( array( 'home_url', 'site_url' ) as $url_function ) {
+			if ( ! function_exists( $url_function ) ) {
+				continue;
+			}
+			$url  = (string) call_user_func( $url_function );
+			$host = function_exists( 'wp_parse_url' ) ? wp_parse_url( $url, PHP_URL_HOST ) : parse_url( $url, PHP_URL_HOST );
+			if ( is_string( $host ) && in_array( strtolower( trim( $host, '[]' ) ), array( 'localhost', '127.0.0.1', '::1' ), true ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+}
+
+if ( ! function_exists( 'emsfb_prune_addon_languages_efb' ) ) {
+	/**
+	 * Delete the add-on language files of locales this site does not use.
+	 *
+	 * Runs after an add-on is unzipped and after a plugin update. Only files
+	 * named efb-<slug>-<locale>[-<md5>].po|mo|l10n.php|json inside
+	 * vendor/<slug>/languages/ are candidates; the .pot, locales.json and
+	 * index.php always stay. Never throws and never affects an install result.
+	 *
+	 * Does nothing on a local site (localhost, 127.0.0.1, ::1) unless the
+	 * emsfb_prune_addon_languages_on_local_efb filter says otherwise, in a git
+	 * checkout of vendor/, when no locale is known, for a directory outside
+	 * vendor/, or when EMSFB_KEEP_ALL_ADDON_LOCALES is true.
+	 *
+	 * @param string|null $slug One add-on, or null for every registered add-on present.
+	 * @return array{deleted: string[], kept: string[], skipped: string}
+	 */
+	function emsfb_prune_addon_languages_efb( $slug = null ) {
+		$result = array( 'deleted' => array(), 'kept' => array(), 'skipped' => '' );
+		try {
+			if ( defined( 'EMSFB_KEEP_ALL_ADDON_LOCALES' ) && EMSFB_KEEP_ALL_ADDON_LOCALES ) {
+				$result['skipped'] = 'keep_all_constant';
+				return $result;
+			}
+			if ( ! defined( 'EMSFB_PLUGIN_DIRECTORY' ) ) {
+				$result['skipped'] = 'no_plugin_directory';
+				return $result;
+			}
+			$prune_on_local = function_exists( 'apply_filters' ) && (bool) apply_filters( 'emsfb_prune_addon_languages_on_local_efb', false );
+			if ( ! $prune_on_local && emsfb_is_local_site_efb() ) {
+				$result['skipped'] = 'local_site';
+				return $result;
+			}
+			if ( file_exists( EMSFB_PLUGIN_DIRECTORY . 'vendor/.git' ) ) {
+				$result['skipped'] = 'git_checkout';
+				return $result;
+			}
+			$kept = emsfb_get_active_locales_efb();
+			if ( empty( $kept ) ) {
+				$result['skipped'] = 'no_kept_locales';
+				return $result;
+			}
+			$result['kept'] = $kept;
+			if ( ! emsfb_addon_i18n_can_efb( 'realpath' ) ) {
+				$result['skipped'] = 'realpath_unavailable';
+				return $result;
+			}
+			$vendor = realpath( EMSFB_PLUGIN_DIRECTORY . 'vendor' );
+			if ( false === $vendor ) {
+				$result['skipped'] = 'no_vendor';
+				return $result;
+			}
+			$case_insensitive = '\\' === DIRECTORY_SEPARATOR;
+			$vendor           = rtrim( str_replace( '\\', '/', $vendor ), '/' ) . '/';
+			$slugs            = null === $slug ? array_keys( emsfb_get_addon_i18n_providers_efb() ) : array( $slug );
+			foreach ( $slugs as $candidate ) {
+				$candidate = emsfb_addon_i18n_slug_efb( $candidate );
+				$dir       = '' === $candidate ? '' : emsfb_addon_languages_dir_efb( $candidate );
+				$real      = '' === $dir ? false : realpath( $dir );
+				if ( false === $real || ! is_dir( $real ) ) {
+					continue;
+				}
+				$real   = rtrim( str_replace( '\\', '/', $real ), '/' ) . '/';
+				$inside = $case_insensitive ? 0 === strpos( strtolower( $real ), strtolower( $vendor ) ) : 0 === strpos( $real, $vendor );
+				if ( ! $inside || $real === $vendor ) {
+					$result['skipped'] = 'outside_vendor';
+					continue;
+				}
+				$pattern = '/^efb-' . preg_quote( $candidate, '/' ) . '-([A-Za-z]{2,3}(?:_[A-Za-z0-9]+)*)(-[a-f0-9]{32})?\.(po|mo|l10n\.php|json)$/';
+				foreach ( emsfb_list_addon_language_files_efb( $real ) as $name ) {
+					if ( ! preg_match( $pattern, $name, $match ) || in_array( $match[1], $kept, true ) || ! is_file( $real . $name ) ) {
+						continue;
+					}
+					if ( emsfb_delete_addon_language_file_efb( $real . $name ) ) {
+						$result['deleted'][] = 'vendor/' . $candidate . '/languages/' . $name;
+					}
+				}
+			}
+		} catch ( Exception $e ) {
+			$result['skipped'] = 'error';
+		} catch ( Throwable $e ) {
+			$result['skipped'] = 'error';
+		}
+		return $result;
+	}
+}
+
+if ( ! function_exists( 'emsfb_list_addon_language_files_efb' ) ) {
+	/**
+	 * File names in a languages directory.
+	 *
+	 * @param string $dir Directory with a trailing slash.
+	 * @return string[]
+	 */
+	function emsfb_list_addon_language_files_efb( $dir ) {
+		if ( emsfb_addon_i18n_can_efb( 'scandir' ) ) {
+			$names = @scandir( $dir );
+			return is_array( $names ) ? array_values( array_diff( $names, array( '.', '..' ) ) ) : array();
+		}
+		global $wp_filesystem;
+		if ( is_object( $wp_filesystem ) && method_exists( $wp_filesystem, 'dirlist' ) ) {
+			$list = $wp_filesystem->dirlist( $dir, false, false );
+			return is_array( $list ) ? array_map( 'strval', array_keys( $list ) ) : array();
+		}
+		return array();
+	}
+}
+
+if ( ! function_exists( 'emsfb_delete_addon_language_file_efb' ) ) {
+	/**
+	 * Delete one file through WP_Filesystem, else unlink() when it is allowed.
+	 *
+	 * @param string $path Absolute file path.
+	 * @return bool
+	 */
+	function emsfb_delete_addon_language_file_efb( $path ) {
+		global $wp_filesystem;
+		if ( is_object( $wp_filesystem ) && method_exists( $wp_filesystem, 'delete' ) ) {
+			return (bool) $wp_filesystem->delete( $path, false, 'f' );
+		}
+		if ( emsfb_addon_i18n_can_efb( 'unlink' ) ) {
+			return @unlink( $path );
+		}
+		return false;
+	}
+}
+
+if ( ! function_exists( 'emsfb_addon_i18n_signature_efb' ) ) {
+	/**
+	 * Cache signature of the registered add-on phrase files for the current
+	 * locale: provider mtime plus the loaded .mo's mtime. text_efb() puts it in
+	 * its cache key so an add-on install or update never serves stale phrases.
+	 *
+	 * @return string
+	 */
+	function emsfb_addon_i18n_signature_efb() {
+		static $memo = array();
+		$locale = function_exists( 'determine_locale' ) ? determine_locale() : '';
+		if ( isset( $memo[ $locale ] ) ) {
+			return $memo[ $locale ];
+		}
+		$can_stat = emsfb_addon_i18n_can_efb( 'filemtime' );
+		$parts    = array();
+		foreach ( emsfb_get_addon_i18n_providers_efb() as $slug => $provider ) {
+			$mtime = $can_stat ? @filemtime( EMSFB_PLUGIN_DIRECTORY . $provider['file'] ) : false;
+			if ( false === $mtime ) {
+				$parts[] = $slug . ':0';
+				continue;
+			}
+			$mo_mtime = 0;
+			$dir      = emsfb_addon_languages_dir_efb( $slug );
+			$found = ( '' === $dir || '' === $locale ) ? false : @filemtime( $dir . 'efb-' . emsfb_addon_i18n_slug_efb( $slug ) . '-' . $locale . '.mo' );
+			if ( false !== $found ) {
+				$mo_mtime = $found;
+			}
+			$parts[] = $slug . ':' . $mtime . ':' . $mo_mtime;
+		}
+		$memo[ $locale ] = empty( $parts ) ? '0' : substr( md5( implode( '|', $parts ) ), 0, 12 );
+		return $memo[ $locale ];
+	}
+}
+
 class efbFunction {
 
     protected static $req_cache = [];
@@ -985,7 +1515,13 @@ class efbFunction {
         // code, so without it an update would keep serving the previous
         // release's phrases from a persistent object cache until the entry
         // expired on its own.
-        $efb_ck_final = "langfinal:" . EMSFB_PLUGIN_VERSION . ":$efb_lang:$efb_ver:$efb_subset:$page_request";
+        // determine_locale() keeps admins with different profile languages and
+        // switch_to_locale() calls apart; the add-on signature changes whenever a
+        // migrated add-on's phrase or language file changes. A subset never reads
+        // add-on files, so it needs no signature.
+        $efb_locale    = function_exists('determine_locale') ? determine_locale() : $efb_lang;
+        $efb_addon_sig = is_array($inp) ? 'subset' : emsfb_addon_i18n_signature_efb();
+        $efb_ck_final = "langfinal:" . EMSFB_PLUGIN_VERSION . ":$efb_lang:$efb_locale:$efb_addon_sig:$efb_ver:$efb_subset:$page_request";
 
         if (isset(self::$req_cache[$efb_ck_final])) {
             return self::$req_cache[$efb_ck_final];
@@ -1049,7 +1585,6 @@ class efbFunction {
 			"trackingCodeFinder" => $state ? $ac->text->trackingCodeFinder : esc_html__('Confirmation Code Finder','easy-form-builder'),
 			"copyAndPasteBelowShortCodeTrackingCodeFinder" => $state ? $ac->text->copyAndPasteBelowShortCodeTrackingCodeFinder : esc_html__('Copy and paste this shortcode to add the confirmation code finder to any page or post.','easy-form-builder'),
 			"save" => $state ? $ac->text->save : esc_html__('Save','easy-form-builder'),
-			"waiting" => $state ? $ac->text->waiting : esc_html__('Waiting','easy-form-builder'),
 			"saved" => $state ? $ac->text->saved : esc_html__('Saved','easy-form-builder'),
 			/* translators: Step Name = name of a step in a multi-step form */
 			"stepName" => $state ? $ac->text->stepName : esc_html__('Step Name','easy-form-builder'),
@@ -1916,150 +2451,30 @@ class efbFunction {
 			"condADAddon" => $state  &&  isset($ac->text->condADAddon) ? $ac->text->condADAddon : esc_html__('The Conditional Logic Add-on enables dynamic and interactive forms based on specific user inputs or conditional rules. It allows for highly personalized forms tailored to meet users’ unique needs.','easy-form-builder'),
 			/* translators: Shown when the Conditional Logic builder script fails to load in the form editor */
 			"logicLoadError" => $state  &&  isset($ac->text->logicLoadError) ? $ac->text->logicLoadError : esc_html__('The Conditional Logic module failed to load. Please refresh the page; if the problem continues, deactivate and reactivate the Conditional Logic add-on.','easy-form-builder'),
-			/* translators: Toggle label - stop evaluating further rules once this rule matches */
-			"stopProcessing" => $state  &&  isset($ac->text->stopProcessing) ? $ac->text->stopProcessing : esc_html__('Stop after this rule matches','easy-form-builder'),
-			/* translators: IF = section label that introduces the conditions of a conditional-logic rule */
-			"logicIf" => $state  &&  isset($ac->text->logicIf) ? $ac->text->logicIf : esc_html__('IF','easy-form-builder'),
-			/* translators: THEN = section label that introduces the actions of a conditional-logic rule */
-			"logicThen" => $state  &&  isset($ac->text->logicThen) ? $ac->text->logicThen : esc_html__('THEN','easy-form-builder'),
-			/* translators: Test Mode = tab that lets the admin simulate rules with sample values */
-			"testMode" => $state  &&  isset($ac->text->testMode) ? $ac->text->testMode : esc_html__('Test Mode','easy-form-builder'),
-			/* translators: Run Test = button that executes the rule test */
-			"runTest" => $state  &&  isset($ac->text->runTest) ? $ac->text->runTest : esc_html__('Run Test','easy-form-builder'),
-			/* translators: Matched = test result shown when a rule's condition evaluated to true */
-			"matched" => $state  &&  isset($ac->text->matched) ? $ac->text->matched : esc_html__('Matched','easy-form-builder'),
-			/* translators: Not matched = test result shown when a rule's condition evaluated to false */
-			"notMatched" => $state  &&  isset($ac->text->notMatched) ? $ac->text->notMatched : esc_html__('Not matched','easy-form-builder'),
 			/* translators: Skipped = test result shown when a rule was not evaluated at all */
 			"skipped" => $state  &&  isset($ac->text->skipped) ? $ac->text->skipped : esc_html__('Skipped','easy-form-builder'),
-			/* translators: Empty state shown when the form has no fields to build conditions from */
-			"noFields" => $state  &&  isset($ac->text->noFields) ? $ac->text->noFields : esc_html__('No fields found.','easy-form-builder'),
-			/* translators: %1$s = maximum number of items allowed, %2$s = item label (e.g. rules, conditions). Shown when the current plan's limit is reached. */
-			"planLimitReached" => $state  &&  isset($ac->text->planLimitReached) ? $ac->text->planLimitReached : esc_html__('You can create up to %1$s %2$s on your current plan. Upgrade to Pro for unlimited access.','easy-form-builder'),
-			/* translators: Inspector = panel showing the details of the last rule test run */
-			"inspector" => $state  &&  isset($ac->text->inspector) ? $ac->text->inspector : esc_html__('Inspector','easy-form-builder'),
 			/* translators: Rule trace = section listing the step-by-step evaluation of a rule during testing */
 			"logicTrace" => $state  &&  isset($ac->text->logicTrace) ? $ac->text->logicTrace : esc_html__('Rule trace','easy-form-builder'),
-			/* translators: Final values = section showing the resulting field values after rules ran */
-			"finalValues" => $state  &&  isset($ac->text->finalValues) ? $ac->text->finalValues : esc_html__('Final values','easy-form-builder'),
 			/* translators: Effects = section listing the actions a rule performed during testing */
 			"effects" => $state  &&  isset($ac->text->effects) ? $ac->text->effects : esc_html__('Effects','easy-form-builder'),
-			/* translators: Conflicts = section listing rules whose actions contradict each other */
-			"conflicts" => $state  &&  isset($ac->text->conflicts) ? $ac->text->conflicts : esc_html__('Conflicts','easy-form-builder'),
-			/* translators: Warning shown when one rule writes a value to a field that another rule hides or disables, so the value is dropped from the entry */
-			"valueOnStrippedField" => $state  &&  isset($ac->text->valueOnStrippedField) ? $ac->text->valueOnStrippedField : esc_html__('A value is written to this field while another rule hides or disables it &mdash; hidden and disabled fields are not saved with the entry.','easy-form-builder'),
-			/* translators: Reason shown when a rule was skipped because an earlier rule stopped processing */
-			"blockedByStop" => $state  &&  isset($ac->text->blockedByStop) ? $ac->text->blockedByStop : esc_html__('Blocked by stop processing','easy-form-builder'),
-			/* translators: Calculate = action type that computes a value from a formula */
-			"calculate" => $state  &&  isset($ac->text->calculate) ? $ac->text->calculate : esc_html__('Calculate','easy-form-builder'),
 			/* translators: Formula = field label for the calculation expression input */
 			"formula" => $state  &&  isset($ac->text->formula) ? $ac->text->formula : esc_html__('Formula','easy-form-builder'),
-			/* translators: Decimals = field label for the number of decimal places in a calculated value */
-			"decimals" => $state  &&  isset($ac->text->decimals) ? $ac->text->decimals : esc_html__('Decimals','easy-form-builder'),
-			/* translators: Insert field = button that inserts a field token into the formula editor */
-			"insertField" => $state  &&  isset($ac->text->insertField) ? $ac->text->insertField : esc_html__('Insert field','easy-form-builder'),
-			/* translators: Error shown when a Calculate action's formula cannot be evaluated */
-			"formulaInvalid" => $state  &&  isset($ac->text->formulaInvalid) ? $ac->text->formulaInvalid : esc_html__('Formula could not be calculated. Check field tokens and division by zero.','easy-form-builder'),
-			/* translators: Set Value = action type that sets a field's value */
-			"setValue" => $state  &&  isset($ac->text->setValue) ? $ac->text->setValue : esc_html__('Set Value','easy-form-builder'),
-			/* translators: Clear Value = action type that empties a field's value */
-			"clearValue" => $state  &&  isset($ac->text->clearValue) ? $ac->text->clearValue : esc_html__('Clear Value','easy-form-builder'),
-			/* translators: Show Message = action type that displays a message to the visitor */
-			"showMessage" => $state  &&  isset($ac->text->showMessage) ? $ac->text->showMessage : esc_html__('Show Message','easy-form-builder'),
-			/* translators: Jump to Step = action type that moves a multi-step form to another step */
-			"jumpStep" => $state  &&  isset($ac->text->jumpStep) ? $ac->text->jumpStep : esc_html__('Jump to Step','easy-form-builder'),
-			/* translators: Static = value type meaning a fixed, literal value rather than a dynamic one */
-			"staticValue" => $state  &&  isset($ac->text->staticValue) ? $ac->text->staticValue : esc_html__('Static','easy-form-builder'),
-			/* translators: Optional = marks a rule field as not required */
-			"optional" => $state  &&  isset($ac->text->optional) ? $ac->text->optional : esc_html__('Optional','easy-form-builder'),
 			/* translators: Enable = generic toggle action label */
 			"enable" => $state  &&  isset($ac->text->enable) ? $ac->text->enable : esc_html__('Enable','easy-form-builder'),
 			/* translators: Disable = generic toggle action label */
 			"disable" => $state  &&  isset($ac->text->disable) ? $ac->text->disable : esc_html__('Disable','easy-form-builder'),
 			/* translators: Enabled = generic status label */
 			"enabled" => $state  &&  isset($ac->text->enabled) ? $ac->text->enabled : esc_html__('Enabled','easy-form-builder'),
-			/* translators: Notifications = action type/tab for sending notifications */
-			"notifications" => $state  &&  isset($ac->text->notifications) ? $ac->text->notifications : esc_html__('Notifications','easy-form-builder'),
-			/* translators: Confirmation = action type/tab for the post-submit confirmation message */
-			"confirmation" => $state  &&  isset($ac->text->confirmation) ? $ac->text->confirmation : esc_html__('Confirmation','easy-form-builder'),
-			/* translators: Webhook = action type/tab for triggering a webhook request */
-			"webhook" => $state  &&  isset($ac->text->webhook) ? $ac->text->webhook : esc_html__('Webhook','easy-form-builder'),
 			/* translators: Fields = tab listing the form's fields */
 			"fields" => $state  &&  isset($ac->text->fields) ? $ac->text->fields : esc_html__('Fields','easy-form-builder'),
-			/* translators: Redirect = action type that sends the visitor to another URL */
-			"redirect" => $state  &&  isset($ac->text->redirect) ? $ac->text->redirect : esc_html__('Redirect','easy-form-builder'),
 			/* translators: Shown = a field's visibility state after a show/hide rule runs */
 			"shown" => $state  &&  isset($ac->text->shown) ? $ac->text->shown : esc_html__('Shown','easy-form-builder'),
-			/* translators: Hidden = a field's visibility state after a show/hide rule runs */
-			"hidden" => $state  &&  isset($ac->text->hidden) ? $ac->text->hidden : esc_html__('Hidden','easy-form-builder'),
-			/* translators: Placeholder text for the Show Message action's free-text input */
-			"enterText" => $state  &&  isset($ac->text->enterText) ? $ac->text->enterText : esc_html__('Message&hellip;','easy-form-builder'),
-			/* translators: Stable = status meaning rule evaluation finished without looping */
-			"stable" => $state  &&  isset($ac->text->stable) ? $ac->text->stable : esc_html__('Stable','easy-form-builder'),
-			/* translators: Copy value from field = value source option that copies another field's value */
-			"copyValue" => $state  &&  isset($ac->text->copyValue) ? $ac->text->copyValue : esc_html__('Copy value from field','easy-form-builder'),
-			/* translators: Set placeholder = action type that changes a field's placeholder text */
-			"setPlaceholder" => $state  &&  isset($ac->text->setPlaceholder) ? $ac->text->setPlaceholder : esc_html__('Set placeholder','easy-form-builder'),
-			/* translators: Set help text = action type that changes a field's help text */
-			"setHelp" => $state  &&  isset($ac->text->setHelp) ? $ac->text->setHelp : esc_html__('Set help text','easy-form-builder'),
-			/* translators: Set label = action type that changes a field's label text */
-			"setLabel" => $state  &&  isset($ac->text->setLabel) ? $ac->text->setLabel : esc_html__('Set label','easy-form-builder'),
-			/* translators: Focus field = action type that moves keyboard focus to a field */
-			"focusField" => $state  &&  isset($ac->text->focusField) ? $ac->text->focusField : esc_html__('Focus field','easy-form-builder'),
-			/* translators: Scroll to field = action type that scrolls the page to a field */
-			"scrollToField" => $state  &&  isset($ac->text->scrollToField) ? $ac->text->scrollToField : esc_html__('Scroll to field','easy-form-builder'),
-			/* translators: Block submit = action type that prevents the form from being submitted */
-			"blockSubmit" => $state  &&  isset($ac->text->blockSubmit) ? $ac->text->blockSubmit : esc_html__('Block submit','easy-form-builder'),
-			/* translators: Custom submission message = action type that ends the form early with a custom message */
-			"endForm" => $state  &&  isset($ac->text->endForm) ? $ac->text->endForm : esc_html__('Custom submission message','easy-form-builder'),
-			/* translators: URL parameter = condition source based on a URL query parameter */
-			"urlParam" => $state  &&  isset($ac->text->urlParam) ? $ac->text->urlParam : esc_html__('URL parameter','easy-form-builder'),
-			/* translators: User = condition source group based on the visitor/logged-in user */
-			"userSource" => $state  &&  isset($ac->text->userSource) ? $ac->text->userSource : esc_html__('User','easy-form-builder'),
-			/* translators: Current step = condition source based on the multi-step form's active step */
-			"currentStep" => $state  &&  isset($ac->text->currentStep) ? $ac->text->currentStep : esc_html__('Current step','easy-form-builder'),
-			/* translators: Logged in = condition option matching a logged-in WordPress user */
-			"loggedIn" => $state  &&  isset($ac->text->loggedIn) ? $ac->text->loggedIn : esc_html__('Logged in','easy-form-builder'),
-			/* translators: Logged out = condition option matching a logged-out (guest) visitor */
-			"loggedOut" => $state  &&  isset($ac->text->loggedOut) ? $ac->text->loggedOut : esc_html__('Logged out','easy-form-builder'),
-			/* translators: Role = condition source based on the visitor's WordPress user role */
-			"userRole" => $state  &&  isset($ac->text->userRole) ? $ac->text->userRole : esc_html__('Role','easy-form-builder'),
-			/* translators: before = date comparison operator */
-			"dateBefore" => $state  &&  isset($ac->text->dateBefore) ? $ac->text->dateBefore : esc_html__('before','easy-form-builder'),
-			/* translators: after = date comparison operator */
-			"dateAfter" => $state  &&  isset($ac->text->dateAfter) ? $ac->text->dateAfter : esc_html__('after','easy-form-builder'),
-			/* translators: between dates = date comparison operator for a date range */
-			"dateBetween" => $state  &&  isset($ac->text->dateBetween) ? $ac->text->dateBetween : esc_html__('between dates','easy-form-builder'),
-			/* translators: NOT = logical negation operator label */
-			"notOperator" => $state  &&  isset($ac->text->notOperator) ? $ac->text->notOperator : esc_html__('NOT','easy-form-builder'),
-			/* translators: Toggle that inverts (logical NOT) an entire condition group; NAND/NOR are boolean-logic terms shown as a hint */
-			"negateGroup" => $state  &&  isset($ac->text->negateGroup) ? $ac->text->negateGroup : esc_html__('NOT — invert this group (NAND/NOR)','easy-form-builder'),
-			/* translators: Export = button that downloads the logic rules as a file */
-			"exportRules" => $state  &&  isset($ac->text->exportRules) ? $ac->text->exportRules : esc_html__('Export','easy-form-builder'),
-			/* translators: Import = button that loads logic rules from a file */
-			"importRules" => $state  &&  isset($ac->text->importRules) ? $ac->text->importRules : esc_html__('Import','easy-form-builder'),
-			/* translators: Success message shown after importing logic rules */
-			"importDone" => $state  &&  isset($ac->text->importDone) ? $ac->text->importDone : esc_html__('Rules imported. Review and save the form.','easy-form-builder'),
-			/* translators: Error shown when the imported file is not a valid logic-rules export */
-			"importInvalid" => $state  &&  isset($ac->text->importInvalid) ? $ac->text->importInvalid : esc_html__('This file is not a valid EFB logic-rules export.','easy-form-builder'),
 			/* translators: Duplicate = button that copies a rule or condition group */
 			"duplicate" => $state  &&  isset($ac->text->duplicate) ? $ac->text->duplicate : esc_html__('Duplicate','easy-form-builder'),
-			/* translators: Field label for choosing which fields are sent in the webhook payload; empty selection means all fields */
-			"payloadFields" => $state  &&  isset($ac->text->payloadFields) ? $ac->text->payloadFields : esc_html__('Payload fields (empty = all)','easy-form-builder'),
-			/* translators: Trigger webhook = action type that calls a webhook URL */
-			"triggerWebhook" => $state  &&  isset($ac->text->triggerWebhook) ? $ac->text->triggerWebhook : esc_html__('Trigger webhook','easy-form-builder'),
-			/* translators: Stop webhook = action type that cancels a previously triggered webhook */
-			"stopWebhook" => $state  &&  isset($ac->text->stopWebhook) ? $ac->text->stopWebhook : esc_html__('Stop webhook','easy-form-builder'),
-			/* translators: Hint under the stop-webhook field explaining that an empty value stops every webhook */
-			"stopWebhookHint" => $state  &&  isset($ac->text->stopWebhookHint) ? $ac->text->stopWebhookHint : esc_html__('empty = stop all','easy-form-builder'),
 			/* translators: Message shown to the visitor when a Block submit rule prevents form submission */
 			"submitBlocked" => $state  &&  isset($ac->text->submitBlocked) ? $ac->text->submitBlocked : esc_html__('Submission is not allowed for the current answers.','easy-form-builder'),
 			/* translators: Message shown to the visitor when a rule ends the form early */
 			"formEnded" => $state  &&  isset($ac->text->formEnded) ? $ac->text->formEnded : esc_html__('This form is closed for your answers.','easy-form-builder'),
-			/* translators: Warning shown when rule evaluation does not settle, e.g. two rules keep toggling each other (a possible loop) */
-			"loopWarning" => $state  &&  isset($ac->text->loopWarning) ? $ac->text->loopWarning : esc_html__('Rules did not stabilize (possible loop)','easy-form-builder'),
-			/* translators: Empty state prompting the admin to add their first logic rule */
-			"addFirstRule" => $state  &&  isset($ac->text->addFirstRule) ? $ac->text->addFirstRule : esc_html__('Add your first rule to start building smart forms.','easy-form-builder'),
 
 			/* translators: Enable Conditional = toggle label that turns on conditional logic for a field */
 			"condlogic" => $state  &&  isset($ac->text->condlogic) ? $ac->text->condlogic : esc_html__('Enable Conditional','easy-form-builder'),
@@ -2069,58 +2484,14 @@ class efbFunction {
 			"hide" => $state  &&  isset($ac->text->hide) ? $ac->text->hide : esc_html__('Hide','easy-form-builder'),
 			/* translators: Contains = text comparison operator */
 			"contains" => $state  &&  isset($ac->text->contains) ? $ac->text->contains : esc_html__('Contains','easy-form-builder'),
-			/* translators: Not contain = text comparison operator, the negated form of Contains */
-			"ncontains" => $state  &&  isset($ac->text->ncontains) ? $ac->text->ncontains : esc_html__('Not contain','easy-form-builder'),
-			/* translators: starts with = text comparison operator */
-			"startw" => $state  &&  isset($ac->text->startw) ? $ac->text->startw : esc_html__('starts with','easy-form-builder'),
-			/* translators: ends with = text comparison operator */
-			"endw" => $state  &&  isset($ac->text->endw) ? $ac->text->endw : esc_html__('ends with','easy-form-builder'),
-			/* translators: greater than = numeric comparison operator */
-			"gthan" => $state  &&  isset($ac->text->gthan) ? $ac->text->gthan : esc_html__('greater than','easy-form-builder'),
-			/* translators: less than = numeric comparison operator */
-			"lthan" => $state  &&  isset($ac->text->lthan) ? $ac->text->lthan : esc_html__('less than','easy-form-builder'),
-			/* translators: greater than or equal to = numeric comparison operator */
-			"gtehan" => $state  &&  isset($ac->text->gtehan) ? $ac->text->gtehan : esc_html__('greater than or equal to','easy-form-builder'),
-			/* translators: less than or equal to = numeric comparison operator */
-			"ltehan" => $state  &&  isset($ac->text->ltehan) ? $ac->text->ltehan : esc_html__('less than or equal to','easy-form-builder'),
-			/* translators: between = numeric/date range comparison operator */
-			"between" => $state  &&  isset($ac->text->between) ? $ac->text->between : esc_html__('between','easy-form-builder'),
-			/* translators: not between = numeric/date range comparison operator, the negated form of "between" */
-			"nBetween" => $state  &&  isset($ac->text->nBetween) ? $ac->text->nBetween : esc_html__('not between','easy-form-builder'),
 			/* translators: Is = equality comparison operator */
 			"ise" => $state  &&  isset($ac->text->ise) ? $ac->text->ise : esc_html__('Is','easy-form-builder'),
-			/* translators: Is not = equality comparison operator, the negated form of "Is" */
-			"isne" => $state  &&  isset($ac->text->isne) ? $ac->text->isne : esc_html__('Is not','easy-form-builder'),
 			/* translators: Empty = comparison operator meaning the field has no value */
 			"empty" => $state  &&  isset($ac->text->empty) ? $ac->text->empty : esc_html__('Empty','easy-form-builder'),
-			/* translators: Not empty = comparison operator meaning the field has a value */
-			"nEmpty" => $state  &&  isset($ac->text->nEmpty) ? $ac->text->nEmpty : esc_html__('Not empty','easy-form-builder'),
 			/* translators: OR = logical operator meaning one option or the other */
 			"or" => $state  &&  isset($ac->text->or) ? $ac->text->or : esc_html__('or','easy-form-builder'),
-			/* translators: AND = logical operator, paired with the OR operator above */
-			"and" => $state  &&  isset($ac->text->and) ? $ac->text->and : esc_html__('and','easy-form-builder'),
-			/* translators: Conditions = tab/section listing a group's conditions */
-			"logicConditions" => $state  &&  isset($ac->text->logicConditions) ? $ac->text->logicConditions : esc_html__('Conditions','easy-form-builder'),
-			/* translators: Condition = singular label for one condition row */
-			"logicCondition" => $state  &&  isset($ac->text->logicCondition) ? $ac->text->logicCondition : esc_html__('Condition','easy-form-builder'),
-			/* translators: Group = label for a group of conditions */
-			"logicGroup" => $state  &&  isset($ac->text->logicGroup) ? $ac->text->logicGroup : esc_html__('Group','easy-form-builder'),
-			/* translators: Placeholder message shown when a condition group has nothing added to it yet */
-			"logicGroupEmpty" => $state  &&  isset($ac->text->logicGroupEmpty) ? $ac->text->logicGroupEmpty : esc_html__('Add a condition or a group.','easy-form-builder'),
 			/* translators: Done title = field label for the completion screen's title text */
 			"doneTitle" => $state  &&  isset($ac->text->doneTitle) ? $ac->text->doneTitle : esc_html__('Done title','easy-form-builder'),
-			/* translators: Icon = field label for the completion screen's icon */
-			"doneIcon" => $state  &&  isset($ac->text->doneIcon) ? $ac->text->doneIcon : esc_html__('Icon','easy-form-builder'),
-			/* translators: Field label for the text shown next to the submission confirmation code */
-			"trackingCodeLabel" => $state  &&  isset($ac->text->trackingCodeLabel) ? $ac->text->trackingCodeLabel : esc_html__('Confirmation code label','easy-form-builder'),
-			/* translators: Icon color = field label for the completion screen's icon color */
-			"iconColor" => $state  &&  isset($ac->text->iconColor) ? $ac->text->iconColor : esc_html__('Icon color','easy-form-builder'),
-			/* translators: Title color = field label for the completion screen's title color */
-			"titleColor" => $state  &&  isset($ac->text->titleColor) ? $ac->text->titleColor : esc_html__('Title color','easy-form-builder'),
-			/* translators: Message color = field label for the completion screen's message color */
-			"messageColor" => $state  &&  isset($ac->text->messageColor) ? $ac->text->messageColor : esc_html__('Message color','easy-form-builder'),
-			/* translators: Default = marks an option as the default choice */
-			"defaultOpt" => $state  &&  isset($ac->text->defaultOpt) ? $ac->text->defaultOpt : esc_html__('Default','easy-form-builder'),
 
 
 			"pgbar" => $state  &&  isset($ac->text->pgbar) ? $ac->text->pgbar : esc_html__('Progress bar','easy-form-builder'),
@@ -2149,8 +2520,6 @@ class efbFunction {
 
 			"sms" => $state  &&  isset($ac->text->sms) ? $ac->text->sms : esc_html__('SMS','easy-form-builder'),
 			"documentation" => $state  &&  isset($ac->text->documentation) ? $ac->text->documentation : esc_html__('Documentation','easy-form-builder'),
-			"smscw" => $state  &&  isset($ac->text->smscw) ? $ac->text->smscw : esc_html__('Click on the Settings button on the panel page of Easy Form Builder Plugin and configure the SMS sending method. Then, try again.','easy-form-builder'),
-			"to" => $state  &&  isset($ac->text->to) ? $ac->text->to : esc_html__('To','easy-form-builder'),
 			"esmsno" => $state  &&  isset($ac->text->esmsno) ? $ac->text->esmsno : esc_html__('Enable SMS notifications','easy-form-builder'),
 			"etelegramno" => $state  &&  isset($ac->text->etelegramno) ? $ac->text->etelegramno : esc_html__('Enable Telegram notifications','easy-form-builder'),
 			"telegram" => $state  &&  isset($ac->text->telegram) ? $ac->text->telegram : esc_html__('Telegram','easy-form-builder'),
@@ -2299,8 +2668,8 @@ class efbFunction {
 			/* translators: %s is the list of valid file formats */
 			"ivf" => $state  &&  isset($ac->text->ivf) ? $ac->text->ivf : esc_html__('Valid formats: %s','easy-form-builder'),
 			"zoom" => $state  &&  isset($ac->text->zoom) ? $ac->text->zoom : esc_html__('Zoom','easy-form-builder'),
-			/* translators: CDN = Content Delivery Network - a service that loads files faster; leafletjs.com is a mapping library; unpkg.com is a JavaScript file hosting service */
-			"lpds" => $state  &&  isset($ac->text->lpds) ? $ac->text->lpds : esc_html__('This is the best version. The em dash creates a natural pause that makes "only on pages where this feature is used" land as a reassuring afterthought — exactly the tone you want for a privacy/transparency notice. It reads more conversationally than the other two options.','easy-form-builder'),
+			/* translators: CDN = Content Delivery Network - a service that loads files faster; Leaflet.js (leafletjs.com) is a mapping library; unpkg.com is a JavaScript file hosting service */
+			"lpds" => $state  &&  isset($ac->text->lpds) ? $ac->text->lpds : esc_html__('To enable the Location Picker field, Easy Form Builder loads Leaflet.js from the unpkg.com CDN — only on pages where this feature is used.','easy-form-builder'),
 			"elpo" => $state  &&  isset($ac->text->elpo) ? $ac->text->elpo : esc_html__('Enable Location Picker in Easy Form Builder','easy-form-builder'),
 			"jqinl" => $state  &&  isset($ac->text->jqinl) ? $ac->text->jqinl : esc_html__('Easy Form Builder cannot display the form because jQuery is not properly loaded. This issue might be due to incorrect jQuery invocation by another plugin or the current website theme.','easy-form-builder'),
 
@@ -3252,6 +3621,16 @@ class efbFunction {
 
 				$rtrn=$lang;
 			}
+
+			// Dashboard phrases that migrated add-ons ship in their own text domain.
+			// Full arrays only: a front-end subset never loads add-on files.
+			if (!class_exists('EfbAddonPhrases')) {
+				require_once EMSFB_PLUGIN_DIRECTORY . 'includes/phrases.php';
+			}
+			$addon_base_phrases = EfbAddonPhrases::get_addon_base_phrases_efb($ac, $state);
+			if (!empty($addon_base_phrases)) {
+				$rtrn = array_merge($rtrn, $addon_base_phrases);
+			}
 		}
 
 		if ($page_request !== 'default') {
@@ -3889,6 +4268,99 @@ class efbFunction {
 	}
 
 	/**
+	 * The plan an add-on needs: 0 = every plan, 3 = Free Plus or Pro, 1 = Pro.
+	 *
+	 * This is the plugin's own answer, and it has to be: the licensing server
+	 * only refuses add-ons that are actually sold, so it hands Conditional
+	 * Logic to any site that asks and hands everything to localhost. Without a
+	 * local rule the Add-ons page drew a lock the install path did not keep.
+	 *
+	 * @param string $addon Add-on flag key.
+	 * @return int
+	 */
+	public function addon_required_package_efb($addon) {
+		static $tiers = array(
+			'AdnOF'  => 0, // Offline Forms - free on every plan
+			'AdnSMF' => 3, // Conditional Logic - Free Plus and Pro
+		);
+		$addon = (string) $addon;
+		return isset($tiers[$addon]) ? $tiers[$addon] : 1;
+	}
+
+	/**
+	 * Add-on keys this plan keeps when downgrading to it.
+	 *
+	 * @param int $package_type Plan being moved to.
+	 * @return array<int, string>
+	 */
+	public function addon_keys_allowed_by_package_efb($package_type) {
+		$package_type = (int) $package_type;
+		$allowed = array();
+		foreach ($this->get_all_addon_keys_efb() as $key) {
+			$required = $this->addon_required_package_efb($key);
+			if (0 === $required || 1 === $package_type || (3 === $package_type && 3 === $required)) {
+				$allowed[] = $key;
+			}
+		}
+		return $allowed;
+	}
+
+	/**
+	 * Whether this site's plan entitles it to install an add-on.
+	 *
+	 * A stored activation code that still validates for this domain wins over
+	 * the plan option: a network blip has been known to reset emsfb_pro, and a
+	 * paying customer must not be told to upgrade because of it.
+	 *
+	 * @param string $addon Add-on flag key.
+	 * @return bool
+	 */
+	public function addon_plan_allows_install_efb($addon) {
+		$required = $this->addon_required_package_efb($addon);
+		if (0 === $required) {
+			return true;
+		}
+
+		$local_package = (int) get_option('emsfb_pro', 2);
+		if (1 === $local_package) {
+			return true;
+		}
+		if (3 === $local_package && 3 === $required) {
+			return true;
+		}
+
+		$active_code = (string) get_option('emsfb_pro_activeCode', '');
+		if ('' === $active_code) {
+			$settings = get_setting_Emsfb('decoded');
+			$active_code = is_object($settings) && isset($settings->activeCode) ? (string) $settings->activeCode : '';
+		}
+		if ('' === $active_code) {
+			return false;
+		}
+
+		return (bool) $this->is_efb_pro_license_valid_efb($active_code);
+	}
+
+	/**
+	 * True when an activation code was minted for this domain. No network call.
+	 *
+	 * @param string $active_code Stored activation code.
+	 * @return bool
+	 */
+	public function is_efb_pro_license_valid_efb($active_code) {
+		$active_code = explode('@', (string) $active_code)[0];
+		if ('' === $active_code) {
+			return false;
+		}
+		foreach ($this->license_domain_candidates_efb() as $host) {
+			if (md5($host) === $active_code) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Canonical list of every add-on flag key.
 	 *
 	 * Single source of truth for the add-on identifiers used across the plugin.
@@ -3950,25 +4422,97 @@ class efbFunction {
 	}
 
 	/**
+	 * Files a migrated add-on needs for its dashboard phrases to translate.
+	 *
+	 * Deliberately not part of get_addon_required_files_efb(): that list also
+	 * gates public forms, install checks and the background runner, and none of
+	 * them may wait for translations. Only Create and Panel check these (scope
+	 * 'admin'), so a site still holding a package from before the add-on had its
+	 * own translations downloads it again there. Keep in step with
+	 * EfbAddonPhrases::register_default_addons().
+	 *
+	 * @return array<string, array<int, string>>
+	 */
+	public function get_addon_i18n_required_files_efb(){
+		return array(
+			'AdnTLG' => array( 'vendor/telegram/telegram-phrases-efb.php', 'vendor/telegram/languages/locales.json' ),
+			'AdnGoS' => array( 'vendor/googlesheet/googlesheet-phrases-efb.php', 'vendor/googlesheet/languages/locales.json' ),
+			'AdnATF' => array( 'vendor/autofill/autofill-phrases-efb.php', 'vendor/autofill/languages/locales.json' ),
+			'AdnHSH' => array( 'vendor/human-shield/human-shield-phrases-efb.php', 'vendor/human-shield/languages/locales.json' ),
+			'AdnSMF' => array( 'vendor/logic/logic-phrases-efb.php', 'vendor/logic/languages/locales.json' ),
+			'AdnPAP' => array( 'vendor/paypal/paypal-phrases-efb.php', 'vendor/paypal/languages/locales.json' ),
+			'AdnSPF' => array( 'vendor/stripe/stripe-phrases-efb.php', 'vendor/stripe/languages/locales.json' ),
+			'AdnSS'  => array( 'vendor/smssended/smssended-phrases-efb.php', 'vendor/smssended/languages/locales.json' ),
+		);
+	}
+
+	/**
+	 * Health scope of the recovery in progress: 'admin' while Create, Panel or the
+	 * Recover button recover, so the downloader also replaces a package that lacks
+	 * the files in get_addon_i18n_required_files_efb().
+	 *
+	 * @var string
+	 */
+	public $addon_health_scope_efb = 'runtime';
+
+	/**
+	 * Add-on keys downloaded again although their files are present
+	 * (process_addon_i18n_refetch_efb()).
+	 *
+	 * @var array<string, bool>
+	 */
+	public $addon_force_refetch_efb = array();
+
+	/**
+	 * Whether an add-on whose runtime files are present also satisfies the current
+	 * recovery scope. Always true in scope 'runtime', which keeps public forms,
+	 * installs and the background runner exactly as before.
+	 *
+	 * @param string $addon_key Add-on setting key.
+	 * @return bool
+	 */
+	public function addon_scope_files_present_efb( $addon_key ){
+		if ( isset( $this->addon_force_refetch_efb[ $addon_key ] ) ) {
+			return false;
+		}
+		if ( 'admin' !== $this->addon_health_scope_efb ) {
+			return true;
+		}
+		$i18n_files = $this->get_addon_i18n_required_files_efb();
+		foreach ( isset( $i18n_files[ $addon_key ] ) ? $i18n_files[ $addon_key ] : array() as $relative_file ) {
+			if ( ! file_exists( EMSFB_PLUGIN_DIRECTORY . $relative_file ) ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
 	 * Check enabled add-ons from disk only. This is deliberately cheap enough
 	 * to run for every Create and Panel page request.
 	 *
 	 * @param object|null $settings Decoded EFB settings.
+	 * @param string      $scope    'runtime' (default): the files an add-on needs to run.
+	 *                              'admin': also its translation files (Create, Panel).
 	 * @return array{missing: array<string, array<int, string>>, checked: array<int, string>}
 	 */
-	public function get_addon_local_health_efb( $settings = null ){
+	public function get_addon_local_health_efb( $settings = null, $scope = 'runtime' ){
 		if ( ! is_object( $settings ) ) {
 			$settings = get_setting_Emsfb( 'decoded' );
 		}
 
 		$missing = array();
 		$checked = array();
+		$i18n_files = 'admin' === $scope ? $this->get_addon_i18n_required_files_efb() : array();
 		foreach ( $this->get_addon_required_files_efb() as $addon_key => $required_files ) {
 			if ( ! is_object( $settings ) || empty( $settings->{$addon_key} ) ) {
 				continue;
 			}
 
 			$checked[] = $addon_key;
+			if ( isset( $i18n_files[ $addon_key ] ) ) {
+				$required_files = array_merge( $required_files, $i18n_files[ $addon_key ] );
+			}
 			$missing_files = array();
 			foreach ( $required_files as $relative_file ) {
 				if ( ! file_exists( EMSFB_PLUGIN_DIRECTORY . $relative_file ) ) {
@@ -4061,7 +4605,10 @@ class efbFunction {
 			return $request_result;
 		}
 
-		$health = $this->get_addon_local_health_efb( $settings );
+		// Create, Panel and the Recover button also restore a package that predates
+		// the add-on's own translations; every other source checks runtime files only.
+		$health_scope = in_array( sanitize_key( $source ), array( 'create', 'panel', 'manual' ), true ) ? 'admin' : 'runtime';
+		$health = $this->get_addon_local_health_efb( $settings, $health_scope );
 		$initial_missing = array_keys( $health['missing'] );
 		if ( empty( $initial_missing ) ) {
 			if ( false !== get_option( 'emsfb_addons_reinstall_required', false ) ) {
@@ -4081,8 +4628,44 @@ class efbFunction {
 			);
 		}
 
-		$download = $this->download_all_addons_efb( true );
-		$health_after = $this->get_addon_local_health_efb( $settings );
+		$source = sanitize_key( $source );
+
+		/* After a failed attempt nothing but the Recover button retries until the
+		 * backoff expires. Otherwise every admin page view, and on a site without
+		 * cron every visitor, waits on the add-on server again for the same
+		 * answer. */
+		if ( 'manual' !== $source && ( get_transient( 'emsfb_addons_dl_backoff' ) || get_transient( 'emsfb_addons_renew_backoff' ) ) ) {
+			$last = get_option( 'emsfb_addon_recovery_result', array() );
+			$last = is_array( $last ) ? $last : array();
+			return $request_result = array(
+				'success'         => false,
+				'needed'          => true,
+				'recovered'       => false,
+				'initial_missing' => $initial_missing,
+				'missing'         => $initial_missing,
+				'errors'          => isset( $last['errors'] ) && is_array( $last['errors'] ) ? $last['errors'] : array(),
+				'renew_required'  => ! empty( $last['renew_required'] ) || false !== get_transient( 'emsfb_addons_renew_backoff' ),
+				'source'          => $source,
+				'skipped'         => 'backoff',
+			);
+		}
+
+		/* The report email is for owners who are not watching. Whoever opened
+		 * Create, Panel or Add-ons, or pressed Recover, already has the reason on
+		 * screen; emailing them sent one message per page view. */
+		$muted_before = $this->suppress_addon_report_efb;
+		if ( in_array( $source, array( 'create', 'panel', 'addons', 'manual' ), true ) ) {
+			$this->suppress_addon_report_efb = true;
+		}
+		$scope_before = $this->addon_health_scope_efb;
+		$this->addon_health_scope_efb = $health_scope;
+		try {
+			$download = $this->download_all_addons_efb( true );
+		} finally {
+			$this->suppress_addon_report_efb = $muted_before;
+			$this->addon_health_scope_efb = $scope_before;
+		}
+		$health_after = $this->get_addon_local_health_efb( $settings, $health_scope );
 		$success = empty( $health_after['missing'] );
 		$result = array(
 			'success'         => $success,
@@ -4111,40 +4694,109 @@ class efbFunction {
 	}
 
 	/**
+	 * Add-ons a form cannot work without, read from its stored structure.
+	 *
+	 * Only add-ons that shape what the visitor sees or submits count. SMS,
+	 * Telegram, Google Sheets and Form Security & Spam Protection run after the
+	 * submit behind their own file guards, so none of them is a reason to hide
+	 * a form.
+	 *
+	 * @param  string $form_structure The raw form_structer column.
+	 * @return string[]               Add-on keys.
+	 */
+	public function get_form_required_addons_efb( $form_structure ) {
+		// Stored with escaped quotes; the renderer strips them the same way.
+		$structure = str_replace( '\\', '', (string) $form_structure );
+		$has_type  = function ( $types ) use ( $structure ) {
+			foreach ( (array) $types as $type ) {
+				if ( false !== strpos( $structure, '"type":"' . $type . '"' ) ) {
+					return true;
+				}
+			}
+			return false;
+		};
+
+		$required = array();
+		// The same test the renderer uses before it loads the conditional logic runtime.
+		if ( false !== strpos( $structure, '"logic":"1"' ) || false !== strpos( $structure, '"logic_rules"' ) ) {
+			$required[] = 'AdnSMF';
+		}
+		if ( $has_type( 'stripe' ) ) {
+			$required[] = 'AdnSPF';
+		}
+		if ( $has_type( 'paypal' ) ) {
+			$required[] = 'AdnPAP';
+		}
+		if ( $has_type( array( 'persiaPay', 'persiapay', 'zarinPal' ) ) ) {
+			$required[] = 'AdnPPF';
+		}
+		if ( $has_type( 'pdate' ) ) {
+			$required[] = 'AdnPDP';
+		}
+		if ( $has_type( 'ardate' ) ) {
+			$required[] = 'AdnADP';
+		}
+		// Country, state and city lists are fetched from the offline add-on's JSON files.
+		if ( $has_type( array( 'country', 'conturyList', 'statePro', 'stateProvince', 'cityList', 'city' ) ) ) {
+			$required[] = 'AdnOF';
+		}
+		if ( false !== strpos( $structure, '"autofill_id":' ) || preg_match( '/"autofill_api":"?(true|1)"?[,}]/', $structure ) ) {
+			$required[] = 'AdnATF';
+		}
+
+		return $required;
+	}
+
+	/**
 	 * Health gate for public form rendering.
 	 *
 	 * Deliberately does no network work. recover_missing_addons_efb() downloads
 	 * inline, which is right in wp-admin where an administrator is waiting for
 	 * the result, but on a visitor request it blocks page rendering for as long
 	 * as the add-on server takes to answer. Here the repair is handed to the
-	 * background runner and the caller is told immediately that the form cannot
-	 * be rendered yet.
+	 * background runner and the caller is told immediately whether the form can
+	 * be rendered.
+	 *
+	 * A form waits only for the add-ons it uses. Any other missing add-on is
+	 * repaired in the background while the form keeps working, so one missing
+	 * add-on no longer takes every form on the site down.
 	 *
 	 * Returns the same shape as recover_missing_addons_efb() so callers keep
 	 * their existing branches.
 	 *
-	 * @param  object|null $settings Optional settings object.
+	 * @param  object|null   $settings Optional settings object.
+	 * @param  string[]|null $required Add-ons the form uses, from
+	 *                                 get_form_required_addons_efb(). Null counts
+	 *                                 every enabled add-on as required.
 	 * @return array
 	 */
-	public function check_addons_for_public_request_efb( $settings = null ) {
+	public function check_addons_for_public_request_efb( $settings = null, $required = null ) {
 		/* No result cache here on purpose: the health check is a handful of
 		 * file_exists() calls, and both expensive branches below are already
 		 * once-per-request — recover_missing_addons_efb() keeps its own guard and
 		 * queue_addon_recovery_efb() is rate limited by a transient lock. */
-		$health  = $this->get_addon_local_health_efb( $settings );
-		$missing = array_keys( $health['missing'] );
+		$health   = $this->get_addon_local_health_efb( $settings );
+		$missing  = array_keys( $health['missing'] );
+		$blocking = null === $required ? $missing : array_values( array_intersect( $missing, (array) $required ) );
 
-		if ( empty( $missing ) ) {
+		if ( empty( $blocking ) ) {
+			// Repair what this form does not use without making the visitor wait for it.
+			$queue = empty( $missing ) ? array() : $this->queue_addon_recovery_efb( array(
+				'addon'  => reset( $missing ),
+				'source' => 'public_background',
+			) );
+
 			return array(
 				'success'         => true,
 				'needed'          => false,
 				'recovered'       => false,
-				'initial_missing' => array(),
-				'missing'         => array(),
+				'initial_missing' => $missing,
+				'missing'         => $missing,
 				'errors'          => array(),
 				'renew_required'  => false,
 				'source'          => 'public_form',
 				'deferred'        => false,
+				'queued'          => ! empty( $queue['queued'] ),
 			);
 		}
 
@@ -4160,13 +4812,17 @@ class efbFunction {
 			} finally {
 				$this->addon_inline_mode_efb = false;
 			}
-			$inline['deferred'] = false;
-			$inline['inline']   = true;
+			// Judged by this form's add-ons: another one still missing does not keep it hidden.
+			$inline['success']   = ! array_intersect( (array) $inline['missing'], $blocking );
+			$inline['recovered'] = $inline['success'] && ! empty( $inline['needed'] );
+			$inline['deferred']  = false;
+			$inline['queued']    = false;
+			$inline['inline']    = true;
 			return $inline;
 		}
 
 		$queue = $this->queue_addon_recovery_efb( array(
-			'addon'  => reset( $missing ),
+			'addon'  => reset( $blocking ),
 			'source' => 'public_form',
 		) );
 
@@ -4175,7 +4831,7 @@ class efbFunction {
 			'needed'          => true,
 			'recovered'       => false,
 			'initial_missing' => $missing,
-			'missing'         => $missing,
+			'missing'         => $blocking,
 			'errors'          => array(),
 			'renew_required'  => false,
 			'source'          => 'public_form',
@@ -4236,10 +4892,11 @@ class efbFunction {
 	 * the block clears itself the moment recovery (or a manual reinstall) lands.
 	 *
 	 * @param object|null $settings Decoded EFB settings.
+	 * @param string      $scope    'admin' on Create and Panel, see get_addon_local_health_efb().
 	 * @return string
 	 */
-	public function addon_recovery_state_efb( $settings = null ) {
-		$health      = $this->get_addon_local_health_efb( $settings );
+	public function addon_recovery_state_efb( $settings = null, $scope = 'runtime' ) {
+		$health      = $this->get_addon_local_health_efb( $settings, $scope );
 		$missing     = ! empty( $health['missing'] );
 		$post_update = (bool) get_option( 'emsfb_addons_reinstall_required' );
 
@@ -4283,21 +4940,94 @@ class efbFunction {
 	}
 
 	/**
+	 * Download again the add-ons whose language file for a locale in use is gone
+	 * (queued in emsfb_addon_i18n_refetch by emsfb_flag_addon_i18n_refetch_efb()).
+	 *
+	 * Called by the Add-ons, Create and Panel screens only; never on the front end.
+	 * It never changes addon_recovery_state_efb(), never emails, and honours the
+	 * download and renewal backoffs. A failed attempt waits 6 hours.
+	 *
+	 * @return array{attempted: string[], restored: string[], skipped: string}
+	 */
+	public function process_addon_i18n_refetch_efb() {
+		$result  = array( 'attempted' => array(), 'restored' => array(), 'skipped' => '' );
+		$pending = get_option( 'emsfb_addon_i18n_refetch', array() );
+		if ( empty( $pending ) || ! is_array( $pending ) ) {
+			return $result;
+		}
+		if ( get_transient( 'emsfb_addons_dl_backoff' ) || get_transient( 'emsfb_addons_renew_backoff' ) || get_transient( 'emsfb_addon_i18n_refetch_backoff' ) ) {
+			$result['skipped'] = 'backoff';
+			return $result;
+		}
+
+		$keys_by_slug = array();
+		foreach ( $this->get_addon_i18n_required_files_efb() as $addon_key => $files ) {
+			if ( preg_match( '#^vendor/([^/]+)/#', (string) reset( $files ), $match ) ) {
+				$keys_by_slug[ $match[1] ] = $addon_key;
+			}
+		}
+		$settings = get_setting_Emsfb( 'decoded' );
+		$log      = get_option( 'emsfb_addon_i18n_refetch_log', array() );
+		$log      = is_array( $log ) ? $log : array();
+
+		$muted_before = $this->suppress_addon_report_efb;
+		$this->suppress_addon_report_efb = true;
+		try {
+			foreach ( $pending as $slug => $locales ) {
+				$addon_key = isset( $keys_by_slug[ $slug ] ) ? $keys_by_slug[ $slug ] : '';
+				// Disabled, unknown or not installed: nothing to refresh, recovery owns a missing add-on.
+				if ( '' === $addon_key || ! is_object( $settings ) || empty( $settings->{$addon_key} ) || ! $this->is_addon_installed_locally_efb( $addon_key ) ) {
+					unset( $pending[ $slug ] );
+					continue;
+				}
+				$result['attempted'][] = $slug;
+				$this->addon_force_refetch_efb[ $addon_key ] = true;
+				try {
+					$installed = $this->addon_add_efb( $addon_key );
+				} finally {
+					unset( $this->addon_force_refetch_efb[ $addon_key ] );
+				}
+				foreach ( (array) $locales as $locale ) {
+					$log[ $slug . '|' . $locale ] = time();
+				}
+				if ( is_array( $installed ) && ! empty( $installed['status'] ) ) {
+					unset( $pending[ $slug ] );
+					$result['restored'][] = $slug;
+				} else {
+					set_transient( 'emsfb_addon_i18n_refetch_backoff', 1, 6 * 3600 );
+					break;
+				}
+			}
+		} finally {
+			$this->suppress_addon_report_efb = $muted_before;
+		}
+
+		update_option( 'emsfb_addon_i18n_refetch_log', $log, false );
+		if ( empty( $pending ) ) {
+			delete_option( 'emsfb_addon_i18n_refetch' );
+		} else {
+			update_option( 'emsfb_addon_i18n_refetch', $pending, false );
+		}
+		return $result;
+	}
+
+	/**
 	 * Recovery UI shared by Create, Panel and the Add-ons page.
 	 *
 	 * The card asks the user to reinstall missing add-ons, installs them over
 	 * admin-ajax, then swaps in an "Activate" button that reloads the page so the
 	 * freshly restored add-on files are loaded by PHP.
 	 *
-	 * @param string $mode 'block' for the full-screen post-update gate, otherwise
-	 *                     an inline banner.
+	 * @param string $mode  'block' for the full-screen post-update gate, otherwise
+	 *                      an inline banner.
+	 * @param string $scope 'admin' on Create and Panel, see get_addon_local_health_efb().
 	 * @return string
 	 */
-	public function render_addon_recovery_ui_efb( $mode = 'inline' ) {
+	public function render_addon_recovery_ui_efb( $mode = 'inline', $scope = 'runtime' ) {
 		$is_block = ( 'block' === $mode );
 		$ajax     = admin_url( 'admin-ajax.php' );
 		$nonce    = wp_create_nonce( 'wp_rest' );
-		$health   = $this->get_addon_local_health_efb();
+		$health   = $this->get_addon_local_health_efb( null, $scope );
 		$last_result = get_option( 'emsfb_addon_recovery_result', array() );
 		$has_error = is_array( $last_result ) && ! empty( $last_result['errors'] );
 		$missing_labels = array();
@@ -4354,6 +5084,9 @@ class efbFunction {
 					</button>
 				</div>
 				<div id="efb-recover-status" class="efb" style="margin-top:14px;font-size:0.95em;color:#6b5d16;min-height:1.2em;" aria-live="polite"></div>
+				<?php if ( $is_block && current_user_can( 'Emsfb_addon' ) ) : ?>
+					<p class="efb" style="margin:12px 0 0;"><a href="<?php echo esc_url( admin_url( 'admin.php?page=Emsfb_addon' ) ); ?>" id="efb-recover-addons-link" style="color:#5a4b00;font-weight:600;text-decoration:underline;"><i class="efb bi-plugin" style="margin-inline-end:6px;"></i><?php echo esc_html__( 'Add-ons', 'easy-form-builder' ); ?></a></p>
+				<?php endif; ?>
 			</div>
 		</div>
 		<script>
@@ -4467,8 +5200,14 @@ class efbFunction {
 			return '';
 		}
 
+		/* At most one automatic reload per page every five minutes, remembered for
+		 * the tab: whatever the next response says, a visitor is never put in a
+		 * refresh loop. Without sessionStorage the server-side queue check alone
+		 * decides. */
 		return '<script>(function(){if(window.efbAddonReloadScheduled){return;}'
 			. 'window.efbAddonReloadScheduled=true;'
+			. 'try{var k="efbAddonReload:"+location.pathname,last=+sessionStorage.getItem(k)||0;'
+			. 'if(last&&Date.now()-last<300000){return;}sessionStorage.setItem(k,String(Date.now()));}catch(e){}'
 			. 'window.setTimeout(function(){window.location.reload();},' . ( $seconds * 1000 ) . ');})();</script>';
 	}
 
@@ -4476,7 +5215,7 @@ public function addon_add_efb($value) {
 
 		// A local health check has already proved this add-on is ready. Never
 		// contact the licensing/download endpoint just to rediscover that fact.
-		if ( $this->is_addon_installed_locally_efb( $value ) ) {
+		if ( $this->is_addon_installed_locally_efb( $value ) && $this->addon_scope_files_present_efb( $value ) ) {
 			return array(
 				'status'  => true,
 				'message' => esc_html__( 'The add-on is already installed.', 'easy-form-builder' ),
@@ -4675,7 +5414,7 @@ public function addon_add_efb($value) {
 				// copies can leave the folder present while its required bootstrap file
 				// is gone. Re-extract in that case so automatic recovery truly repairs
 				// missing files instead of reporting a false success.
-				if (!file_exists($directory) || ! $this->is_addon_installed_locally_efb( $value )) {
+				if (!file_exists($directory) || ! $this->is_addon_installed_locally_efb( $value ) || ! $this->addon_scope_files_present_efb( $value )) {
 					$result = $this->fun_addon_new($url);
                     if (is_wp_error($result)) {
                         if ($is_persian_locale) {
@@ -4807,6 +5546,11 @@ public function addon_add_efb($value) {
 				. ' (' . $r->get_error_message() . ')'
 			);
 		}
+		// Keep only the add-on language files of locales this site uses. Never
+		// throws and never changes the install result.
+		if ( function_exists( 'emsfb_prune_addon_languages_efb' ) ) {
+			emsfb_prune_addon_languages_efb();
+		}
 		return true;
 	}
 
@@ -4851,31 +5595,21 @@ public function addon_add_efb($value) {
 				// Do not make an external request for add-ons whose required local
 				// files are already present. This guard protects automatic recovery,
 				// the manual recovery button, and every legacy caller.
-				if ( $this->is_addon_installed_locally_efb( $key ) ) {
+				if ( $this->is_addon_installed_locally_efb( $key ) && $this->addon_scope_files_present_efb( $key ) ) {
 					$details['already_present'][] = $key;
 					continue;
 				}
 
 				if ($key === 'AdnGoS') {
 					$local_gs = EMSFB_PLUGIN_DIRECTORY . '/vendor/googlesheet/class-Emsfb-googlesheet.php';
-					if (file_exists($local_gs)) {
+					// A package without its translations (admin scope, Create/Panel recovery) is re-downloaded.
+					if (file_exists($local_gs) && $this->addon_scope_files_present_efb($key)) {
 						update_option('emsfb_addon_AdnGoS', 2);
 						continue;
 					}
 				}
-				if ($key === 'AdnHSH') {
-					// Ships inside the plugin; never downloaded from the remote server.
-					$local_hsh = EMSFB_PLUGIN_DIRECTORY . '/vendor/human-shield/human-shield-efb.php';
-					if (file_exists($local_hsh)) {
-						update_option('emsfb_addon_AdnHSH', 2);
-						$details['already_present'][] = $key;
-					} else {
-						$state = false;
-						$details['errors'][ $key ] = esc_html__( 'This bundled add-on is missing from the plugin files.', 'easy-form-builder' );
-						$details['errors'][ $key ] .= '<br>' . $download_message;
-					}
-					continue;
-				}
+				// Form Security & Spam Protection is downloaded like every other add-on:
+				// it is not in the plugin zip, so an update always removes it.
 				$details['attempted'][] = $key;
 				$r =$this->addon_add_efb($key);
 				if(!is_array($r) || !isset($r['status'])){
@@ -4900,7 +5634,7 @@ public function addon_add_efb($value) {
 		}
 
 		$details['renew_required'] = $renew_required;
-		$health_after = $this->get_addon_local_health_efb( $settings );
+		$health_after = $this->get_addon_local_health_efb( $settings, $this->addon_health_scope_efb );
 		$details['missing'] = array_keys( $health_after['missing'] );
 		if ( ! empty( $details['missing'] ) ) {
 			$state = false;
@@ -4926,6 +5660,13 @@ public function addon_add_efb($value) {
 				return $return_details ? $details : false;
 			}
 
+			/* One report per failure, not one per attempt or per retry cycle: the
+			 * same add-ons failing again within a day is not news to the owner. */
+			$report_signature = md5(implode(',', $details['missing']) . '|' . implode(',', array_keys($details['errors'])));
+			if(get_transient('emsfb_addons_report_sent') === $report_signature){
+				return $return_details ? $details : false;
+			}
+
 			$to = isset($settings->emailSupporter) ? $settings->emailSupporter : null;
 			if($to==null){$to = get_option('admin_email');}
 
@@ -4935,6 +5676,7 @@ public function addon_add_efb($value) {
 
 			if(emsfb_is_email_sending_enabled_efb($settings)) {
 				$this->send_email_state_new($to ,$sub ,$m,0,"addonsDlProblem",'null','null');
+				set_transient('emsfb_addons_report_sent', $report_signature, DAY_IN_SECONDS);
 			}
 			return $return_details ? $details : false;
 		}
@@ -4943,6 +5685,7 @@ public function addon_add_efb($value) {
 			delete_transient('emsfb_addons_renew_backoff');
 			delete_option('emsfb_addons_dl_failures');
 			delete_transient('emsfb_addons_dl_backoff');
+			delete_transient('emsfb_addons_report_sent');
 
             return true;
 
@@ -5483,6 +6226,7 @@ public function addon_add_efb($value) {
 	public function clear_addon_recovery_state_efb(){
 		delete_transient('emsfb_addon_recovery_lock');
 		delete_transient('emsfb_addons_dl_backoff');
+		delete_transient('emsfb_addons_report_sent');
 		delete_option('emsfb_addons_dl_failures');
 		delete_option('emsfb_addon_recovery_pending');
 	}
@@ -5575,7 +6319,8 @@ public function addon_add_efb($value) {
 			. '<li>' . esc_html__('Open Easy Form Builder in your dashboard and use the Recover add-ons button.', 'easy-form-builder') . ' <a href="' . esc_url($admin_url) . '">' . esc_html($admin_url) . '</a></li>'
 			. '<li>' . esc_html__('If the add-on folder is not writable, ask your host to allow writing to the plugin folder.', 'easy-form-builder') . '</li>'
 			. '<li>' . esc_html__('If outgoing requests are blocked, ask your host to allow connections to the Easy Form Builder update server.', 'easy-form-builder') . '</li>'
-			. '<li>' . esc_html__('If your Pro subscription has expired, renew it to restore the Pro add-ons.', 'easy-form-builder') . '</li>'
+			/* translators: Premium and Agency are the names of the paid Easy Form Builder plans */
+			. '<li>' . esc_html__('Some add-ons are only available on the Premium or Agency plans. If your subscription has expired, renew it to get those add-ons back.', 'easy-form-builder') . '</li>'
 			. '</ol>'
 
 			. '<p><a href="https://whitestudio.team/support/" target="_blank">' . esc_html__('Please kindly report the following issue to the Easy Form Builder team.', 'easy-form-builder') . '</a></p>'

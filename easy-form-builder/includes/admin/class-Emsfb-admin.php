@@ -43,6 +43,7 @@ class Admin {
             add_action('wp_ajax_check_email_server_efb', [$this, 'check_email_server_admin']);
             add_action('wp_ajax_efb_save_onboarding_email', [$this, 'efb_save_onboarding_email']);
             add_action('wp_ajax_efb_complete_onboarding', [$this, 'efb_complete_onboarding']);
+            add_action('wp_ajax_efb_dismiss_onboarding', [$this, 'efb_dismiss_onboarding']);
             add_action('wp_ajax_add_addons_Emsfb', [$this, 'add_addons_Emsfb']);
             add_action('wp_ajax_remove_addons_Emsfb', [$this, 'remove_addons_Emsfb']);
             add_action('wp_ajax_update_file_Emsfb', array( $this,'file_upload_public'));
@@ -300,6 +301,7 @@ class Admin {
 			unset($valp[0]['sms_msg_new_noti']);
 			unset($valp[0]['sms_msg_responsed_noti']);
 			unset($valp[0]['sms_msg_recived_user']);
+			unset($valp[0]['sms_msg_recived_usr']);
 			if(isset($valp[0]['sms_admins_phone_no'])){unset($valp[0]['sms_admins_phone_no']);}
 		}
 
@@ -313,6 +315,7 @@ class Admin {
             unset($valp[0]['telegram_msg_new_noti']);
             unset($valp[0]['telegram_msg_responsed_noti']);
             unset($valp[0]['telegram_msg_recived_user']);
+            unset($valp[0]['telegram_msg_recived_usr']);
             unset($valp[0]['telegram_bot_token']);
             unset($valp[0]['telegram_admin_chat_ids']);
         }
@@ -533,6 +536,29 @@ class Admin {
             wp_send_json_success($response, 200);
         }
 
+        /*
+         * The plan gate, decided here rather than by the licensing server.
+         * That server only refuses add-ons it actually sells, so it approves
+         * Conditional Logic for every site and approves everything for
+         * localhost - the Add-ons page drew a lock that the install never
+         * honoured, and clicking it installed the add-on anyway.
+         */
+        if (!$efbFunction->addon_plan_allows_install_efb($post_value)) {
+            $required_package = $efbFunction->addon_required_package_efb($post_value);
+            $this->addon_install_log_efb('request_blocked_local_plan', [
+                'requested_addon' => $post_value,
+                'required_package' => $required_package,
+                'local_package' => (int) get_option('emsfb_pro', 2),
+            ]);
+            wp_send_json_error([
+                'success' => false,
+                'm' => 3 === $required_package ? $lang['thisFeatureAvailableFreePlusPro'] : $lang['proUnlockMsg'],
+                'code' => 'addon_plan_required',
+                'required_package' => $required_package,
+            ], 200);
+            return;
+        }
+
         // Block script injection attempts and make it visible in the logs.
         if ($this->isScript($post_value)) {
             $this->addon_install_log_efb('request_blocked_script_value', [
@@ -544,9 +570,6 @@ class Admin {
             return;
         }
 
-        // Form Security & Spam Protection ships inside the plugin. The
-        // licensing endpoint still verifies its package before local files are
-        // enabled.
         // File access problems are common on shared hosts, so log the full
         // preflight status before any network requests are attempted.
         $status = emsfb_get_file_access_status_efb();
@@ -839,8 +862,21 @@ class Admin {
                     'response_data' => $data,
                 ]);
                 $remote_reason = isset($data->reason) ? sanitize_key($data->reason) : '';
+                /*
+                 * The server states a refusal as {"status":false,"error":"You do
+                 * not have permission"} - no `reason` at all. Read only as a
+                 * reason, that is an unrecognised failure, so a site on the
+                 * wrong plan was told "the server responded with an invalid
+                 * request" instead of being offered the upgrade.
+                 */
+                $remote_error = isset($data->error) && is_scalar($data->error) ? trim((string) $data->error) : '';
+                if ('' === $remote_reason && '' !== $remote_error && false !== stripos($remote_error, 'permission')) {
+                    $remote_reason = 'plan_required';
+                }
                 if (in_array($remote_reason, ['plan_required', 'package_required', 'premium_required'], true)) {
-                    $required_package = isset($data->required_package) ? (int) $data->required_package : 1;
+                    $required_package = isset($data->required_package)
+                        ? (int) $data->required_package
+                        : $efbFunction->addon_required_package_efb($post_value);
                     $entitlement = $this->addon_local_entitlement_efb($required_package);
 
                     $this->addon_install_log_efb('remote_response_plan_required', [
@@ -1910,6 +1946,32 @@ class Admin {
 
         emsfb_complete_onboarding_efb();
         wp_send_json_success(array('completed' => true));
+    }
+
+    /**
+     * The admin closed the email step (x or Escape) without running the
+     * delivery test. That is a deliberate "not now", and the step used to
+     * reopen on every Panel and Create load until a test was run. The test
+     * stays available in General Settings, and the builder keeps warning while
+     * email sending is off.
+     *
+     * Kept apart from completion: emsfb_onboarding_completed_at still means a
+     * test actually ran. A plan that was never saved is not affected - the
+     * plan chooser keeps coming back on its own until one is.
+     */
+    public function efb_dismiss_onboarding() {
+        $efbFunction = get_efbFunction();
+        if (!check_ajax_referer('wp_rest', 'nonce', false) || !$efbFunction->user_permission_efb_admin_dashboard()) {
+            wp_send_json_error(array('message' => esc_html__('You do not have permission to complete setup.', 'easy-form-builder')), 403);
+        }
+
+        $dismissed = false;
+        if ((bool) get_option('emsfb_onboarding_pending', false)) {
+            update_option('emsfb_onboarding_pending', 0, false);
+            update_option('emsfb_onboarding_dismissed_at', current_time('mysql'), false);
+            $dismissed = true;
+        }
+        wp_send_json_success(array('dismissed' => $dismissed));
     }
 
     private function start_email_tester_efb($efbFunction, $ac) {
@@ -3026,6 +3088,15 @@ class Admin {
                     . ' (' . $r->get_error_message() . ')'
                 );
             }
+            // Keep only the add-on language files of locales this site uses. A global
+            // function (this class does not extend efbFunction); it never throws and
+            // never changes the install result.
+            if ( ! function_exists( 'emsfb_prune_addon_languages_efb' ) && function_exists( 'get_efbFunction' ) ) {
+                get_efbFunction();
+            }
+            if ( function_exists( 'emsfb_prune_addon_languages_efb' ) ) {
+                emsfb_prune_addon_languages_efb();
+            }
             return true;
         }
     public function file_upload_public(){
@@ -3642,9 +3713,21 @@ function admin_notices_efb () {
         if (!in_array($current_package_type, [0, 1, 2, 3], true)) {
             $current_package_type = 2;
         }
+        /*
+         * Until a plan is chosen, emsfb_pro holds -1 (a fresh install), the
+         * legacy 10, or nothing at all. The coercion above reads those as Free
+         * for the downgrade checks, but they are not a saved choice: letting
+         * them short-cut as "unchanged" meant "Start with Free" never wrote
+         * anything, and the plan chooser reopened on every Panel and Create
+         * load. Only a stored 1, 2 or 3 - the values getSelectedPlan_efb()
+         * recognises - can be unchanged.
+         */
+        $stored_package_type = get_option('emsfb_pro', null);
+        $has_saved_plan = is_numeric($stored_package_type)
+            && in_array((int) $stored_package_type, [1, 2, 3], true);
         $onboarding_pending = emsfb_onboarding_pending_efb();
         $target_package_type = $selected_plan === 'free_plus' ? 3 : ($selected_plan === 'free' ? 2 : 1);
-        if ($target_package_type === $current_package_type) {
+        if ($has_saved_plan && $target_package_type === $current_package_type) {
             wp_send_json_success(array(
                 'success' => true,
                 'plan' => $selected_plan,
@@ -3724,11 +3807,12 @@ function admin_notices_efb () {
          */
         $disabled_addons = array();
         if ($is_downgrade) {
-            $addon_keys = $efbFunction->get_all_addon_keys_efb();
-            if ($package_type_efb === 3) {
-                // Offline Forms and Conditional Logic are available in Free Plus.
-                $addon_keys = array_diff($addon_keys, array('AdnOF', 'AdnSMF'));
-            }
+            // Which add-ons the new plan keeps is the same question the install
+            // gate answers, so both read one table (addon_required_package_efb).
+            $addon_keys = array_diff(
+                $efbFunction->get_all_addon_keys_efb(),
+                $efbFunction->addon_keys_allowed_by_package_efb($package_type_efb)
+            );
             foreach ($addon_keys as $addon_key) {
                 if (isset($settings->{$addon_key}) && (int) $settings->{$addon_key} !== 0) {
                     $disabled_addons[] = $addon_key;

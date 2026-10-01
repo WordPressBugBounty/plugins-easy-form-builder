@@ -906,30 +906,6 @@ public function check_nonce_permission_efb($request) {
 			$state="form";
 			$rgister_captcha_url = false;
 			$this->efbFunction = get_efbFunction();
-			/* Health check only — the repair runs in the background. Downloading
-			 * here made every visitor wait on the add-on server, and a slow or
-			 * unreachable server took the form down with it. */
-			$addon_recovery = $this->efbFunction->check_addons_for_public_request_efb();
-			if ( ! empty( $addon_recovery['recovered'] ) ) {
-				if ( $this->addon_recovery_transition_rendered ) {
-					return '';
-				}
-				$this->addon_recovery_transition_rendered = true;
-				return $this->efbFunction->render_addon_recovery_reload_ui_efb( true );
-			}
-			if ( empty( $addon_recovery['success'] ) ) {
-				// Do not render a partly functional form. The administrator gets the
-				// precise diagnostics in the recovery UI; visitors get a safe message.
-				if ( $this->addon_recovery_transition_rendered ) {
-					return '';
-				}
-				$this->addon_recovery_transition_rendered = true;
-				/* Reload only when a background repair is actually pending. After an
-				 * inline attempt has already failed there is nothing to come back
-				 * to, and refreshing would just loop the visitor. */
-				$retry_after = ! empty( $addon_recovery['deferred'] ) ? 25 : 0;
-				return $this->efbFunction->render_addon_recovery_public_error_ui_efb( $retry_after );
-			}
 			if(isset($_GET['track'])){
 				$state_form =  sanitize_text_field(wp_unslash($_GET['track']) );
 				$state="track";
@@ -1061,6 +1037,35 @@ public function check_nonce_permission_efb($request) {
 				</div>
 				<h3 style='color:#202a8d;text-align: center;'>".esc_html__('Form does not exist !!','easy-form-builder')."</h3>
 				<h4 style='color:#ff4b93;text-align: center;'>".esc_html__('Easy Form Builder', 'easy-form-builder')."</h4></div></div>";
+			}
+			/* Health check only — the repair runs in the background. A form waits
+			 * only for the add-ons it uses; any other missing add-on is repaired in
+			 * the background while this form keeps working. */
+			if ( null === $is_track && null !== $value_form_data ) {
+				$addon_recovery = $this->efbFunction->check_addons_for_public_request_efb(
+					null,
+					$this->efbFunction->get_form_required_addons_efb( $value_form_data->form_structer )
+				);
+				if ( ! empty( $addon_recovery['recovered'] ) ) {
+					if ( $this->addon_recovery_transition_rendered ) {
+						return '';
+					}
+					$this->addon_recovery_transition_rendered = true;
+					return $this->efbFunction->render_addon_recovery_reload_ui_efb( true );
+				}
+				if ( empty( $addon_recovery['success'] ) ) {
+					// Do not render a partly functional form. The administrator gets the
+					// precise diagnostics in the recovery UI; visitors get a safe message.
+					if ( $this->addon_recovery_transition_rendered ) {
+						return '';
+					}
+					$this->addon_recovery_transition_rendered = true;
+					/* Reload only when this request queued the repair. Every later
+					 * visitor meets the queue lock or the backoff instead, and keying
+					 * the reload on anything else refreshed them every 25 seconds. */
+					$retry_after = ! empty( $addon_recovery['queued'] ) ? 25 : 0;
+					return $this->efbFunction->render_addon_recovery_public_error_ui_efb( $retry_after );
+				}
 			}
 			$this->text_ = ["somethingWentWrongPleaseRefresh","atcfle","cpnnc","tfnapca","thisFeatureAvailableFreePlusPro", "icc","cpnts","cpntl","mcplen","mmxplen","mxcplen","clcdetls","vmgs","required","mmplen","offlineSend","amount","allformat","videoDownloadLink","downloadViedo","removeTheFile","pWRedirect","eJQ500","error400","errorCode","remove","minSelect","search","MMessageNSendEr","formNExist",
 			"settingsNfound","formPrivateM","pleaseWaiting","youRecivedNewMessage","WeRecivedUrM","thankFillForm","trackNo","thankRegistering","welcome","thankSubscribing","thankDonePoll","error403","errorSiteKeyM","errorCaptcha","pleaseEnterVaildValue","createAcountDoneM","incorrectUP","sentBy","newPassM","done","surveyComplatedM","error405","errorSettingNFound","errorMRobot",
@@ -2521,10 +2526,12 @@ public function check_nonce_permission_efb($request) {
 						if ($still_processing == false) {
 							return;
 						}
+						$item = $this->normalize_submitted_row_efb($item, isset($f['type']) ? $f['type'] : '');
+						$item_value_len = is_array($item['value'] ?? null) ? count($item['value']) : strlen((string) ($item['value'] ?? ''));
 						if (((isset($f['disabled']) == true &&  $f['disabled'] == 1  && isset($f['hidden']) == false)
 								|| (isset($f['disabled']) == true && $f['disabled'] == 1 && isset($f['hidden']) == true && $f['hidden'] == false))
 							&& ($item['id_'] == $f['id_'] || $f['id_'] == $item['id_'])
-							&& strlen($item['value']) > 1
+							&& $item_value_len > 1
 						) {
 							$is_valid = 0;
 							$still_processing == false;
@@ -2640,15 +2647,23 @@ public function check_nonce_permission_efb($request) {
 								case 'imgRadio':
 									$is_valid = 0;
 									if (isset($item['value'])) {
+										/* The saved field decides the row's kind. The price and
+										 * image lookups below key on it, and so does the attribute
+										 * allow-list, so a browser-supplied type must not steer
+										 * either. */
+										$item['type'] = $f['type'];
 										$item = $this->filter_attributes_by_type_efb($item,$f['type']);
 										$item['value'] = sanitize_text_field($item['value']);
 										array_filter($form_fields_array, function ($fr, $ki) use (&$item, &$validated_item, &$is_valid, &$form_fields_array, $form_condition, &$error_message) {
 											if (isset($fr['id_']) && isset($item['id_ob']) && $fr['id_'] == $item['id_ob']) {
 												$item['value'] = $fr['value'];
 												$is_valid = 1;
-												$t = strpos($item['type'], 'pay');
-												if ($t != false) {
-													$item['price'] = $fr['price'];
+												/* strpos() finds "pay" at offset 0 of "payRadio", and
+												 * 0 != false is false - so the saved price was never
+												 * applied and the browser's price (admitted by the
+												 * payRadio allow-list) was stored instead. */
+												if (strpos($item['type'], 'pay') !== false) {
+													if (isset($fr['price'])) { $item['price'] = $fr['price']; } else { unset($item['price']); }
 												}
 												$t = strpos($item['type'], 'img');
 												if (isset($fr['src'])) {
@@ -2697,14 +2712,32 @@ public function check_nonce_permission_efb($request) {
 									$still_processing = false;
 									break;
 								case 'option':
-									$t = strpos(strtolower($item['type']), 'checkbox');
-									if (gettype($t) != 'boolean') {
-									}
 									$is_valid = 0;
 									if (isset($item['value'])) {
-
+										/* An option row belongs to the checkbox-family field named
+										 * by its id_. Store it under that field's saved type: the
+										 * viewer groups on it, the email prices on it, and a
+										 * browser that names some other type must not pick the
+										 * render branch. A row whose parent is not a checkbox
+										 * field is not an option answer at all. */
+										$option_parent_type = $this->parent_field_type_efb($item['id_'] ?? null, $form_fields_array);
+										if ($option_parent_type === '' || strpos(strtolower($option_parent_type), 'checkbox') === false) {
+											$validated_item = null;
+											$still_processing = false;
+											break;
+										}
+										$item['type'] = $option_parent_type;
 										$item['value'] = sanitize_text_field($item['value']);
 										$item = $this->filter_attributes_by_type_efb($item,$f['type']);
+										/* The 'option' allow-list admits price and qty for the
+										 * priced and free-text checkbox kinds. On any other parent a
+										 * browser-supplied price is not overwritten below and would
+										 * be summed into the viewer's "total paid"; qty is only ever
+										 * typed into a chlCheckBox's companion input. */
+										if (is_array($item)) {
+											if (stripos($option_parent_type, 'pay') === false) unset($item['price']);
+											if (stripos($option_parent_type, 'chl') === false) unset($item['qty']);
+										}
 										if ((isset($f['id_']) && isset($item['id_ob']) && $f['id_'] == $item['id_ob'])
 											|| (isset($f['id_']) && isset($item['id_']) && $f['type'] == "chlCheckBox"  && $f['id_'] == $item['id_ob'])
 										) {
@@ -2869,6 +2902,16 @@ public function check_nonce_permission_efb($request) {
 									$still_processing = false;
 									break;
 								case 'sample':
+									/* Was stored verbatim — no sanitising, no attribute
+									 * filtering, and the browser-supplied type kept — so a
+									 * submission to a sample field persisted raw. Put it through
+									 * the same allow-list every other field uses and pin the type
+									 * to the saved field, so nothing untrusted survives here. */
+									if (isset($item['value']) && is_string($item['value'])) {
+										$item['value'] = sanitize_text_field($item['value']);
+									}
+									$item = $this->filter_attributes_by_type_efb($item, $f['type']);
+									if (is_array($item)) { $item['type'] = $f['type']; }
 									$validated_item = $item;
 									$still_processing = false;
 									break;
@@ -2876,9 +2919,12 @@ public function check_nonce_permission_efb($request) {
 								case 'persiapay':
 								case 'payment':
 									if ($form_fields_array[0]['type'] == 'payment') {
-										$item['amount'] = sanitize_text_field($item['amount']);
-										$item['id_'] = sanitize_text_field($item['id_']);
-										$item['name'] = sanitize_text_field($item['name']);
+										$item['amount'] = sanitize_text_field($item['amount'] ?? '');
+										$item['id_'] = sanitize_text_field($item['id_'] ?? '');
+										$item['name'] = sanitize_text_field($item['name'] ?? '');
+										if (isset($item['value']) && is_string($item['value'])) {
+											$item['value'] = sanitize_text_field($item['value']);
+										}
 										$item = $this->filter_attributes_by_type_efb($item,$f['type']);
 
 										$validated_item = $item;
@@ -2911,6 +2957,11 @@ public function check_nonce_permission_efb($request) {
 									$upload_validation = $s == 1 ? $this->validate_submitted_upload_url_efb($item['url'], $f) : false;
 									if ($upload_validation === true) {
 											$item['url'] = sanitize_url($item['url']);
+											/* The client always sends the "@file@" marker here and
+											 * every reader (viewer, email, CSV) recognises an upload
+											 * by it. It was the one attribute of this row stored
+											 * verbatim, so pin it rather than carry a free string. */
+											$item['value'] = '@file@';
 											$validated_item = $item;
 											$is_valid = 1;
 										} else {
@@ -2947,24 +2998,59 @@ public function check_nonce_permission_efb($request) {
 								case 'esign':
 									$is_valid = 0;
 									if (isset($item['value']) && is_string($item['value']) && strpos($item['value'], 'data:image/png;base64,') === 0) {
-										$is_valid = 1;
-										$item = $this->filter_attributes_by_type_efb($item,$f['type']);
-										$validated_item = $item;
+										/* A signature is a canvas-exported PNG data URL and nothing
+										 * else: strict base64 after the prefix. The prefix check on
+										 * its own let a value like
+										 * "data:image/png;base64,<img onerror=...>" through, because
+										 * the tail was never decoded or validated. Require the tail
+										 * to be non-empty, pure base64, and actually decodable, so
+										 * no markup can ride along inside a stored signature. */
+										$esign_b64 = substr($item['value'], strlen('data:image/png;base64,'));
+										if ($esign_b64 !== ''
+											&& preg_match('/^[A-Za-z0-9+\/]+={0,2}$/', $esign_b64) === 1
+											&& base64_decode($esign_b64, true) !== false) {
+											$item = $this->filter_attributes_by_type_efb($item,$f['type']);
+											/* The kind of a stored row is decided by the saved field,
+											 * never by the browser. Mirrors the upload branch and
+											 * closes the esign->r_matrix render type-confusion: the
+											 * admin viewer dispatches on this type. */
+											if (is_array($item)) { $item['type'] = $f['type']; }
+											$validated_item = $item;
+											$is_valid = 1;
+										}
 									}
 									$still_processing = false;
 									break;
 								case 'maps':
+									/* filter_attributes_by_type_efb skips the 'value' key for
+									 * every type, so a marker's address rode into storage
+									 * completely raw — only lat/lng were ever validated.
+									 * Sanitize it here, the same way every other free-text
+									 * value in this switch is hardened. Also build
+									 * $validated_item from the filtered $item (as the other
+									 * cases do) instead of the pre-filter copy, so the
+									 * sanitized address actually reaches storage. */
 									$is_valid = 1;
-									$validated_item = $item;
 									$c = 0;
 									$item = $this->filter_attributes_by_type_efb($item,$f['type']);
-									foreach ($item['value'] as $key => $value) {
+									$markers = array();
+									foreach ((is_array($item['value'] ?? null) ? $item['value'] : array()) as $value) {
 										$c += 1;
-										if (is_numeric($value['lat']) == false || is_numeric($value['lng']) == false) {
+										if (!is_array($value) || !isset($value['lat'], $value['lng']) || !is_scalar($value['lat']) || !is_scalar($value['lng'])
+											|| is_numeric($value['lat']) == false || is_numeric($value['lng']) == false) {
 											$is_valid = 0;
-											$validated_item = null;
-										};
+											continue;
+										}
+										/* A marker is exactly lat, lng and address; anything else
+										 * the browser attached is dropped rather than stored. */
+										$markers[] = array(
+											'lat'     => $value['lat'],
+											'lng'     => $value['lng'],
+											'address' => isset($value['address']) && is_scalar($value['address']) ? sanitize_text_field((string) $value['address']) : '',
+										);
 									}
+									$item['value'] = $markers;
+									$validated_item = $is_valid ? $item : null;
 									if ($c != $f['mark']) {
 										$is_valid = 0;
 										$validated_item = null;
@@ -2976,9 +3062,13 @@ public function check_nonce_permission_efb($request) {
 								case 'color':
 									$is_valid = 0;
 									$item = $this->filter_attributes_by_type_efb($item,$f['type']);
-									$l = strlen($item['value']);
-									if (isset($item['value']) && is_string($item['value']) && strpos($item['value'], '#') === 0 && $l == 7) {
-										$item['value'] = sanitize_text_field($item['value']);
+									/* The value lands in a style attribute (viewer and email), so
+									 * it has to be exactly the #rrggbb an <input type="color">
+									 * produces. "starts with # and is 7 long" still let six
+									 * arbitrary characters through, and measured them before
+									 * checking the value was a string at all. */
+									if (isset($item['value']) && is_string($item['value']) && preg_match('/^#[0-9a-fA-F]{6}$/', $item['value']) === 1) {
+										$item['value'] = strtolower($item['value']);
 										$is_valid = 1;
 										$validated_item = $item;
 									}
@@ -3049,6 +3139,9 @@ public function check_nonce_permission_efb($request) {
 						$error_field_id = '';
 					}
 					if (isset($validated_item)) {
+						if (is_array($validated_item)) {
+							$validated_item['type'] = $this->stored_row_type_efb($validated_item, $f, $form_fields_array);
+						}
 						array_push($validated_items, $validated_item);
 					};
 				}
@@ -3422,7 +3515,7 @@ public function check_nonce_permission_efb($request) {
 								$saved_payment_content = json_decode(str_replace('\\', '', $value[0]->content), true);
 								$submitted_values = $submitted_values;
 								$filtered = array_filter($submitted_values, function ($item) use ($saved_payment_content) {
-									return !isset($item['type']) || strpos($item['type'], 'pay') === false;
+									return is_array($item) && (!isset($item['type']) || !is_string($item['type']) || strpos($item['type'], 'pay') === false);
 								});
 								$amount = array_reduce($saved_payment_content, function ($carry, $item) {
 									return $carry + ($item['price'] ?? 0);
@@ -3486,8 +3579,13 @@ public function check_nonce_permission_efb($request) {
 								$validated_items = [];
 								foreach ($form_structure_json as $f) {
 									$it = array_filter($filtered, function ($item) use ($f) {
-										return isset($f['id_'], $item['id_']) && $f['id_'] == $item['id_'] && $f['name'] == $item['name'];
+										return is_array($f) && isset($f['id_'], $item['id_']) && $f['id_'] == $item['id_'] && ($f['name'] ?? null) == ($item['name'] ?? null);
 									});
+									/* These rows skipped the validator above; see
+									 * sanitize_payment_merge_row_efb(). */
+									$it = array_values(array_filter(array_map(function ($item) use ($f) {
+										return $this->sanitize_payment_merge_row_efb($item, $f);
+									}, $it)));
 									$validated_items = empty($validated_items) ? $it : array_merge($validated_items, $it);
 									if ($payment_gateway == "persiaPay") array_push($validated_items, $result);
 								}
@@ -5772,7 +5870,7 @@ public function check_nonce_permission_efb($request) {
 		}
 	}
 
-	private function process_conditional_webhook_rules($form_fields_array, $submitted_values, $track_code, $event_type, $context = array()) {
+	private function process_conditional_webhook_rules($form_fields_array, $submitted_values, $track_code, $event_type, $context = array(), $allow_send = null) {
 		if (empty($form_fields_array[0]['webhook_rules']) || !is_array($form_fields_array[0]['webhook_rules'])) return array();
 		$webhook_submitted_values = isset($context['integration_values']) && is_array($context['integration_values'])
 			? $context['integration_values']
@@ -5802,6 +5900,14 @@ public function check_nonce_permission_efb($request) {
 			$rule_webhook_id = isset($rule['webhook_id']) ? sanitize_text_field($rule['webhook_id']) : '';
 			if ($stop_all || ($rule_webhook_id !== '' && isset($stopped_ids[$rule_webhook_id]))) continue;
 			if (!$this->efb_evaluate_conditional_group($rule['conditions'] ?? array(), $values)) continue;
+
+			/* $allow_send (the side-effect gate) is asked once, when the first
+			 * rule is really about to be sent, so a submission whose rules do
+			 * not match spends nothing from the webhook stop-loss. */
+			if ($allow_send !== null) {
+				if (!call_user_func($allow_send)) return $sent;
+				$allow_send = null;
+			}
 
 			/* payload_fields (PRD C6 "Modify webhook payload"): when set, only
 			 * the whitelisted field ids are sent to the webhook endpoint. */
@@ -6407,6 +6513,17 @@ public function check_nonce_permission_efb($request) {
 		return Formbuilder::formatPrice_efb($amount, $currency);
 	}
 
+	/**
+	 * Entity-escape one stored value for the notification email, keeping only
+	 * the <br> that replaceContentMessageEfb() produced from the line-break
+	 * token. Values are tag-stripped on the way in; this is the second layer
+	 * for rows stored before that and for any stray '<' or '"'.
+	 */
+	private function email_escape_leaf_efb($value) {
+		$value = is_scalar($value) ? (string) $value : '';
+		return str_replace(array('&lt;br&gt;', '&lt;br/&gt;', '&lt;br /&gt;'), '<br>', esc_html($value));
+	}
+
 	public function email_get_content_efb($content, $track){
 		$m  = '<table border="0" cellpadding="0" cellspacing="0" width="100%" class="container containerEmailEfb" >';
 
@@ -6439,7 +6556,7 @@ public function check_nonce_permission_efb($request) {
 				if($title==='' && $value===''){ return; }
 				$m .= '<tr>';
 				$m .= '<td valign="top" width="50%" class="columnEmailEfb" style="padding:5px; line-height:20px;">';
-				$m .= '<p style="margin:0 0 10px 0;font-weight: bold;font-size:16px;">'.$title.'</p>';
+				$m .= '<p style="margin:0 0 10px 0;font-weight: bold;font-size:16px;">'.esc_html($title).'</p>';
 				$m .= '</td>';
 				$m .= '<td valign="top" width="50%" class="columnEmailEfb" style="padding:5px; line-height:20px;">';
 				$m .= '<p style="margin:0 0 10px 0;font-size:14px;">'.$value.'</p>';
@@ -6467,10 +6584,11 @@ public function check_nonce_permission_efb($request) {
 				if (isset($c['value']) && is_string($c['value'])) {
 					$q = str_replace('@efb!', ',', $c['value']);
 					$q = str_replace('@n#', '<br>', $q);
+					$q = $this->email_escape_leaf_efb($q);
 					if ($q !== '@file@') { $q = '<b>'.$q.'</b>'; }
 				}
 				if (isset($c['qty'])) {
-					$q .= ($q ? ' ' : '') . ': <b>'.$c['qty'].'</b>';
+					$q .= ($q ? ' ' : '') . ': <b>'.$this->email_escape_leaf_efb($c['qty']).'</b>';
 				}
 
 				if (isset($c['value']) && $c['value']==='@file@' && !in_array(($c['url'] ?? ''), $list)) {
@@ -6486,28 +6604,31 @@ public function check_nonce_permission_efb($request) {
 						$duration_label = $duration > 0 ? ' (' . esc_html($duration . 's') . ')' : '';
 						$q = '<a href="'.esc_url($url).'" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">'.esc_html($kind_label . $duration_label . ' — ' . __('Download','easy-form-builder')).'</a>';
 					} elseif ($t==='image') {
-						$q = '<img src="'.$url.'" alt="'.htmlspecialchars($nm).'" style="display:block;max-width:100%;height:auto;border:0;">';
+						$q = '<img src="'.esc_url($url).'" alt="'.esc_attr($nm).'" style="display:block;max-width:100%;height:auto;border:0;">';
 					} elseif ($t==='document' || $t==='allformat') {
-						$q = '<a href="'.$url.'" target="_blank" style="text-decoration:none;">'.$nm.'</a>';
+						$q = '<a href="'.esc_url($url).'" target="_blank" style="text-decoration:none;">'.esc_html($nm).'</a>';
 					} elseif ($t==='media') {
 
 						$audios = ['mp3','wav','ogg'];
 						$isAudio = false;
 						foreach($audios as $a){ if(strpos($url,$a)!==false){ $isAudio=true; break; } }
 						if ($isAudio){
-							$q = '<a href="'.$url.'" target="_blank" style="text-decoration:none;">'.$nm.'</a>';
+							$q = '<a href="'.esc_url($url).'" target="_blank" style="text-decoration:none;">'.esc_html($nm).'</a>';
 						} else {
-							$q = '<a href="'.$url.'" target="_blank" style="text-decoration:none;">'.$lanText['videoDownloadLink'].'</a>';
+							$q = '<a href="'.esc_url($url).'" target="_blank" style="text-decoration:none;">'.$lanText['videoDownloadLink'].'</a>';
 						}
 					} else {
-						$q = strlen($url)>1 ? '<a href="'.$url.'" target="_blank" style="text-decoration:none;">'.$nm.'</a>' : '<span>💤</span>';
+						$q = strlen($url)>1 ? '<a href="'.esc_url($url).'" target="_blank" style="text-decoration:none;">'.esc_html($nm).'</a>' : '<span>💤</span>';
 					}
 					$addPair($title ?: 'file', $q);
 					continue;
 				}
 
 				if (isset($c['type']) && $c['type']==='esign'){
-					$q = '<img src="'.($c['value'] ?? '').'" alt="'.htmlspecialchars($title).'" style="display:block;max-width:100%;height:auto;border:0;">';
+					$esign_src = isset($c['value']) && is_string($c['value']) && preg_match('/^data:image\/png;base64,[A-Za-z0-9+\/]+={0,2}$/', $c['value']) === 1 ? $c['value'] : '';
+					$q = $esign_src !== ''
+						? '<img src="'.$esign_src.'" alt="'.esc_attr($title).'" style="display:block;max-width:100%;height:auto;border:0;">'
+						: '<code>'.$this->email_escape_leaf_efb($c['value'] ?? '').'</code>';
 					$addPair($title, $q);
 					continue;
 				}
@@ -6521,7 +6642,7 @@ public function check_nonce_permission_efb($request) {
 
 				if (isset($c['type']) && $c['type']==='maps'){
 					if (is_array($c['value'] ?? null)){
-						$q = '<a href="'.$link_w.'" style="text-decoration:none;">'.$lanText['msgemlmp'].'</a>';
+						$q = '<a href="'.esc_url($link_w).'" style="text-decoration:none;">'.$lanText['msgemlmp'].'</a>';
 						$addPair($title ?: 'Location', $q);
 					}
 					continue;
@@ -6554,7 +6675,7 @@ public function check_nonce_permission_efb($request) {
 					$vals = [];
 					foreach($content as $op){
 						if (($op['type'] ?? '')==='r_matrix' && ($op['id_'] ?? '')===($c['id_'] ?? '')){
-							$vals[] = '<b>'.($op['value'] ?? '').'</b>';
+							$vals[] = '<b>'.$this->email_escape_leaf_efb($op['value'] ?? '').'</b>';
 						}
 					}
 					$addPair($title ?: 'Options', implode('<br>', $vals));
@@ -6602,7 +6723,7 @@ public function check_nonce_permission_efb($request) {
 					}
 
 					if (isset($c['type']) && strpos($c['type'],'imgRadio')!==false){
-						$q = '<b>'.($c['value'] ?? '').'</b>';
+						$q = '<b>'.$this->email_escape_leaf_efb($c['value'] ?? '').'</b>';
 					}else if (isset($c['value']) && strpos($c['type'],'imgRadio') !== false){
 
 						$q = $this->fun_imgRadio_efb($c['id_'], $c['src'] ?? '', $c);
@@ -6615,7 +6736,7 @@ public function check_nonce_permission_efb($request) {
 						$addPair($title, $q);
 					}
 				}else if (isset($c['type']) && $c['type']==='checkbox' && isset($c['value']) && $c['value']!=='@file@') {
-					$addPair($title, '<b>'.$c['value'].'</b>');
+					$addPair($title, '<b>'.$this->email_escape_leaf_efb($c['value']).'</b>');
 				}
 			}
 
@@ -7340,8 +7461,10 @@ public function check_nonce_permission_efb($request) {
 
 		$submitted_ids = [];
 		foreach ((array) $submitted_values as $row) {
-			if (!is_array($row) || empty($row['id_'])) continue;
-			$type = strtolower((string) ($row['type'] ?? ''));
+			/* id_ is used as an array key below; a non-scalar one is not a
+			 * field reference at all and would fatal with "Illegal offset". */
+			if (!is_array($row) || empty($row['id_']) || !is_scalar($row['id_'])) continue;
+			$type = strtolower((string) (is_scalar($row['type'] ?? null) ? $row['type'] : ''));
 			$value = $row['value'] ?? '';
 			if (in_array($type, $checkbox_types, true) && !empty($row['id_ob'])) {
 				$submitted_ids[$row['id_']] = true;
@@ -7371,6 +7494,114 @@ public function check_nonce_permission_efb($request) {
 		}
 
 		return ['valid' => true, 'missing_field' => null, 'missing_name' => null];
+	}
+
+	/**
+	 * Coerce a submitted row to the shapes the validator switch below reads.
+	 *
+	 * A row is attacker-shaped JSON. Every key the switch compares, measures or
+	 * sanitizes is handled as a string - except a maps value, which is a list of
+	 * markers - yet nothing enforced that, so an array where a string was
+	 * expected reached strlen()/strtolower()/sanitize_email() and fataled the
+	 * request before any field-level check could reject it. Scalars become
+	 * strings; arrays and objects collapse to '' so they fail validation the
+	 * same way an empty value does. null is left alone so isset() semantics in
+	 * the branches are unchanged.
+	 */
+	private function normalize_submitted_row_efb($item, $field_type) {
+		if (!is_array($item)) {
+			return array('id_' => '', 'id_ob' => '', 'type' => '', 'name' => '', 'amount' => '');
+		}
+		$to_string = function ($v) {
+			if (is_array($v) || is_object($v)) return '';
+			if (is_bool($v)) return $v ? '1' : '';
+			return (string) $v;
+		};
+		foreach (array('id_', 'id_ob', 'type', 'name', 'amount', 'url', 'qty', 'price') as $k) {
+			if (array_key_exists($k, $item) && $item[$k] !== null && !is_string($item[$k])) {
+				$item[$k] = $to_string($item[$k]);
+			}
+		}
+		if (array_key_exists('value', $item) && $item['value'] !== null) {
+			if ($field_type === 'maps') {
+				if (!is_array($item['value'])) $item['value'] = array();
+			} elseif (!is_string($item['value'])) {
+				$item['value'] = $to_string($item['value']);
+			}
+		}
+		return $item;
+	}
+
+	/**
+	 * Saved type of the field a row names as its parent, or '' when no such
+	 * field exists in the form structure.
+	 */
+	private function parent_field_type_efb($parent_id, $fields) {
+		if ($parent_id === null || $parent_id === '' || !is_array($fields)) return '';
+		foreach ($fields as $candidate) {
+			if (is_array($candidate) && isset($candidate['id_'], $candidate['type']) && (string) $candidate['id_'] === (string) $parent_id) {
+				return (string) $candidate['type'];
+			}
+		}
+		return '';
+	}
+
+	/**
+	 * The type a validated row is stored under.
+	 *
+	 * The response viewer, the notification email and the CSV export all pick a
+	 * render branch from this value, so it has to come from the saved form and
+	 * never from the browser: a text answer submitted as type "color" landed in
+	 * a style attribute, one submitted as "esign" in an <img src>. For an option
+	 * row the saved field is the option itself, so the owning checkbox-family
+	 * field supplies the type - that is what the bundled client sends and what
+	 * the readers group on. The payment catch-all is left alone: it stores
+	 * whichever row reaches it first under that row's own kind.
+	 */
+	private function stored_row_type_efb($row, $field, $fields) {
+		$saved = isset($field['type']) ? (string) $field['type'] : '';
+		$browser = isset($row['type']) ? (string) $row['type'] : '';
+		if ($saved === '' || in_array($saved, array('payment', 'persiaPay', 'persiapay'), true)) return $browser;
+		if ($saved !== 'option') return $saved;
+		$parent = $this->parent_field_type_efb(isset($row['id_']) ? $row['id_'] : (isset($field['parent']) ? $field['parent'] : null), $fields);
+		if ($parent !== '') return $parent;
+		return in_array($browser, array('checkbox', 'payCheckbox', 'chlCheckBox', 'trmCheckbox'), true) ? $browser : 'checkbox';
+	}
+
+	/**
+	 * The final payment submit re-reads the visitor's non-payment rows from the
+	 * raw request and merges them with the rows saved when the intent was
+	 * created, bypassing the per-field validator above. Give each such row the
+	 * same treatment: string shapes, the field's attribute allow-list, a
+	 * sanitized value (markers for a map) and the saved field's type - never
+	 * the browser's, and never a price on a row that is not a priced kind.
+	 */
+	private function sanitize_payment_merge_row_efb($item, $field) {
+		if (!is_array($item) || !is_array($field)) return null;
+		$type = isset($field['type']) ? (string) $field['type'] : '';
+		$item = $this->normalize_submitted_row_efb($item, $type);
+		$clean = $this->filter_attributes_by_type_efb($item, $type);
+		if (!is_array($clean)) return null;
+		if (isset($clean['value'])) {
+			if (is_array($clean['value'])) {
+				$markers = array();
+				foreach ($clean['value'] as $m) {
+					if (is_array($m) && isset($m['lat'], $m['lng']) && is_scalar($m['lat']) && is_scalar($m['lng']) && is_numeric($m['lat']) && is_numeric($m['lng'])) {
+						$markers[] = array(
+							'lat'     => $m['lat'],
+							'lng'     => $m['lng'],
+							'address' => isset($m['address']) && is_scalar($m['address']) ? sanitize_text_field((string) $m['address']) : '',
+						);
+					}
+				}
+				$clean['value'] = $markers;
+			} else {
+				$clean['value'] = sanitize_text_field((string) $clean['value']);
+			}
+		}
+		if (stripos($type, 'pay') === false) unset($clean['price']);
+		$clean['type'] = $type !== '' ? $type : (isset($clean['type']) ? (string) $clean['type'] : '');
+		return $clean;
 	}
 
 	private function filter_attributes_by_type_efb($data,$type) {
@@ -8736,24 +8967,57 @@ public function check_nonce_permission_efb($request) {
 			'source'        => 'efb_intgrate_with_3rd_party_services_efb',
 		);
 
-		if ( apply_filters( 'efb_shield_allow_side_effect', true, array_merge( $shield_context, array( 'channel' => 'webhook' ) ) ) ) {
-			$context['conditional_webhooks'] = $this->process_conditional_webhook_rules($form_fields_array, $submitted_values, $track_code, $event_type, $context);
-		} else {
-			$context['conditional_webhooks'] = array();
-		}
+		// The gate spends one unit of the channel's daily stop-loss per question,
+		// so it is asked only when this submission really has something to send:
+		// otherwise busy forms without a webhook, Telegram or Google Sheets set up
+		// use up the budget of the forms that have one.
+		// The webhook channel is asked at most once per submission; the
+		// conditional webhook rules and the efb_after_form_integration listeners
+		// share that decision.
+		$webhooks_allowed = null;
+		$allow_webhooks = function () use ( &$webhooks_allowed, $shield_context ) {
+			if ( null === $webhooks_allowed ) {
+				$webhooks_allowed = (bool) apply_filters( 'efb_shield_allow_side_effect', true, array_merge( $shield_context, array( 'channel' => 'webhook' ) ) );
+			}
+			return $webhooks_allowed;
+		};
 
-		if ( apply_filters( 'efb_shield_allow_side_effect', true, array_merge( $shield_context, array( 'channel' => 'telegram' ) ) ) ) {
+		$context['conditional_webhooks'] = $this->process_conditional_webhook_rules($form_fields_array, $submitted_values, $track_code, $event_type, $context, $allow_webhooks);
+
+		if ( $this->efb_side_effect_has_work_efb( 'telegram', 'efb_3rd_party_telegram_notify', $context ) && apply_filters( 'efb_shield_allow_side_effect', true, array_merge( $shield_context, array( 'channel' => 'telegram' ) ) ) ) {
 			do_action('efb_3rd_party_telegram_notify', $context);
 		}
 
-		if ( apply_filters( 'efb_shield_allow_side_effect', true, array_merge( $shield_context, array( 'channel' => 'googlesheet' ) ) ) ) {
+		if ( $this->efb_side_effect_has_work_efb( 'googlesheet', 'efb_3rd_party_google_sheet_sync', $context ) && apply_filters( 'efb_shield_allow_side_effect', true, array_merge( $shield_context, array( 'channel' => 'googlesheet' ) ) ) ) {
 			do_action('efb_3rd_party_google_sheet_sync', $context);
 		}
 
-		if ( apply_filters( 'efb_shield_allow_side_effect', true, array_merge( $shield_context, array( 'channel' => 'webhook', 'source' => 'efb_after_form_integration' ) ) ) ) {
+		if ( $this->efb_side_effect_has_work_efb( 'webhook', 'efb_after_form_integration', $context ) && $allow_webhooks() ) {
 			do_action('efb_after_form_integration', $context);
 		}
 
+	}
+
+	/**
+	 * Whether an integration has anything to send for this event.
+	 *
+	 * An integration that knows it will send nothing for this form (Telegram
+	 * notifications off, no Google Sheet linked) answers false through the
+	 * efb_shield_side_effect_has_work filter, so no stop-loss unit is spent on
+	 * it. An integration that does not answer (an older add-on) keeps being
+	 * treated as having work, which is how every event was counted before.
+	 *
+	 * @param string $channel Side-effect channel (telegram, googlesheet, webhook).
+	 * @param string $hook    Action the integration listens on.
+	 * @param array  $context Integration context passed to that action.
+	 * @return bool
+	 */
+	private function efb_side_effect_has_work_efb( $channel, $hook, $context ) {
+		if ( ! has_action( $hook ) ) {
+			return false;
+		}
+		$has_work = apply_filters( 'efb_shield_side_effect_has_work', null, $channel, $context );
+		return null === $has_work ? true : (bool) $has_work;
 	}
 
 }

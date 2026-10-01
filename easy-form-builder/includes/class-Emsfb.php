@@ -75,6 +75,58 @@ class Emsfb {
         // that would create it. The listener has to exist before the event fires.
         add_action('emsfb_addon_recovery_event', [$this, 'run_addon_recovery_efb'], 10, 1);
         add_action('init', [$this, 'schedule_background_jobs_efb']);
+        // A new site or profile language can need an add-on language file that was
+        // pruned when the add-on was installed. Flag it; the next Add-ons, Create or
+        // Panel screen downloads the add-on again.
+        add_action('add_option_WPLANG', [$this, 'addon_site_locale_changed_efb'], 10, 0);
+        add_action('update_option_WPLANG', [$this, 'addon_site_locale_changed_efb'], 10, 0);
+        add_action('added_user_meta', [$this, 'addon_user_locale_changed_efb'], 10, 4);
+        add_action('updated_user_meta', [$this, 'addon_user_locale_changed_efb'], 10, 4);
+    }
+
+    /**
+     * add_option_WPLANG / update_option_WPLANG: queue add-on translations for the new site language.
+     *
+     * @return void
+     */
+    public function addon_site_locale_changed_efb() {
+        $this->flag_addon_locale_efb((string) get_option('WPLANG', ''));
+    }
+
+    /**
+     * added_user_meta / updated_user_meta: queue add-on translations for a new profile language.
+     *
+     * @param int    $meta_id    Meta row id.
+     * @param int    $object_id  User id.
+     * @param string $meta_key   Meta key.
+     * @param mixed  $meta_value Meta value.
+     * @return void
+     */
+    public function addon_user_locale_changed_efb($meta_id, $object_id, $meta_key, $meta_value) {
+        if ('locale' !== $meta_key || !is_string($meta_value)) {
+            return;
+        }
+        $this->flag_addon_locale_efb($meta_value);
+    }
+
+    /**
+     * Load functions.php and hand the locale to the shared flagger.
+     *
+     * @param string $locale WordPress locale; '' means English.
+     * @return void
+     */
+    private function flag_addon_locale_efb($locale) {
+        if ('' === $locale || 'en_US' === $locale) {
+            return;
+        }
+        try {
+            self::get_efbFunction();
+            if (function_exists('emsfb_flag_addon_i18n_refetch_efb')) {
+                emsfb_flag_addon_i18n_refetch_efb(null, $locale);
+            }
+        } catch (\Throwable $e) {
+            // A language change must never fail because of add-on translations.
+        }
     }
 
     /**
@@ -299,6 +351,38 @@ class Emsfb {
             new \Emsfb\Review_Request();
         }
 
+        // Translations for every locale the site uses except the four shipped with the
+        // plugin (exact locales: fa_AF, ary, en_GB, de_AT... are downloaded):
+        // WhiteStudio first, wordpress.org second. Not counted into $core_ok - a site
+        // without language packs is still a working form builder.
+        // See docs/language-packs/README.md.
+        if ($this->require_plugin_file_efb('includes/class-Emsfb-language-packs.php')) {
+            \Emsfb\Language_Packs::boot([
+                'product'           => 'easy-form-builder',
+                'text_domain'       => 'easy-form-builder',
+                'wporg_slug'        => 'easy-form-builder',
+                'version'           => EMSFB_PLUGIN_VERSION,
+                'plugin_file'       => EMSFB_PLUGIN_FILE,
+                'plugin_name'       => 'Easy Form Builder',
+                'prefix'            => 'emsfb_language_packs',
+                'servers'           => [defined('EMSFB_LANGUAGE_PACKS_SERVER_URL') ? EMSFB_LANGUAGE_PACKS_SERVER_URL : EMSFB_SERVER_URL],
+                'bundled_locales'   => ['fa_IR', 'ar', 'en_US', 'de_DE'],
+                'bundled_dir'       => EMSFB_PLUGIN_DIRECTORY . 'languages/',
+                'guide_url'         => 'https://github.com/hassantafreshi/easy-form-builder/blob/HEAD/docs/language-packs/manual-install.md',
+                'extra_locales'     => 'emsfb_get_active_locales_efb',
+                'enabled'           => !(defined('EMSFB_DISABLE_LANGUAGE_PACKS') && EMSFB_DISABLE_LANGUAGE_PACKS),
+                'debug'             => defined('EFB_DEBUG') && EFB_DEBUG,
+                // Without WP-Cron the first visit installs a missing pack: Panel and Create
+                // block and reload (like add-on recovery), other screens only show a notice.
+                'blocking_screens'     => ['Emsfb', 'Emsfb_create'],
+                'front_script_handles' => ['efb-main-js'],
+            ]);
+            // text_efb() caches the built phrase array per locale; a new pack must not be hidden by it.
+            add_action('emsfb_language_packs_installed', static function () {
+                update_option('emsfb_text_version', time());
+            });
+        }
+
         if (is_admin()) {
             $admin_ok = $this->require_plugin_file_efb('includes/admin/class-Emsfb-admin.php');
             $admin_ok = $this->require_plugin_file_efb('includes/admin/class-Emsfb-create.php') && $admin_ok;
@@ -461,7 +545,8 @@ class Emsfb {
 			new Emsfb_Shield_SilentCaptcha_Integration();
 		}
 
-		// Form Security & Spam Protection (Human Shield) ships inside the plugin.
+		// Form Security & Spam Protection (Human Shield) is a downloaded add-on in
+		// vendor/human-shield: a plugin update removes it and add-on recovery restores it.
 		// The protection *runtime* only activates when the add-on is switched on
 		// (AdnHSH >= 1); it stays off by default so form/submission behaviour does
 		// not change until the user opts in. The *admin settings page* is always
@@ -1428,10 +1513,25 @@ class Emsfb {
         $table_setting = $wpdb->prefix . 'emsfb_setting';
 
         // A plugin update can wipe downloaded add-on files. Flag that add-ons may
-        // need reinstalling; Create/Panel/Add-ons block on this until a local
-        // health check confirms every enabled add-on is present again (the flag
-        // clears itself at that point via addon_recovery_state_efb()).
+        // need reinstalling; Create and Panel block on this until a local health
+        // check confirms every enabled add-on is present again (the flag clears
+        // itself at that point via addon_recovery_state_efb()).
         update_option('emsfb_addons_reinstall_required', time());
+        // A new release is a new situation: let the first page load retry at once
+        // instead of waiting out a backoff left by a failure on the old version.
+        delete_transient('emsfb_addons_dl_backoff');
+        delete_option('emsfb_addons_dl_failures');
+
+        // Keep only the add-on language files of locales this site uses. A no-op on
+        // local sites and git checkouts; never throws, never affects the upgrade.
+        try {
+            self::get_efbFunction();
+            if (function_exists('emsfb_prune_addon_languages_efb')) {
+                emsfb_prune_addon_languages_efb();
+            }
+        } catch (\Throwable $e) {
+            // Translations must never break an upgrade.
+        }
 
         if (function_exists('wp_cache_flush')) {
             wp_cache_flush();
